@@ -4324,6 +4324,64 @@ function drawMenuList(ctx, items, sel, x, y, step, opts) {
   }
 }
 
+/* ---- 実際のキー名（P1/P2 に今つながっている入力機器の割り当て） ---- */
+function keyName(slot, a) {
+  const d = Devices.slots[slot];
+  if (!d) return '---';
+  if (d.kind === 'kb') return codeLabel(d.binds[a]);
+  const arr = d.profile.binds[a] || [];
+  return arr.length ? arr.map(bindLabel).join('/') : '未割当';
+}
+function moveKeysName(slot) {
+  const d = Devices.slots[slot];
+  if (!d) return '---';
+  if (d.kind !== 'kb') return 'スティック';
+  const dirs = ['up', 'left', 'down', 'right'];
+  if (dirs.every(a => (d.binds[a] || '').indexOf('Arrow') === 0)) return '矢印キー';
+  return dirs.map(a => codeLabel(d.binds[a])).join('');
+}
+function keyLegend(slot) {
+  return 'P' + (slot + 1) + '   移動 ' + moveKeysName(slot) + '   弱 ' + keyName(slot, 'L') + '   強 ' + keyName(slot, 'H') +
+    '   必殺 ' + keyName(slot, 'S') + '   投げ ' + keyName(slot, 'T');
+}
+
+/* ---- 技一覧（タイトル・ポーズ共通） ---- */
+function moveListRows(ch) {
+  const M = ch.moves, nm = id => (M[id] && M[id].name) || id;
+  return [
+    ['移動 / ジャンプ', '←→ / ↑', '同じ', '↗↖ で前後にジャンプ'],
+    ['ダッシュ / バックステップ', '→→ / ←←', '同じ', 'すばやく近づく・離れる'],
+    ['ガード', '← (相手と反対)', '同じ', '下段は ↙ でしゃがんでガード'],
+    [nm('5L'), '弱', '同じ', '速い。弱→強→必殺とつながる'],
+    [nm('2L'), '↓ + 弱', '同じ', '下段。しゃがみガードでしか防げない'],
+    [nm('5H'), '強', '同じ', '必殺技でキャンセルできる'],
+    [nm('2H'), '↓ + 強', '同じ', '下段。当たると相手が転ぶ'],
+    [nm('jL') + ' / ' + nm('jH'), 'ジャンプ中に 弱 / 強', '同じ', '飛び込みに'],
+    [nm('throw'), '弱+強 同時 / 投げ', '同じ', '密着で。ガードを崩せる'],
+    [nm('sp1'), '↓↘→ + 必殺', '必殺', 'お札の飛び道具'],
+    [nm('sp2'), '↓↙← + 必殺', '→ + 必殺', '出始め無敵の対空'],
+    [nm('super'), '↓↘→↓↘→ + 必殺', '↓ + 必殺', '大祓ゲージ満タンで使える']
+  ];
+}
+function drawMoveList(ctx, ch, title) {
+  drawText(ctx, title || '技一覧', 480, 40, { size: 28, align: 'center', color: '#ffffff', glow: '#19f3ff' });
+  drawText(ctx, keyLegend(0), 480, 76, { size: 14, align: 'center', color: UI_COL.p1 });
+  drawText(ctx, keyLegend(1), 480, 96, { size: 14, align: 'center', color: UI_COL.p2 });
+  panel(ctx, 40, 110, 880, 384, '#19f3ff', 0.8);
+  const cols = [60, 300, 500, 640];
+  ['技', '通常操作', 'かんたん操作', 'ポイント'].forEach((h, i) => drawText(ctx, h, cols[i], 134, { size: 13, color: '#8fa3c8' }));
+  const rows = moveListRows(ch);
+  for (let r = 0; r < rows.length; r++) {
+    const y = 162 + r * 27, sp = r >= 9;
+    if (sp) { ctx.fillStyle = 'rgba(255,79,163,0.10)'; ctx.fillRect(48, y - 18, 864, 26); }
+    drawText(ctx, rows[r][0], cols[0], y, { size: 15, color: sp ? '#ffd0e4' : '#ffffff' });
+    drawText(ctx, rows[r][1], cols[1], y, { size: 15, color: '#e6f1ff' });
+    drawText(ctx, rows[r][2], cols[2], y, { size: 15, color: rows[r][2] === '同じ' ? '#6a7490' : '#ffe94d' });
+    drawText(ctx, rows[r][3], cols[3], y, { size: 12, color: '#b9c7e6' });
+  }
+  drawText(ctx, '方向は右向きのとき（左向きなら ←→ が逆）。かんたん操作はキャラ選択で切り替え', 480, 512, { size: 12, align: 'center', color: '#8fa3c8' });
+}
+
 /* ================= BOOT ================= */
 Game.scenes.boot = {
   idleLimit: 0,
@@ -4353,7 +4411,7 @@ Game.scenes.boot = {
 /* ================= TITLE ================= */
 Game.scenes.title = {
   idleLimit: 0,
-  items: ['対戦開始', '入力設定', '設定', 'あそびかた'],
+  items: ['2人で対戦', '1人で練習 (CPU)', '技一覧', 'あそびかた', '入力設定', '設定'],
   enter() {
     this.sel = 0; this.hintT = 0; this.demo = false; this.demoT = 0; this.demoI = 0; this.pups = [];
     FX.reset();
@@ -4382,10 +4440,12 @@ Game.scenes.title = {
     this.sel = menuMove(this.sel, this.items.length, n);
     if (n & B_L) {
       Audio.play('menuOk');
-      if (this.sel === 0) Game.go('charSelect');
-      else if (this.sel === 1) Game.go('inputConfig', { from: 'title' });
-      else if (this.sel === 2) Game.go('settings');
-      else Game.go('howto');
+      Game.training = this.sel === 1;
+      if (this.sel <= 1) Game.go('charSelect');
+      else if (this.sel === 2) Game.go('moves');
+      else if (this.sel === 3) Game.go('howto');
+      else if (this.sel === 4) Game.go('inputConfig', { from: 'title' });
+      else Game.go('settings');
     }
   },
   render(ctx) {
@@ -4411,12 +4471,12 @@ Game.scenes.title = {
     drawText(ctx, T.title, 480 + off, 168, { size: 66, align: 'center', color: '#ffffff', glow: '#ff3b5c' });
     drawText(ctx, T.titleEn, 480, 206, { size: 18, font: 'en', align: 'center', color: '#19f3ff', glow: '#19f3ff' });
     drawText(ctx, T.tagline, 480, 238, { size: 16, align: 'center', color: '#e6f1ff' });
-    drawMenuList(ctx, this.items, this.sel, 480, 312, 46);
-    const hints = T.hints, hi = Math.floor(this.hintT / 480) % hints.length;
-    const ha = Util.clamp(Math.min((this.hintT % 480) / 20, (480 - (this.hintT % 480)) / 20), 0, 1);
-    drawText(ctx, 'TIPS  ' + hints[hi], 480, 500, { size: 14, align: 'center', color: '#8fa3c8', alpha: ha });
+    drawMenuList(ctx, this.items, this.sel, 480, 274, 31, { size: 19 });
+    drawText(ctx, 'メニュー:  ↑↓ で選ぶ   Enter か 弱 で決定', 480, 462, { size: 13, align: 'center', color: '#ffe94d' });
+    drawText(ctx, keyLegend(0), 480, 490, { size: 13, align: 'center', color: UI_COL.p1 });
+    drawText(ctx, keyLegend(1), 480, 510, { size: 13, align: 'center', color: UI_COL.p2 });
     if (Object.keys(Devices.pads).some(k => Devices.pads[k].connected && !Devices.pads[k].configured)) {
-      drawText(ctx, 'Joy-Conは入力設定でボタンを確認してください', 480, 470, { size: 14, align: 'center', color: '#ffe94d' });
+      drawText(ctx, 'Joy-Conは入力設定でボタンを確認してください', 480, 530, { size: 12, align: 'center', color: '#ffe94d' });
     }
     drawConn(ctx);
   }
@@ -4434,14 +4494,16 @@ Game.scenes.howto = {
     drawText(ctx, 'あそびかた', 480, 60, { size: 32, align: 'center', color: '#ffffff', glow: '#19f3ff' });
     panel(ctx, 80, 84, 800, 200, '#19f3ff');
     const lines = Game.data.texts.howto;
-    for (let i = 0; i < lines.length && i < 8; i++) drawText(ctx, lines[i], 110, 118 + i * 24, { size: 17, color: '#e6f1ff' });
+    for (let i = 0; i < lines.length && i < 6; i++) drawText(ctx, lines[i], 110, 118 + i * 24, { size: 17, color: '#e6f1ff' });
+    drawText(ctx, keyLegend(0), 110, 250, { size: 14, color: UI_COL.p1 });
+    drawText(ctx, keyLegend(1), 110, 272, { size: 14, color: UI_COL.p2 });
     panel(ctx, 80, 300, 800, 170, '#ff4fa3');
     drawText(ctx, '操作の対応', 100, 326, { size: 16, color: '#ff4fa3' });
     const rows = [
       ['技', '通常操作', 'かんたん操作'],
       ['波動系 (sp1)', '↓↘→ + 必殺', '必殺のみ'],
       ['昇り系 (sp2)', '↓↙← + 必殺', '→ + 必殺'],
-      ['大祓 (超必殺)', '↓→↓→ + 必殺 (ゲージ満タン)', '↓ + 必殺 (ゲージ満タン)'],
+      ['大祓 (超必殺)', '↓↘→↓↘→ + 必殺 (ゲージ満タン)', '↓ + 必殺 (ゲージ満タン)'],
       ['投げ', '弱 + 強 または 投げボタン', '同じ'],
       ['ダッシュ', '→→  /  バックステップ ←←', '同じ']
     ];
@@ -4452,6 +4514,21 @@ Game.scenes.howto = {
       drawText(ctx, rows[i][2], 640, y, { size: 14, color: c });
     }
     drawText(ctx, '戻る: 強 / Esc', 480, 508, { size: 14, align: 'center', color: '#8fa3c8' });
+    drawConn(ctx);
+  }
+};
+
+/* ================= MOVES（技一覧） ================= */
+Game.scenes.moves = {
+  idleLimit: 5400,
+  enter() { },
+  update() {
+    if ((Input.nav & (B_H | B_L)) || Input.keyPressed('Escape')) { Audio.play('menuCancel'); Game.go('title'); }
+  },
+  render(ctx) {
+    Backdrop.draw(ctx, 0.7);
+    drawMoveList(ctx, Game.chars[Game.roster[0]].ch, '技一覧  ' + Game.chars[Game.roster[0]].ch.name);
+    drawText(ctx, '戻る: 強 / Esc', 480, 532, { size: 12, align: 'center', color: '#8fa3c8' });
     drawConn(ctx);
   }
 };
@@ -4533,6 +4610,7 @@ Game.scenes.charSelect = {
       easy: i === 0 ? eff.easy.p1 : eff.easy.p2, pup: null, key: ''
     }));
     this.cd = -1; this.t = 0;
+    this.training = !!Game.training || !!HASH.p.training;
     this.refreshPreview(0); this.refreshPreview(1);
     FX.reset();
   },
@@ -4592,6 +4670,12 @@ Game.scenes.charSelect = {
       else { Audio.play('menuCancel'); Game.go('title'); return; }
     }
     if (Input.startHold[0] === 45 || Input.startHold[1] === 45 || Input.keyPressed('Tab')) { Game.go('inputConfig', { from: 'charSelect' }); return; }
+    /* 1人で練習: P2 は CPU。P1 が決めたら同じキャラ・別の配色で自動的に決まる */
+    if (this.training) {
+      const a = this.p[0], b = this.p[1];
+      if (a.decided && !b.decided) { b.decided = true; b.picked = a.picked; b.pal = 1 - a.pal; this.refreshPreview(1); }
+      else if (!a.decided && b.decided) { b.decided = false; b.picked = null; this.refreshPreview(1); }
+    }
     if (this.p[0].decided && this.p[1].decided) {
       if (this.cd < 0) this.cd = 60;
       this.cd--;
@@ -4606,11 +4690,11 @@ Game.scenes.charSelect = {
     Game.easy = [a.easy, b.easy];
     if (Game.sel[0] === Game.sel[1] && Game.pal2[0] === Game.pal2[1]) Game.pal2[1] = !Game.pal2[0];
     Store.set('last', { p1: Game.sel[0], p2: Game.sel[1] });
-    Game.go('versus', { training: !!HASH.p.training });
+    Game.go('versus', { training: this.training });
   },
   render(ctx) {
     Backdrop.draw(ctx, 0.6);
-    drawText(ctx, 'キャラクター選択', 480, 44, { size: 28, align: 'center', color: '#ffffff', glow: '#19f3ff' });
+    drawText(ctx, this.training ? '1人で練習  キャラクター選択' : 'キャラクター選択', 480, 44, { size: 28, align: 'center', color: '#ffffff', glow: '#19f3ff' });
     const n = this.cards.length, cw = Math.min(120, 340 / n), gap = 10;
     const total = n * cw + (n - 1) * gap, x0 = 480 - total / 2;
     for (let c = 0; c < n; c++) {
@@ -4666,7 +4750,9 @@ Game.scenes.charSelect = {
         drawText(ctx, '「' + q + '」', ix + iw - 14, 462, { size: 11, color: '#e6f1ff', align: 'right', base: 'middle' });
       } else drawText(ctx, 'おまかせ', ix + iw / 2, 420, { size: 20, align: 'center', color: '#8fa3c8' });
       /* 配色とモード */
-      const st = p.decided ? 'READY' : (Game.roster.length > 1 ? '←→ 選択 / 弱 決定' : '←→ 配色 / 弱 READY');
+      const st = p.decided ? (this.training && i === 1 ? 'CPU' : 'READY')
+        : (this.training && i === 1 ? '練習相手 (CPU)'
+        : (keyName(i, 'L') + ': 決定    ' + keyName(i, 'T') + ': 配色    ' + keyName(i, 'S') + ': かんたん切替'));
       drawText(ctx, st, ix + iw / 2, 494, { size: p.decided ? 18 : 12, font: p.decided ? 'en' : 'jp', align: 'center', color: p.decided ? '#7cff6b' : '#b9c7e6', glow: p.decided ? '#7cff6b' : null, base: 'middle' });
       if (id) {
         ctx.fillStyle = LookAdapter.edge(Game.chars[id].ch, p.pal === 1 ? 'paletteP2' : 'palette'); ctx.fillRect(ix + iw - 50, 352, 12, 12);
@@ -4681,7 +4767,12 @@ Game.scenes.charSelect = {
       if (p.easy) { panel(ctx, ix + iw - 110, y2 - 14, 90, 18, '#ffe94d', 0.6); drawText(ctx, 'かんたん: ON', ix + iw - 65, y2 - 5, { size: 11, color: '#ffe94d', align: 'center', base: 'middle' }); }
       else drawText(ctx, 'かんたん: OFF', ix + iw - 20, y2 - 5, { size: 11, color: '#6a7490', align: 'right', base: 'middle' });
     }
-    drawText(ctx, '必殺: かんたん操作 切替   投げ: 配色   Start長押し(Tab): 入力設定   強/Esc: 戻る', 480, 262, { size: 12, align: 'center', color: '#8fa3c8' });
+    if (this.cd < 0) {
+      const msg = this.training ? 'P1 の 弱ボタン（' + keyName(0, 'L') + '）を押すと始まります'
+        : '2人とも 弱ボタンを押すと始まります（P1: ' + keyName(0, 'L') + '   P2: ' + keyName(1, 'L') + '）';
+      drawText(ctx, msg, 480, 262, { size: 15, align: 'center', color: '#ffe94d', alpha: 0.75 + 0.25 * Math.sin(Game.t * 4) });
+      drawText(ctx, 'Tab: 入力設定    Esc: 戻る', 480, 284, { size: 12, align: 'center', color: '#8fa3c8' });
+    }
     if (this.cd >= 0) {
       const k = this.cd / 60;
       drawText(ctx, '対戦開始', 480, 300, { size: 40, align: 'center', color: '#ffffff', glow: '#ffe94d', alpha: 0.4 + 0.6 * Math.abs(Math.sin(Game.t * 10)) });
@@ -5008,10 +5099,10 @@ Game.scenes.fight = {
   /* ポーズ中もメニュー操作のため update は回す（シミュレーションは進めない） */
   timeScale() { return (this.paused || !this.match) ? 1 : this.match.timeScale(); },
   fxScale() { return (this.paused || !this.match) ? 0 : (this.match.phase === 'KO' ? 0.5 : 1); },
-  pauseItems() { return this.pauseWhy === 'disconnect' ? ['キーボードで継続', 'タイトルへ'] : ['再開', '入力設定', 'キャラ選択へ', 'タイトルへ']; },
+  pauseItems() { return this.pauseWhy === 'disconnect' ? ['キーボードで継続', 'タイトルへ'] : ['再開', '技一覧', '入力設定', 'キャラ選択へ', 'タイトルへ']; },
   openPause(why) {
     if (this.paused) return;
-    this.paused = true; this.pauseSel = 0; this.pauseWhy = why || 'menu';
+    this.paused = true; this.pauseSel = 0; this.pauseWhy = why || 'menu'; this.showMoves = false;
     Input.lockFor(10);
     Audio.play('menuOk');
   },
@@ -5050,6 +5141,10 @@ Game.scenes.fight = {
   },
   updatePause() {
     const n = Input.nav, items = this.pauseItems();
+    if (this.showMoves) {
+      if ((n & (B_H | B_L | B_START)) || Input.keyPressed('Escape') || Input.keyPressed('Enter')) { this.showMoves = false; Audio.play('menuCancel'); }
+      return;
+    }
     if (this.pauseWhy === 'disconnect') {
       const d = this.devs[this.discIdx];
       if (d && d.connected) { this.paused = false; Toast.push('コントローラーが再接続されました'); return; }
@@ -5062,6 +5157,7 @@ Game.scenes.fight = {
       const it = items[this.pauseSel];
       Audio.play('menuOk');
       if (it === '再開') { this.paused = false; Input.lockFor(10); }
+      else if (it === '技一覧') this.showMoves = true;
       else if (it === 'キーボードで継続') {
         Devices.setSlot(this.discIdx, this.discIdx === 0 ? 'kb1' : 'kb2');
         this.devs = [Devices.slots[0], Devices.slots[1]];
@@ -5080,6 +5176,7 @@ Game.scenes.fight = {
     renderFightWorld(ctx, m, this.paused ? 1 : alpha, { debugWorld: dbg });
     drawCutin(ctx, m, this);
     drawHUD(ctx, m, this.hud, Game.t);
+    if (!this.paused) drawText(ctx, 'Esc: ポーズ / 技一覧', 480, 503, { size: 11, align: 'center', color: '#8fa3c8', alpha: 0.75 });
     drawFightBanners(ctx, m, this);
     if (Input.idle > 1800 && !this.paused) {
       drawText(ctx, '10秒後にタイトルへ戻ります', 480, 150, { size: 20, align: 'center', color: '#ffb347', alpha: 0.6 + 0.4 * Math.sin(Game.t * 8) });
@@ -5091,6 +5188,12 @@ Game.scenes.fight = {
   renderPause(ctx) {
     ctx.fillStyle = 'rgba(3,4,12,0.72)'; ctx.fillRect(0, 0, CFG.W, CFG.H);
     const items = this.pauseItems();
+    if (this.showMoves) {
+      ctx.fillStyle = 'rgba(3,4,12,0.6)'; ctx.fillRect(0, 0, CFG.W, CFG.H);
+      drawMoveList(ctx, this.match.fighters[0].ch, '技一覧');
+      drawText(ctx, '閉じる: 強 / Esc', 480, 532, { size: 12, align: 'center', color: '#8fa3c8' });
+      return;
+    }
     if (this.pauseWhy === 'disconnect') {
       const n = this.discIdx + 1;
       drawText(ctx, 'P' + n + ' コントローラー切断', 480, 150, { size: 30, align: 'center', color: '#ff6b8b', glow: '#ff3b5c' });
@@ -5142,7 +5245,7 @@ Game.scenes.result = {
     if (n & (B_LEFT | B_RIGHT)) Audio.play('menuMove');
     if (n & B_L) {
       Audio.play('menuOk');
-      if (this.sel === 0) Game.go('versus', { training: !!HASH.p.training });
+      if (this.sel === 0) Game.go('versus', { training: !!Game.training || !!HASH.p.training });
       else if (this.sel === 1) Game.go('charSelect');
       else Game.go('title');
     }
