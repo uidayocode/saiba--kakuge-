@@ -181,81 +181,164 @@ function bodyFrame(j) {
   };
   return { P, pel, neck, head, sh, tUp, back, fwd, down, parts, put, legs, arm };
 }
+/* なめらかな閉じた形（点を通る曲線） */
+function smooth(pts) {
+  const g = new Path2D(), n = pts.length;
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  let m0 = mid(pts[n - 1], pts[0]); g.moveTo(m0[0], m0[1]);
+  for (let i = 0; i < n; i++) { const p = pts[i], m = mid(p, pts[(i + 1) % n]); g.quadraticCurveTo(p[0], p[1], m[0], m[1]); }
+  g.closePath(); return g;
+}
+/* 根元から先へ、太さが途中で膨らむ曲がった房（尻尾・たてがみの房） */
+function plume(base, dir, L, bend, wMax, wEnd) {
+  const n = perpL(dir), pts = [];
+  for (let k = 0; k <= 8; k++) {
+    const u = k / 8, curl = bend * u * u;
+    const c = add(add(base, dir, L * u), n, curl * L);
+    pts.push(c);
+  }
+  const L1 = [], R1 = [];
+  for (let k = 0; k <= 8; k++) {
+    const u = k / 8, a = pts[Math.max(0, k - 1)], b = pts[Math.min(8, k + 1)], t = unit(sub(b, a)), nn = perpL(t);
+    /* 根元は少し細く、中ほどで一番太く、先は細くとがる */
+    const w = (k === 8 ? wEnd : Math.max(wEnd, wMax * Math.pow(Math.sin(Math.PI * (0.12 + 0.86 * u)), 0.7))) / 2;
+    L1.push(add(pts[k], nn, w)); R1.push(add(pts[k], nn, -w));
+  }
+  return smooth(L1.concat(R1.reverse()));
+}
 function costumeKomainu(j, ch) {
   ch = ch || {};
-  const { P, pel, neck, head, sh, tUp, back, fwd, down, parts, put, legs, arm } = bodyFrame(j);
+  const { P, pel, neck, head, sh, tUp, back, fwd, down, parts, put } = bodyFrame(j);
   const r = 14;
-  // 巻いた尻尾（揺れ物があれば、その先を揺らす）
-  if (ch.shortTail && ch.shortTail.length > 1) put(polyPath(strip(ch.shortTail, 20, 8)));
-  else { const tb = add(add(pel, back, 18), tUp, 10); put(circle(add(tb, [0, -6]), 11)); put(polyPath([add(pel, back, 6), add(tb, [8, -14]), add(tb, [-14, -22]), add(tb, [-16, 2])])); }
-  legs(9, 7, 7);
-  arm(J.EB, J.HB, 9, 7, 9);
-  put(polyPath(hull([add(pel, back, 13), add(pel, fwd, 11), add(neck, back, 15), add(add(neck, fwd, 17), down, 6), add(sh, fwd, 18)])));
-  // たてがみ
-  const mane = [];
-  for (let k = 0; k < 14; k++) { const t = k / 14 * Math.PI * 2, rr = k % 2 ? r * 1.25 : r * 2.0; mane.push(add(add(head, back, 4), [Math.cos(t) * rr, Math.sin(t) * rr])); }
-  put(polyPath(mane));
-  for (const id of ["maneTuft1", "maneTuft2"]) if (ch[id] && ch[id].length > 1) put(polyPath(strip(ch[id], 10, 3)));
-  // 角ばった頭と鼻づら・耳
-  put(polyPath(hull([add(head, [-r * 0.9, -r * 0.8]), add(head, [r * 0.6, -r * 0.9]), add(head, [-r * 0.9, r * 0.8]),
-                     add(head, fwd, r * 1.55), add(add(head, fwd, r * 1.5), [0, r * 0.6]), add(head, [r * 0.5, r * 0.9])])));
-  put(polyPath([add(head, [-r * 0.4, -r * 0.7]), add(head, [-r * 0.2, -r * 1.6]), add(head, [r * 0.3, -r * 0.8])]));
-  put(ell(add(add(head, fwd, r * 0.55), [0, -r * 0.25]), 3, 1.4), "main", true);
-  arm(J.EF, J.HF, 10, 8, 10, "front");
+  /* 尾: 炎のように巻き上がる大きな房（揺れ物があればその向き） */
+  const tb = add(pel, back, 10);
+  let tdir = unit(add(back, tUp, 1.3));
+  if (ch.shortTail && ch.shortTail.length > 1) { const e = ch.shortTail[ch.shortTail.length - 1]; tdir = unit(sub(e, ch.shortTail[0])); }
+  put(plume(tb, tdir, 66, -0.4, 34, 4));
+  put(plume(add(tb, tUp, 6), unit(add(tdir, back, 0.7)), 44, -0.55, 22, 3));
+  put(plume(add(tb, tUp, -2), unit(add(tdir, tUp, -0.5)), 38, 0.4, 18, 3));
+  /* 後ろ脚: 太い腿 → 細いすね → 大きな足 */
+  const leg = (K, A, T, layer) => {
+    put(polyPath(hull([add(pel, back, 12), add(pel, fwd, 8), add(P(K), back, 9), add(P(K), fwd, 9)])), layer);
+    put(capsule(P(K), P(A), 10.5, 8), layer);
+    put(ell(lerp(P(A), P(T), 0.55), 12.5, 7), layer);
+  };
+  leg(J.KB, J.AB, J.TB); leg(J.KF, J.AF, J.TF);
+  /* 前脚（腕）: 付け根が太く、先は大きな前足 */
+  const arm = (E, H, layer) => {
+    put(capsule(sh, P(E), 12, 9.5), layer); put(capsule(P(E), P(H), 9, 7.5), layer);
+    const d = unit(sub(P(H), P(E))); put(ell(add(P(H), d, 3), 11, 9), layer);
+  };
+  arm(J.EB, J.HB);
+  /* 胴: 盛り上がった胸から腰へ締まる */
+  put(smooth([add(pel, back, 13), add(add(lerp(pel, neck, 0.5), back, 15), tUp, 2), add(neck, back, 14), add(add(neck, fwd, 16), tUp, 4),
+              add(add(sh, fwd, 22), down, 8), add(add(lerp(pel, neck, 0.45), fwd, 16), down, 4), add(pel, fwd, 10)]));
+  /* たてがみ: 渦を巻く雲のような房（とがらせない） */
+  /* たてがみ: 頭の後ろ半分を、巻き毛の玉（円）で囲む */
+  const mc = add(add(head, back, 7), [0, 3]);
+  put(circle(mc, r * 1.45));
+  for (let k = 0; k < 9; k++) {
+    const t = Math.PI * (0.45 + k / 8 * 1.3), dirB = [back[0] * Math.cos(t - Math.PI) - 0, 0];
+    void dirB;
+    const ang = Math.atan2(back[1], back[0]) + (k / 8 - 0.5) * Math.PI * 1.5;
+    put(circle(add(mc, [Math.cos(ang) * r * 1.5, Math.sin(ang) * r * 1.5]), r * (k % 2 ? 0.62 : 0.75)));
+  }
+  for (const id of ["maneTuft1", "maneTuft2"]) if (ch[id] && ch[id].length > 1) put(polyPath(strip(ch[id], 12, 3)));
+  /* 頭: 四角い額と、前に突き出た鼻づら・下あご */
+  put(smooth([add(head, [-r * 0.9, -r * 0.9]), add(head, [r * 0.5, -r * 1.0]), add(add(head, fwd, r * 1.6), [0, -r * 0.2]),
+              add(add(head, fwd, r * 1.7), [0, r * 0.5]), add(add(head, fwd, r * 0.9), [0, r * 0.95]), add(head, [-r * 0.6, r * 0.9])]));
+  put(polyPath([add(head, [-r * 0.5, -r * 0.8]), add(head, [-r * 0.35, -r * 1.55]), add(head, [r * 0.15, -r * 0.85])]));
+  put(ell(add(add(head, fwd, r * 0.6), [0, -r * 0.3]), 3.2, 1.6), "main", true);
+  arm(J.EF, J.HF, "front");
   return parts;
 }
 function costumeOni(j, ch) {
   ch = ch || {};
-  const { P, pel, neck, head, tUp, back, fwd, down, parts, put, legs, arm } = bodyFrame(j);
+  const { P, pel, neck, head, sh, tUp, back, fwd, down, parts, put } = bodyFrame(j);
   const r = 17;
-  legs(13, 11, 9);
-  // 腰布（揺れ物があれば裾を揺らす）
-  put(polyPath(hull([add(pel, back, 22), add(pel, fwd, 21), add(lerp(pel, P(J.KF), 0.75), fwd, 10), add(lerp(pel, P(J.KB), 0.75), back, 10)])));
-  if (ch.loincloth && ch.loincloth.length > 1) put(polyPath(strip(ch.loincloth, 22, 14)));
-  arm(J.EB, J.HB, 14, 12, 12);
-  // 逆三角形の上半身
-  put(polyPath(hull([add(pel, back, 18), add(pel, fwd, 18), add(add(neck, back, 30), down, 6), add(add(neck, fwd, 30), down, 6), add(neck, back, 16), add(neck, fwd, 16)])));
-  // ざんばら髪・頭・2本の角
+  /* 脚: 太い腿から締まるすね、大きな足 */
+  const leg = (K, A, T) => {
+    put(capsule(pel, P(K), 16, 13)); put(capsule(P(K), P(A), 12.5, 9.5));
+    put(ell(lerp(P(A), P(T), 0.5), 15, 8));
+  };
+  leg(J.KB, J.AB, J.TB); leg(J.KF, J.AF, J.TF);
+  /* 腰巻: 虎皮のぎざぎざの裾 */
+  {
+    const kb = lerp(pel, P(J.KB), 0.7), kf = lerp(pel, P(J.KF), 0.7), pts = [add(pel, back, 24), add(pel, fwd, 23)];
+    const a = add(kf, fwd, 12), b = add(kb, back, 12);
+    for (let k = 0; k <= 6; k++) { const q = lerp(a, b, k / 6); pts.push(k % 2 ? add(q, down, -7) : add(q, down, 4)); }
+    put(polyPath(pts));
+  }
+  if (ch.loincloth && ch.loincloth.length > 1) put(polyPath(strip(ch.loincloth, 22, 10)));
+  /* 腕: 盛り上がった肩、太い上腕、拳 */
+  const arm = (E, H, layer) => {
+    put(circle(sh, 17), layer);
+    put(capsule(sh, P(E), 15, 12.5), layer); put(capsule(P(E), P(H), 12.5, 10), layer);
+    put(circle(P(H), 12.5), layer);
+  };
+  arm(J.EB, J.HB);
+  /* 胴: 厚い胸板、締まった腰（曲線で） */
+  put(smooth([add(pel, back, 19), add(add(lerp(pel, neck, 0.5), back, 24), tUp, 0), add(add(neck, back, 30), down, 4), add(neck, back, 14),
+              add(neck, fwd, 14), add(add(neck, fwd, 32), down, 4), add(add(lerp(pel, neck, 0.55), fwd, 27), tUp, 0), add(pel, fwd, 20)]));
+  /* ざんばら髪 */
   const hair = [];
-  for (let k = 0; k < 11; k++) { const t = Math.PI * (0.95 + k / 10 * 1.1), rr = k % 2 ? r * 1.15 : r * 1.65; hair.push(add(add(head, back, 5), [Math.cos(t) * rr, Math.sin(t) * rr])); }
+  for (let k = 0; k < 11; k++) { const t = Math.PI * (0.95 + k / 10 * 1.1), rr = k % 2 ? r * 1.15 : r * 1.7; hair.push(add(add(head, back, 5), [Math.cos(t) * rr, Math.sin(t) * rr])); }
   hair.push(add(head, [0, r * 0.4]));
   put(polyPath(hair));
   for (const id of ["hairTuft1", "hairTuft2"]) if (ch[id] && ch[id].length > 1) put(polyPath(strip(ch[id], 12, 3)));
-  put(circle(head, r));
-  put(polyPath([add(head, [-r * 0.5, -r * 0.8]), add(head, [-r * 0.9, -r * 2.0]), add(head, [-r * 0.05, -r * 0.95])]));
-  put(polyPath([add(head, [r * 0.25, -r * 0.85]), add(head, [r * 0.55, -r * 2.05]), add(head, [r * 0.85, -r * 0.6])]));
-  put(polyPath([add(add(head, fwd, r * 0.15), [0, -r * 0.2]), add(add(head, fwd, r * 0.8), [0, -r * 0.35]), add(add(head, fwd, r * 0.75), [0, -r * 0.05])]), "main", true);
-  // 金棒（手前の手）
-  const hf = P(J.HF), fa = unit(sub(hf, P(J.EF))), clubDir = unit(add(fa, [0, -0.6]));
-  put(capsule(add(hf, clubDir, -10), add(hf, clubDir, 70), 5, 10), "front");
-  arm(J.EF, J.HF, 15, 13, 13, "front");
+  /* 頭とあご（四角くがっしり） */
+  put(smooth([add(head, [-r * 0.95, -r * 0.7]), add(head, [r * 0.7, -r * 0.9]), add(add(head, fwd, r * 1.1), [0, -r * 0.1]),
+              add(add(head, fwd, r * 1.05), [0, r * 0.8]), add(head, [0, r * 1.1]), add(head, [-r * 0.9, r * 0.6])]));
+  /* 反り返った2本の角 */
+  const horn = (b0, b1, tip, cp) => { const g = new Path2D(); g.moveTo(b0[0], b0[1]); g.quadraticCurveTo(cp[0], cp[1], tip[0], tip[1]); g.quadraticCurveTo(cp[0] + 6, cp[1] + 4, b1[0], b1[1]); g.closePath(); return g; };
+  put(horn(add(head, [-r * 0.6, -r * 0.75]), add(head, [-r * 0.1, -r * 0.9]), add(head, [-r * 1.05, -r * 2.15]), add(head, [-r * 0.35, -r * 1.6])));
+  put(horn(add(head, [r * 0.2, -r * 0.9]), add(head, [r * 0.75, -r * 0.65]), add(head, [r * 0.55, -r * 2.2]), add(head, [r * 0.85, -r * 1.5])));
+  put(polyPath([add(add(head, fwd, r * 0.15), [0, -r * 0.25]), add(add(head, fwd, r * 0.85), [0, -r * 0.4]), add(add(head, fwd, r * 0.8), [0, -r * 0.05])]), "main", true);
+  /* 金棒: 先が太く、とげのでこぼこが輪郭に出る */
+  const hf = P(J.HF), fa = unit(sub(hf, P(J.EF))), cd = unit(add(fa, [0, -0.6])), nn = perpL(cd);
+  put(capsule(add(hf, cd, -10), add(hf, cd, 70), 5, 11), "front");
+  for (let k = 0; k < 4; k++) for (const sgn of [1, -1]) {
+    const L = 32 + k * 12, w = 5 + (L + 10) / 80 * 6, b0 = add(add(hf, cd, L - 3), nn, sgn * w), b1 = add(add(hf, cd, L + 3), nn, sgn * w);
+    put(polyPath([b0, b1, add(add(hf, cd, L), nn, sgn * (w + 6))]), "front");
+  }
+  arm(J.EF, J.HF, "front");
   return parts;
 }
 function costumeFox(j, ch) {
   ch = ch || {};
-  const { P, pel, neck, head, tUp, back, fwd, parts, put, legs, arm } = bodyFrame(j);
+  const { P, pel, neck, head, sh, tUp, back, fwd, down, parts, put } = bodyFrame(j);
   const r = 13;
-  // 3本の尻尾（揺れ物の節があればそれに沿わせる）
-  const tails = ["tailA", "tailB", "tailC"];
-  if (tails.every(id => ch[id] && ch[id].length > 1)) tails.forEach(id => put(polyPath(strip(ch[id], 22, 3))));
-  else for (const [ang, L] of [[-35, 62], [-60, 70], [-85, 58]]) {
+  /* 3本のふさふさの尻尾（根元は細く、中ほどが膨らみ、先がとがる。外へ反る） */
+  const base = add(pel, back, 6);
+  const tails = ["tailA", "tailB", "tailC"], angs = [[-8, 64, 0.5], [-48, 78, 0.5], [-92, 62, 0.5]];
+  angs.forEach(([ang, L, bend], k) => {
     const DEGR = Math.PI / 180;
-    const dir = unit([back[0] * Math.cos(ang * DEGR) + tUp[0] * Math.sin(-ang * DEGR), back[1] * Math.cos(ang * DEGR) + tUp[1] * Math.sin(-ang * DEGR)]);
-    const base = add(pel, back, 4), mid = add(base, dir, L * 0.55), tip = add(base, dir, L), n = perpL(dir);
-    put(polyPath([base, add(mid, n, 13), add(tip, n, 3), tip, add(tip, n, -4), add(mid, n, -11)]));
-  }
-  legs(6.5, 4.5, 4.5);
-  arm(J.EB, J.HB, 5.5, 4.5, 5);
-  // 細身の着物と帯
-  put(polyPath(hull([add(pel, back, 10), add(pel, fwd, 10), add(neck, back, 9), add(neck, fwd, 9), add(lerp(pel, P(J.KF), 0.45), fwd, 11), add(lerp(pel, P(J.KB), 0.45), back, 11)])));
-  // 狐の面（とがった鼻先と2本の耳）
-  put(polyPath([add(head, [-r * 0.85, -r * 0.45]), add(head, [-r * 0.6, -r * 2.0]), add(head, [-r * 0.05, -r * 0.85])]));
-  put(polyPath([add(head, [r * 0.1, -r * 0.85]), add(head, [r * 0.55, -r * 2.05]), add(head, [r * 0.85, -r * 0.35])]));
-  put(polyPath(hull([add(head, [-r, -r * 0.5]), add(head, [-r * 0.7, r * 0.8]), add(head, [r * 0.2, r * 0.9]),
-                     add(add(head, fwd, r * 1.7), [0, r * 0.25]), add(head, [r * 0.5, -r * 0.9]), add(head, [-r * 0.4, -r])])));
+    let dir = unit([back[0] * Math.cos(ang * DEGR) + tUp[0] * Math.sin(-ang * DEGR), back[1] * Math.cos(ang * DEGR) + tUp[1] * Math.sin(-ang * DEGR)]);
+    const c = ch[tails[k]];
+    if (c && c.length > 1) dir = unit(add(dir, unit(sub(c[c.length - 1], c[0])), 0.8));
+    put(plume(base, dir, L, -bend * 0.5, 24, 2));
+  });
+  /* 脚: 細く長い。ひざ下までの短い袴 */
+  const leg = (K, A, T) => { put(capsule(pel, P(K), 7.5, 6)); put(capsule(P(K), P(A), 6, 4.5)); put(capsule(P(A), P(T), 4.5, 3.2)); };
+  leg(J.KB, J.AB, J.TB); leg(J.KF, J.AF, J.TF);
+  put(polyPath(hull([add(pel, back, 11), add(pel, fwd, 11), add(lerp(pel, P(J.KF), 0.8), fwd, 12), add(lerp(pel, P(J.KB), 0.8), back, 12),
+                     add(lerp(pel, P(J.KF), 0.8), back, 4), add(lerp(pel, P(J.KB), 0.8), fwd, 4)])));
+  /* 腕と、垂れる袖 */
+  const arm = (E, H, layer, sleeve) => {
+    put(capsule(sh, P(E), 6, 5), layer); put(capsule(P(E), P(H), 5, 4), layer); put(circle(P(H), 4.5), layer);
+    put(polyPath(hull([add(sh, back, 3), add(sh, fwd, 5), P(E), add(P(E), down, 14), add(lerp(sh, P(E), 0.5), down, 10)])), layer);
+    if (sleeve && sleeve.length > 1) put(polyPath(strip(sleeve, 12, 7)), layer);
+  };
+  arm(J.EB, J.HB);
+  /* 細身の着物 */
+  put(smooth([add(pel, back, 10), add(lerp(pel, neck, 0.5), back, 9), add(neck, back, 9), add(neck, fwd, 8), add(add(lerp(pel, neck, 0.55), fwd, 10), tUp, 2), add(pel, fwd, 10)]));
+  /* 狐の面: 長い鼻先、大きな耳 */
+  put(polyPath([add(head, [-r * 0.9, -r * 0.4]), add(head, [-r * 0.75, -r * 2.2]), add(head, [-r * 0.05, -r * 0.85])]));
+  put(polyPath([add(head, [r * 0.05, -r * 0.85]), add(head, [r * 0.5, -r * 2.25]), add(head, [r * 0.85, -r * 0.35])]));
+  put(smooth([add(head, [-r, -r * 0.5]), add(head, [-r * 0.6, r * 0.8]), add(head, [r * 0.3, r * 0.9]),
+              add(add(head, fwd, r * 1.85), [0, r * 0.3]), add(head, [r * 0.6, -r * 0.8]), add(head, [-r * 0.4, -r])]));
   put(polyPath([add(add(head, fwd, r * 0.15), [0, -r * 0.05]), add(add(head, fwd, r * 0.85), [0, -r * 0.4]), add(add(head, fwd, r * 0.7), [0, r * 0.05])]), "main", true);
-  if (ch.sleeve && ch.sleeve.length > 1) put(polyPath(strip(ch.sleeve, 12, 8)), "front");
-  arm(J.EF, J.HF, 6, 5, 5.5, "front");
+  arm(J.EF, J.HF, "front", ch.sleeve);
   return parts;
 }
 const COSTUMES = { miko: costumeMiko, komainu: costumeKomainu, oni404: costumeOni, fox: costumeFox };
