@@ -34,8 +34,24 @@ function silhouette(g, path, rim, rimA, rimW, fill) {
   g.restore();
 }
 
-function create(W, H, GY) {
+/* ステージの種類（色と、置くものの違い） */
+const THEMES = {
+  sando: { name: '電脳神社・参道', sub: 'ネオン鳥居の境内',
+    sky: ['#04030c', '#0e0824', '#24103a', '#4a1747', '#5e1d4c'], red: NEON_RED, pink: NEON_PINK, gold: GOLD, cyan: CYAN,
+    ridge: ['#140b2c', '#170c30'], city: true, hall: 1, toriiFar: true, lanterns: true, motes: 'petal', ground: ['#120a24', '#050409'], fog: '255,120,190', hor: '255,90,170' },
+  honden: { name: '本殿・雪の夜', sub: '御神体の眠る奥の院',
+    sky: ['#02040c', '#07122a', '#0d2244', '#1a3a66', '#22507a'], red: '#ffc46b', pink: '#8fd8ff', gold: '#ffe2a0', cyan: '#bfe9ff',
+    ridge: ['#0b1730', '#0e1c38'], city: false, hall: 1.45, toriiFar: false, lanterns: true, motes: 'snow', ground: ['#0d1a30', '#03060c'], fog: '170,210,255', hor: '140,200,255' },
+  umi: { name: 'データの海', sub: '境内サーバーの最深部',
+    sky: ['#000305', '#011014', '#032628', '#06403c', '#0a5048'], red: '#3ff0c0', pink: '#46e8ff', gold: '#b8ff6b', cyan: '#46e8ff',
+    ridge: null, city: false, hall: 0, toriiFar: true, lanterns: false, motes: 'bits', ground: ['#021c1c', '#000505'], fog: '70,232,200', hor: '60,240,200', sea: true }
+};
+
+function create(W, H, GY, themeId) {
   GY = GY || Math.round(H * 0.87);
+  const TH = THEMES[themeId] || THEMES.sando;
+  /* テーマの色で、下の描画に出てくる色の名前を上書き（同じ名前をこの関数の中だけで使う） */
+  const NEON_RED = TH.red, NEON_PINK = TH.pink, GOLD = TH.gold, CYAN = TH.cyan;
   const R = rand(20261009);
   const LW = W + PAD * 2;
 
@@ -43,8 +59,8 @@ function create(W, H, GY) {
   const sky = layer(W, H), sg = sky.getContext("2d");
   {
     const g = sg.createLinearGradient(0, 0, 0, GY);
-    g.addColorStop(0.00, "#04030c"); g.addColorStop(0.40, "#0e0824"); g.addColorStop(0.68, "#24103a");
-    g.addColorStop(0.86, "#4a1747"); g.addColorStop(1.00, "#5e1d4c");
+    g.addColorStop(0.00, TH.sky[0]); g.addColorStop(0.40, TH.sky[1]); g.addColorStop(0.68, TH.sky[2]);
+    g.addColorStop(0.86, TH.sky[3]); g.addColorStop(1.00, TH.sky[4]);
     sg.fillStyle = g; sg.fillRect(0, 0, W, H);
   }
   const stars = [];
@@ -55,10 +71,11 @@ function create(W, H, GY) {
   {
     const c = MR + 30;
     const g = mg.createRadialGradient(c - 20, c - 25, 10, c, c, MR);
-    g.addColorStop(0, "rgba(255,214,232,0.26)"); g.addColorStop(0.7, "rgba(255,150,200,0.12)"); g.addColorStop(1, "rgba(255,120,190,0.05)");
+    const mc = TH.fog;
+    g.addColorStop(0, "rgba(" + mc + ",0.30)"); g.addColorStop(0.7, "rgba(" + mc + ",0.13)"); g.addColorStop(1, "rgba(" + mc + ",0.05)");
     mg.fillStyle = g; mg.beginPath(); mg.arc(c, c, MR, 0, Math.PI * 2); mg.fill();
     mg.save(); mg.beginPath(); mg.arc(c, c, MR, 0, Math.PI * 2); mg.clip();
-    mg.fillStyle = "rgba(255,200,230,0.09)"; for (let y = c - MR; y < c + MR; y += 4) mg.fillRect(c - MR, y, MR * 2, 1.5);   // 走査線
+    mg.fillStyle = "rgba(" + mc + ",0.10)"; for (let y = c - MR; y < c + MR; y += 4) mg.fillRect(c - MR, y, MR * 2, 1.5);   // 走査線
     mg.fillStyle = "rgba(20,8,40,0.35)";                                                                                        // 欠けた部分のクレーター（六角形）
     for (const [dx, dy, s] of [[-30, -18, 16], [22, 26, 22], [34, -36, 10], [-14, 40, 9]]) {
       mg.beginPath(); for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; mg[k ? "lineTo" : "moveTo"](c + dx + Math.cos(a) * s, c + dy + Math.sin(a) * s); } mg.closePath(); mg.fill();
@@ -79,10 +96,18 @@ function create(W, H, GY) {
       fg.fillStyle = col; fg.fill(p);
       fg.strokeStyle = rgba(NEON_PINK, rimA); fg.lineWidth = 1.2; fg.stroke(p);
     };
-    ridge(GY - 120, 70, 26, "#140b2c", 0.10, 1);
-    ridge(GY - 92, 46, 18, "#170c30", 0.14, 3);
+    if (TH.ridge) { ridge(GY - 120, 70, 26, TH.ridge[0], 0.10, 1); ridge(GY - 92, 46, 18, TH.ridge[1], 0.14, 3); }
+    // データの海: 水平線の向こうに浮かぶデータの柱
+    if (TH.sea) {
+      for (let k = 0; k < 26; k++) {
+        const x = R() * LW, h = 30 + R() * 140, w = 6 + R() * 18, top = GY - 70 - h;
+        fg.fillStyle = "rgba(10,60,60,0.55)"; fg.fillRect(x, top, w, h);
+        fg.fillStyle = rgba(CYAN, 0.35); fg.fillRect(x, top, w, 1.5);
+        for (let wy = top + 4; wy < top + h; wy += 6) if (R() < 0.3) { fg.fillStyle = rgba(GOLD, 0.35); fg.fillRect(x + 2, wy, w - 4, 1.2); }
+      }
+    }
     // 街: 左右の端に、高さの違うビル。窓の明かりは疎らに
-    for (const [x0, x1] of [[0, PAD + 250], [PAD + W - 250, LW]]) {
+    for (const [x0, x1] of (TH.city ? [[0, PAD + 250], [PAD + W - 250, LW]] : [])) {
       let x = x0;
       while (x < x1) {
         const w = 18 + R() * 34, h = 24 + R() * 92, top = GY - 70 - h;
@@ -99,8 +124,8 @@ function create(W, H, GY) {
   /* ---- 中景: 拝殿（中央の奥） ---- */
   const hall = layer(LW, H), hg = hall.getContext("2d");
   const HALL = { cx: PAD + W / 2, base: GY - 62 };
-  {
-    const cx = HALL.cx, by = HALL.base, w = 300;
+  if (TH.hall) {
+    const cx = HALL.cx, by = HALL.base, w = 300 * (TH.hall || 1);
     // 石段と基壇
     const st = new Path2D(); st.rect(cx - w * 0.62, by - 8, w * 1.24, 8); st.rect(cx - w * 0.55, by - 16, w * 1.1, 8);
     silhouette(hg, st, NEON_PINK, 0.35, 1.2);
@@ -156,7 +181,7 @@ function create(W, H, GY) {
     return p;
   }
   const toriiFar = layer(LW, H), tfg = toriiFar.getContext("2d");
-  for (const [dx, s, a] of [[-330, 0.42, 0.35], [330, 0.42, 0.35], [-190, 0.55, 0.45], [190, 0.55, 0.45]]) {
+  for (const [dx, s, a] of (TH.toriiFar ? (TH.sea ? [[-360, 0.3, 0.3], [360, 0.3, 0.3], [-230, 0.4, 0.38], [230, 0.4, 0.38], [-120, 0.5, 0.45], [120, 0.5, 0.45]] : [[-330, 0.42, 0.35], [330, 0.42, 0.35], [-190, 0.55, 0.45], [190, 0.55, 0.45]]) : [])) {
     silhouette(tfg, toriiPath(PAD + W / 2 + dx, GY - 46, s), NEON_RED, a, 1.6, "#0e0a24");
   }
   const toriiBig = layer(LW, H), tbg = toriiBig.getContext("2d");
@@ -173,7 +198,7 @@ function create(W, H, GY) {
 
   /* ---- 灯籠（左右の手前寄り） ---- */
   const lant = layer(LW, H), lg = lant.getContext("2d");
-  const LANTERNS = [{ x: PAD + 70, s: 1.0 }, { x: PAD + W - 70, s: 1.0 }, { x: PAD - 150, s: 0.9 }, { x: PAD + W + 150, s: 0.9 }];
+  const LANTERNS = TH.lanterns ? [{ x: PAD + 70, s: 1.0 }, { x: PAD + W - 70, s: 1.0 }, { x: PAD - 150, s: 0.9 }, { x: PAD + W + 150, s: 0.9 }] : [];
   for (const L of LANTERNS) {
     const x = L.x, b = GY - 2, s = L.s, p = new Path2D();
     p.rect(x - 22 * s, b - 10 * s, 44 * s, 10 * s);           // 基礎
@@ -193,7 +218,7 @@ function create(W, H, GY) {
   /* ---- 霞（なめらかな塊を1枚に焼いて横に流す） ---- */
   const fog = layer(W * 2, 160), fgc = fog.getContext("2d");
   { const r3 = rand(42); for (let i = 0; i < 26; i++) { const x = r3() * W * 2, y = 60 + r3() * 70, rr = 60 + r3() * 90;
-      const g = fgc.createRadialGradient(x, y, 0, x, y, rr); g.addColorStop(0, "rgba(255,120,190,0.10)"); g.addColorStop(1, "rgba(255,120,190,0)");
+      const g = fgc.createRadialGradient(x, y, 0, x, y, rr); g.addColorStop(0, "rgba(" + TH.fog + ",0.10)"); g.addColorStop(1, "rgba(" + TH.fog + ",0)");
       fgc.fillStyle = g; fgc.fillRect(x - rr, y - rr, rr * 2, rr * 2); } }
 
   /* ---- 舞う光の粒（桜の花びらとデータ片）。位置は t から決まるので、止め絵でも同じ絵になる ---- */
@@ -224,7 +249,7 @@ function create(W, H, GY) {
     ctx.drawImage(far, px(cam, 0.12), 0);
     for (const b of blinks) { if (Math.sin(t * 2.2 + b.ph) > 0.6) { ctx.fillStyle = "rgba(255,60,90,0.9)"; ctx.fillRect(b.x + px(cam, 0.12) - 1, b.y - 1, 3, 3); } }
     // 地平線の霞（キャラの黒いシルエットが沈まないよう、立ち位置の高さを少し明るく）
-    { const g = ctx.createLinearGradient(0, GY - 170, 0, GY); g.addColorStop(0, "rgba(255,90,170,0)"); g.addColorStop(1, "rgba(255,90,170,0.16)"); ctx.fillStyle = g; ctx.fillRect(0, GY - 170, W, 170); }
+    { const g = ctx.createLinearGradient(0, GY - 170, 0, GY); g.addColorStop(0, "rgba(" + TH.hor + ",0)"); g.addColorStop(1, "rgba(" + TH.hor + ",0.16)"); ctx.fillStyle = g; ctx.fillRect(0, GY - 170, W, 170); }
     ctx.drawImage(hall, px(cam, 0.28), 0);
     ctx.drawImage(toriiFar, px(cam, 0.42), 0);
     // 霞（奥）
@@ -269,12 +294,13 @@ function create(W, H, GY) {
     ctx.globalCompositeOperation = "source-over";
     // 参道（濡れた石畳）
     {
-      const g = ctx.createLinearGradient(0, GY, 0, H); g.addColorStop(0, "#120a24"); g.addColorStop(1, "#050409");
+      const g = ctx.createLinearGradient(0, GY, 0, H); g.addColorStop(0, TH.ground[0]); g.addColorStop(1, TH.ground[1]);
       ctx.fillStyle = g; ctx.fillRect(0, GY, W, H - GY);
       const vx = W / 2 - (cam && cam.x || 0) * 1.0, vy = GY - 120;
-      ctx.strokeStyle = "rgba(120,90,190,0.16)"; ctx.lineWidth = 1; ctx.beginPath();
+      ctx.strokeStyle = TH.sea ? "rgba(70,232,200,0.22)" : "rgba(120,90,190,0.16)"; ctx.lineWidth = 1; ctx.beginPath();
       for (let k = -14; k <= 14; k++) { const xb = vx + k * 90; const xa = vx + (xb - vx) * (1 / 6.0); ctx.moveTo(vx + (xa - vx), GY); ctx.lineTo(xb, H); }
-      for (const yy of [GY + 6, GY + 15, GY + 28, GY + 46, GY + 70]) { ctx.moveTo(0, yy); ctx.lineTo(W, yy); }
+      const off = TH.sea ? (t * 10) % 1 : 0;   /* データの海は横線がゆっくり手前へ流れる */
+      for (const yy of [6, 15, 28, 46, 70]) { const y2 = GY + yy * (1 + off * 0.25); ctx.moveTo(0, y2); ctx.lineTo(W, y2); }
       ctx.stroke();
     }
     // 映り込み（建物）
@@ -316,20 +342,22 @@ function create(W, H, GY) {
     for (const m of MOTES) {
       const y = ((m.y0 + t * m.v) % (H + 20)) - 10, x = ((m.x + Math.sin(t * m.f + m.ph) * m.sway - (cam && cam.x || 0) * m.p) % (W + 200) + W + 200) % (W + 200) - 100;
       ctx.save(); ctx.translate(x, y); ctx.rotate(t * m.f * 1.5 + m.ph);
-      if (m.petal) { ctx.fillStyle = "rgba(255,150,195,0.55)"; ctx.beginPath(); ctx.ellipse(0, 0, m.s * 1.4, m.s * 0.7, 0, 0, Math.PI * 2); ctx.fill(); }
+      if (TH.motes === 'snow') { ctx.fillStyle = "rgba(235,245,255,0.75)"; ctx.beginPath(); ctx.arc(0, 0, m.s * 0.8, 0, Math.PI * 2); ctx.fill(); }
+      else if (TH.motes === 'bits') { ctx.rotate(-(t * m.f * 1.5 + m.ph)); ctx.fillStyle = m.petal ? rgba(CYAN, 0.6) : rgba(GOLD, 0.5); ctx.font = (8 + m.s * 3).toFixed(0) + "px monospace"; ctx.fillText(m.petal ? "1" : "0", 0, 0); }
+      else if (m.petal) { ctx.fillStyle = "rgba(255,150,195,0.55)"; ctx.beginPath(); ctx.ellipse(0, 0, m.s * 1.4, m.s * 0.7, 0, 0, Math.PI * 2); ctx.fill(); }
       else { ctx.fillStyle = "rgba(70,232,255,0.5)"; ctx.fillRect(-m.s / 2, -m.s / 2, m.s, m.s); }
       ctx.restore();
     }
     // 足元の霞（手前）
-    { const g = ctx.createLinearGradient(0, GY - 40, 0, GY + 30); g.addColorStop(0, "rgba(255,110,180,0)"); g.addColorStop(0.6, "rgba(255,110,180,0.07)"); g.addColorStop(1, "rgba(255,110,180,0)"); ctx.fillStyle = g; ctx.fillRect(0, GY - 40, W, 70); }
+    { const g = ctx.createLinearGradient(0, GY - 40, 0, GY + 30); g.addColorStop(0, "rgba(" + TH.fog + ",0)"); g.addColorStop(0.6, "rgba(" + TH.fog + "," + (TH.motes === 'snow' ? 0.14 : 0.07) + ")"); g.addColorStop(1, "rgba(" + TH.fog + ",0)"); ctx.fillStyle = g; ctx.fillRect(0, GY - 40, W, 70); }
     // HUDの読みやすさのため上端を少し暗く + 周辺減光
     { const g = ctx.createLinearGradient(0, 0, 0, 90); g.addColorStop(0, "rgba(3,2,8,0.55)"); g.addColorStop(1, "rgba(3,2,8,0)"); ctx.fillStyle = g; ctx.fillRect(0, 0, W, 90); }
     { const g = ctx.createRadialGradient(W / 2, H * 0.55, H * 0.45, W / 2, H * 0.55, W * 0.75); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(0,0,0,0.5)"); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); }
     if (st.hit) { ctx.fillStyle = "rgba(255,255,255," + (0.08 * st.hit) + ")"; ctx.fillRect(0, 0, W, H); }
   }
 
-  return { draw, drawReflection, drawFront, groundY: GY };
+  return { draw, drawReflection, drawFront, groundY: GY, name: TH.name, subtitle: TH.sub };
 }
 
-window.StageVisual = { create };
+window.StageVisual = { create, THEMES: Object.keys(THEMES).map(k => ({ id: k, name: THEMES[k].name, sub: THEMES[k].sub })) };
 })();

@@ -214,7 +214,7 @@ const Store = {
 
 const Settings = {
   data: null,
-  defaults() { return { volume: 7, shake: true, glitch: true, scanline: true, rounds: 2, time: 99, easy: { p1: true, p2: true }, lock: false }; },
+  defaults() { return { volume: 7, shake: true, glitch: true, scanline: true, rounds: 2, time: 99, easy: { p1: true, p2: true }, lock: false, stage: 'random' }; },
   load() {
     const d = this.defaults();
     const s = Store.get('settings', null);
@@ -228,6 +228,7 @@ const Settings = {
       if (s.easy && typeof s.easy.p1 === 'boolean') d.easy.p1 = s.easy.p1;
       if (s.easy && typeof s.easy.p2 === 'boolean') d.easy.p2 = s.easy.p2;
       if (typeof s.lock === 'boolean') d.lock = s.lock;
+      if (typeof s.stage === 'string') d.stage = s.stage;
     }
     this.data = d;
     return d;
@@ -4334,13 +4335,23 @@ const Stage = {
 /* 現在の実装: stage.js の StageVisual（ネオン鳥居の参道）。無ければ上の Stage（手続き描画）で代用。
  * StageVisual は cam.x だけを受け取るので、ズームと縦スクロールは ctx の変換で与える（キャラと同じ (480, 地面) 中心）。
  * state.reflect(ctx) があれば、地面への映り込みとして呼ぶ（ctx はステージ空間: 地面=GROUND_Y、画面座標）。 */
-let SV = null;
-function initStage(colors) {
+let SV = null, SV_ID = '';
+const SV_CACHE = {};
+function initStage(colors, themeId) {
   SV = null;
   if (window.StageVisual) {
-    try { SV = window.StageVisual.create(CFG.W, CFG.H, CFG.GROUND_Y); } catch (e) { console.error('StageVisual.create failed', e); SV = null; }
+    const id = themeId || 'sando';
+    try { SV = SV_CACHE[id] || (SV_CACHE[id] = window.StageVisual.create(CFG.W, CFG.H, CFG.GROUND_Y, id)); SV_ID = id; } catch (e) { console.error('StageVisual.create failed', e); SV = null; }
   }
   if (!SV) Stage.build(colors);
+}
+/* 試合ごとのステージ（設定が「ランダム」なら毎回選び直す） */
+function pickStage() {
+  const list = window.StageVisual && StageVisual.THEMES ? StageVisual.THEMES.map(x => x.id) : ['sando'];
+  const want = Settings.data.stage || 'random';
+  const id = want === 'random' ? list[fxRng.int(list.length)] : (list.indexOf(want) >= 0 ? want : 'sando');
+  initStage(Game.data.stage.colors, id);
+  return id;
 }
 function svState(s) {
   return { intro: s.intro == null ? 1 : s.intro, ko: s.ko || 0, hit: s.hit || 0, hurry: s.hurry || 0 };
@@ -4924,6 +4935,7 @@ Game.scenes.settings = {
       { label: '制限時間', val: () => (s.time === 0 ? '無制限' : s.time + ' 秒') },
       { label: 'かんたん操作 P1', val: () => onoff(s.easy.p1) },
       { label: 'かんたん操作 P2', val: () => onoff(s.easy.p2) },
+      { label: 'ステージ', val: () => (s.stage === 'random' ? 'ランダム' : ((window.StageVisual && StageVisual.THEMES.find(x => x.id === s.stage)) || { name: '参道' }).name) },
       { label: 'お客さんモード', val: () => (s.lock ? 'ON（設定を隠す）' : 'OFF') },
       { label: '文化祭プリセット', val: () => '決定で 60秒・1本勝負' },
       { label: '本日の記録を消す', val: () => '決定で実行' },
@@ -4941,7 +4953,8 @@ Game.scenes.settings = {
     else if (i === 5) { const o = [60, 99, 0]; s.time = o[(o.indexOf(s.time) + dir + 3) % 3]; }
     else if (i === 6) s.easy.p1 = !s.easy.p1;
     else if (i === 7) s.easy.p2 = !s.easy.p2;
-    else if (i === 8) s.lock = !s.lock;
+    else if (i === 8) { const o = ['random'].concat(window.StageVisual ? StageVisual.THEMES.map(x => x.id) : []); s.stage = o[(o.indexOf(s.stage) + dir + o.length) % o.length]; }
+    else if (i === 9) s.lock = !s.lock;
     else return;
     Settings.save();
     Audio.play(i === 0 ? 'hitL' : 'menuMove');
@@ -4952,10 +4965,10 @@ Game.scenes.settings = {
     if (n & B_LEFT) this.change(-1);
     if (n & B_RIGHT) this.change(1);
     if (n & B_L) {
-      if (this.sel === 9) { s0().time = 60; s0().rounds = 1; Settings.save(); Audio.play('menuOk'); Toast.push('60秒・1本勝負にしました'); }
-      else if (this.sel === 10) { Records.reset(); Audio.play('menuOk'); Toast.push('本日の記録を消しました'); }
-      else if (this.sel === 11) { Settings.reset(); Audio.applyVol(); Audio.play('menuOk'); Toast.push('設定を初期化しました'); }
-      else if (this.sel === 12) { Audio.play('menuCancel'); Game.go('title'); }
+      if (this.sel === 10) { s0().time = 60; s0().rounds = 1; Settings.save(); Audio.play('menuOk'); Toast.push('60秒・1本勝負にしました'); }
+      else if (this.sel === 11) { Records.reset(); Audio.play('menuOk'); Toast.push('本日の記録を消しました'); }
+      else if (this.sel === 12) { Settings.reset(); Audio.applyVol(); Audio.play('menuOk'); Toast.push('設定を初期化しました'); }
+      else if (this.sel === 13) { Audio.play('menuCancel'); Game.go('title'); }
       else this.change(1);
     }
     if (n & B_H) { Audio.play('menuCancel'); Game.go('title'); }
@@ -4966,11 +4979,11 @@ Game.scenes.settings = {
     panel(ctx, 190, 84, 580, 392, '#19f3ff');
     const rows = this.rows();
     for (let i = 0; i < rows.length; i++) {
-      const y = 108 + i * 29.5, on = i === this.sel;
-      if (on) { ctx.fillStyle = 'rgba(25,243,255,0.14)'; fillRR(ctx, 204, y - 14, 552, 28, 4); ctx.fill(); }
-      drawText(ctx, rows[i].label, 228, y, { size: 19, color: on ? '#ffffff' : '#8fa3c8', base: 'middle' });
+      const y = 104 + i * 27.5, on = i === this.sel;
+      if (on) { ctx.fillStyle = 'rgba(25,243,255,0.14)'; fillRR(ctx, 204, y - 13, 552, 26, 4); ctx.fill(); }
+      drawText(ctx, rows[i].label, 228, y, { size: 17, color: on ? '#ffffff' : '#8fa3c8', base: 'middle' });
       const v = rows[i].val();
-      if (v) drawText(ctx, (on && i < 9 ? '◀  ' : '') + v + (on && i < 9 ? '  ▶' : ''), 730, y, { size: 18, align: 'right', color: on ? '#19f3ff' : '#e6f1ff', base: 'middle' });
+      if (v) drawText(ctx, (on && i < 10 ? '◀  ' : '') + v + (on && i < 10 ? '  ▶' : ''), 730, y, { size: 18, align: 'right', color: on ? '#19f3ff' : '#e6f1ff', base: 'middle' });
     }
     drawText(ctx, '左右で変更 / 即時保存 / お客さんモード中は、タイトルで F9 を押すと設定が出ます', 480, 506, { size: 14, align: 'center', color: '#8fa3c8' });
     drawConn(ctx);
@@ -5196,6 +5209,7 @@ Game.scenes.versus = {
   idleLimit: 0,
   enter(args) {
     this.args = args || {};
+    if (Game.tutorial) initStage(Game.data.stage.colors, 'sando'); else pickStage();
     this.pups = [0, 1].map(i => {
       const p = makePreview(Game.sel[i], Game.pal2[i]);
       p.cp.play('intro', 0, true); p.cp.tick(26); p.cp.commit(true);
@@ -5232,8 +5246,8 @@ Game.scenes.versus = {
     ctx.save(); ctx.translate(480, 270); ctx.scale(vs, vs);
     drawText(ctx, 'VS', 0, 20, { size: 84, font: 'en', align: 'center', color: '#ffffff', glow: '#ffe94d' });
     ctx.restore();
-    drawText(ctx, T.name, 480, 430, { size: 22, align: 'center', color: '#e6f1ff', glow: '#19f3ff', alpha: Util.clamp((t - 30) / 20, 0, 1) });
-    drawText(ctx, T.subtitle || '', 480, 456, { size: 14, align: 'center', color: '#8fa3c8', alpha: Util.clamp((t - 30) / 20, 0, 1) });
+    drawText(ctx, (SV && SV.name) || T.name, 480, 430, { size: 22, align: 'center', color: '#e6f1ff', glow: '#19f3ff', alpha: Util.clamp((t - 30) / 20, 0, 1) });
+    drawText(ctx, (SV && SV.subtitle) || T.subtitle || '', 480, 456, { size: 14, align: 'center', color: '#8fa3c8', alpha: Util.clamp((t - 30) / 20, 0, 1) });
     /* 掛け合い: P1 → P2 の順に吹き出し */
     const L = Game.tutorial ? null : vsLines(Game.sel[0], Game.sel[1]), len = L ? 210 : 120;
     if (L) {
