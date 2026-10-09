@@ -5015,12 +5015,39 @@ function renderFightWorld(ctx, m, alpha, o) {
   const zk = Display.k * z;
   for (let k = 0; k < 2; k++) drawFighterFull(ctx, F[order[k]], alpha, zk);
   for (let i = 0; i < 2; i++) drawTrail(ctx, F[i]);
+  for (let i = 0; i < 2; i++) drawStrike(ctx, F[i]);
   drawProjectiles(ctx, m, alpha);
   FX.draw(ctx);
   if (o.debugWorld) o.debugWorld(ctx, m);
   ctx.restore();
   drawStageFront(ctx, cam, t, fightStageState(m));
   ctx.restore();
+}
+
+/* 攻撃の「当たる時間」に、当たり判定の範囲へ光る三日月の斬撃を描く。
+ * 影絵は細部が見えにくいので、いつ・どこまで届くかをこれで見せる（形は当たり判定そのもの）。 */
+function drawStrike(ctx, f) {
+  const mv = f.mv;
+  if (f.state !== 'ATTACK' || !mv || !mv.m.hit || mv.m.kind === 'super' || !mv.m.boxes) return;
+  const col = LookAdapter.edge(f.rt.ch, f.pup.pal);
+  for (let i = 0; i < mv.m.boxes.length; i++) {
+    const b = mv.m.boxes[i], span = b.f1 - b.f0 + 1;
+    if (mv.n < b.f0 || mv.n > b.f1 + 4) continue;
+    const k = (mv.n - b.f0) / span, fade = mv.n > b.f1 ? 1 - (mv.n - b.f1) / 5 : 1;
+    const w = f.boxWorld(b), near = f.facing > 0 ? w[0] : w[2], far = f.facing > 0 ? w[2] : w[0];
+    const rx = Math.max(16, Math.abs(far - near)), ry = Math.max(14, (w[3] - w[1]) * 0.75), cy = (w[1] + w[3]) / 2;
+    /* 振り抜く: 上から下へ扇が開いていき、終わりぎわに細く消える */
+    const a1 = -1.15 + 2.3 * Math.min(1, k * 1.5 + 0.35), a0 = Math.max(-1.15, a1 - 1.6);
+    ctx.save();
+    ctx.translate(near, -cy); ctx.scale(f.facing, 1);
+    ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+    const pass = (lw, c, a) => { ctx.strokeStyle = c; ctx.globalAlpha = a * fade; ctx.lineWidth = lw; ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, a0, a1); ctx.stroke(); };
+    pass(16, col, 0.16); pass(7, col, 0.5); pass(2.5, '#ffffff', 0.9);
+    /* 先端の光 */
+    ctx.globalAlpha = 0.85 * fade; ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(Math.cos(a1) * rx, Math.sin(a1) * ry, 3.5, 0, 6.2832); ctx.fill();
+    ctx.restore();
+  }
 }
 
 /* 試合の状態 → ステージの state（intro: 点灯 / ko: 暗転 / hit: 強打の明滅 / hurry: 残り10秒以下） */
