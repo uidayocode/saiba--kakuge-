@@ -4627,8 +4627,8 @@ Game.scenes.boot = {
 /* ================= TITLE ================= */
 Game.scenes.title = {
   idleLimit: 0,
-  ALL: ['2人で対戦', '1人で遊ぶ (CPU)', '技一覧', 'あそびかた', '入力設定', '設定'],
-  get items() { return (Settings.data.lock && !Game.staff) ? this.ALL.slice(0, 4) : this.ALL; },
+  ALL: ['はじめての人へ', '2人で対戦', '1人で遊ぶ (CPU)', '技一覧', 'あそびかた', '入力設定', '設定'],
+  get items() { return (Settings.data.lock && !Game.staff) ? this.ALL.slice(0, 5) : this.ALL; },
   enter() {
     this.sel = 0; this.hintT = 0; this.demo = false; this.demoT = 0; this.demoI = 0; this.pups = [];
     FX.reset();
@@ -4658,13 +4658,20 @@ Game.scenes.title = {
     this.sel = Math.min(menuMove(this.sel, this.items.length, n), this.items.length - 1);
     if (n & B_L) {
       Audio.play('menuOk');
-      Game.training = false;
+      Game.training = false; Game.tutorial = false;
       this.sel = Math.min(this.sel, this.items.length - 1);
-      if (this.sel === 0) Game.go('charSelect');
-      else if (this.sel === 1) Game.go('cpuSelect');
-      else if (this.sel === 2) Game.go('moves');
-      else if (this.sel === 3) Game.go('howto');
-      else if (this.sel === 4) Game.go('inputConfig', { from: 'title' });
+      const it = this.items[this.sel];
+      if (it === 'はじめての人へ') {
+        /* チュートリアル: 巫女 対 練習台（ガードするだけ）。かんたん操作 */
+        Game.tutorial = true; Game.training = true; Game.cpuLevel = 'dummy';
+        Game.sel = ['miko', 'miko']; Game.pal2 = [false, true]; Game.easy = [true, true];
+        Game.go('versus', { training: true });
+      }
+      else if (it === '2人で対戦') Game.go('charSelect');
+      else if (it === '1人で遊ぶ (CPU)') Game.go('cpuSelect');
+      else if (it === '技一覧') Game.go('moves');
+      else if (it === 'あそびかた') Game.go('howto');
+      else if (it === '入力設定') Game.go('inputConfig', { from: 'title' });
       else Game.go('settings');
     }
   },
@@ -4691,7 +4698,7 @@ Game.scenes.title = {
     drawText(ctx, T.title, 480 + off, 168, { size: 66, align: 'center', color: '#ffffff', glow: '#ff3b5c' });
     drawText(ctx, T.titleEn, 480, 206, { size: 18, font: 'en', align: 'center', color: '#19f3ff', glow: '#19f3ff' });
     drawText(ctx, T.tagline, 480, 238, { size: 16, align: 'center', color: '#e6f1ff' });
-    drawMenuList(ctx, this.items, this.sel, 480, 274, 31, { size: 19 });
+    drawMenuList(ctx, this.items, this.sel, 480, 262, 29, { size: 18 });
     {
       const R = Records.get(), S = R.streak;
       if (R.matches > 0) {
@@ -4881,6 +4888,7 @@ Game.scenes.charSelect = {
       easy: i === 0 ? eff.easy.p1 : eff.easy.p2, pup: null, key: ''
     }));
     this.cd = -1; this.t = 0;
+    Game.tutorial = false;
     this.training = !!Game.training || !!HASH.p.training;
     this.refreshPreview(0); this.refreshPreview(1);
     FX.reset();
@@ -5401,15 +5409,56 @@ Game.scenes.fight = {
     FX.glitchWords = Game.data.texts.glitchWords;
     this.match = new Match({
       rts: [Game.chars[Game.sel[0]], Game.chars[Game.sel[1]]], pal2: Game.pal2.slice(), easy: Game.easy.slice(),
-      rounds: eff.rounds, time: eff.time, seed: seed, fx: FX
+      rounds: Game.tutorial ? 1 : eff.rounds, time: Game.tutorial ? 0 : eff.time, seed: seed, fx: FX
     });
+    this.tut = Game.tutorial ? { i: 0, t: 0, base: null, done: 0 } : null;
     this.hud = { lag: [this.match.fighters[0].hp, this.match.fighters[1].hp], wait: [0, 0], last: [0, 0], round: 1 };
     this.paused = false; this.pauseSel = 0; this.pauseWhy = ''; this.devs = [Devices.slots[0], Devices.slots[1]];
     const lv = Game.cpuLevel || 'dummy';
     this.cpu = this.training ? (lv === 'dummy' ? new CpuPolicy(1, 'dummy') : new CpuPolicy(1, 'cpu', lv)) : null;
+    if (Game.tutorial) this.cpu = { next: () => 0 };   /* チュートリアルの相手は何もしない（コンボが当たるように） */
     if (this.cpu && lv !== 'dummy') this.match.fighters[1].easy = true;
     this.cutPups = [null, null];
     Audio.resume();
+  },
+  TUT: [
+    { say: '→ を押しっぱなしで、前に歩こう', key: 'right', ok: (A, D, s) => s.walk >= 25 },
+    { say: '↑ でジャンプ', key: 'up', ok: (A) => A.isAir() },
+    { say: '弱ボタンで、すばやい攻撃', key: 'L', ok: (A, D, s) => A.usedMoves['5L'] > (s.base['5L'] || 0) },
+    { say: '強ボタンで、強い攻撃', key: 'H', ok: (A, D, s) => A.usedMoves['5H'] > (s.base['5H'] || 0) },
+    { say: '必殺ボタンで、お札を飛ばす', key: 'S', ok: (A, D, s) => A.usedMoves['sp1'] > (s.base['sp1'] || 0) },
+    { say: '→ を押しながら必殺ボタンで、昇り鈴（対空）', key: 'S', pre: '→ + ', ok: (A, D, s) => A.usedMoves['sp2'] > (s.base['sp2'] || 0) },
+    { say: '近づいて 弱 → 強 → 必殺 と続けて押そう（コンボ）', key: null, ok: (A, D, s, m) => m.maxCombo[0] >= 3 },
+    { say: 'ゲージ満タン！ ↓ を押しながら必殺ボタンで、大祓', key: 'S', pre: '↓ + ', gauge: true, ok: (A, D, s) => A.usedMoves['super'] > (s.base['super'] || 0) }
+  ],
+  tutUpdate(m) {
+    const T = this.tut, A = m.fighters[0], D = m.fighters[1];
+    if (m.phase !== 'FIGHTING') return;
+    /* 練習中は体力が減りきらない */
+    if (D.hp < D.maxHp * 0.4) D.hp = D.maxHp;
+    if (A.hp < A.maxHp * 0.4) A.hp = A.maxHp;
+    if (T.i >= this.TUT.length) { if (++T.done > 200) { Game.tutorial = false; Game.go('title'); } return; }
+    const st = this.TUT[T.i];
+    if (!T.base) { T.base = Object.assign({}, A.usedMoves); T.walk = 0; if (st.gauge) A.gauge = CFG.GAUGE_MAX; if (T.i === 6) m.maxCombo[0] = 0; }
+    if (A.state === 'WALK_F') T.walk++;
+    if (T.ok) { if (++T.t > 40) { T.i++; T.t = 0; T.ok = false; T.base = null; } return; }
+    if (st.ok(A, D, T, m)) { T.ok = true; T.t = 0; Audio.play('menuOk'); }
+  },
+  tutRender(ctx) {
+    const T = this.tut, N = this.TUT.length;
+    panel(ctx, 200, 92, 560, 74, '#ffe94d', 0.85);
+    if (T.i >= N) {
+      drawText(ctx, 'これで基本はばっちり！ タイトルに戻ります', 480, 128, { size: 22, align: 'center', base: 'middle', color: '#ffffff', glow: '#ffe94d' });
+      return;
+    }
+    const st = this.TUT[T.i];
+    drawText(ctx, 'はじめての人へ  ' + (T.i + 1) + ' / ' + N, 216, 110, { size: 12, color: '#ffe94d' });
+    drawText(ctx, T.ok ? 'OK！' : st.say, 480, 132, { size: T.ok ? 28 : 18, align: 'center', base: 'middle', color: T.ok ? '#7cff6b' : '#ffffff', glow: T.ok ? '#7cff6b' : null });
+    if (!T.ok && st.key) {
+      const k = st.key === 'right' ? (moveKeysName(0) === '矢印キー' ? '→' : keyName(0, 'right')) : st.key === 'up' ? (moveKeysName(0) === '矢印キー' ? '↑' : keyName(0, 'up')) : keyName(0, st.key);
+      drawText(ctx, '押すキー: ' + (st.pre || '') + k, 744, 110, { size: 12, align: 'right', color: '#ffe94d' });
+    }
+    drawText(ctx, 'Esc: メニュー（やめるときはタイトルへ）', 744, 156, { size: 10, align: 'right', color: '#8fa3c8' });
   },
   cutPup(slot) {
     if (!this.cutPups[slot]) { const f = this.match.fighters[slot]; this.cutPups[slot] = makePreview(f.rt.id, f.pup.pal === 'paletteP2'); }
@@ -5439,6 +5488,7 @@ Game.scenes.fight = {
     if (this.cpu) masks[1] = this.cpu.next(m, 1);
     m.step(masks);
     BGM.setHurry(m.timeMax > 0 && m.timer <= 10 && m.phase === 'FIGHTING');
+    if (this.tut) this.tutUpdate(m);
     /* HUD の遅延バー */
     if (m.round !== hud.round) { hud.round = m.round; for (let i = 0; i < 2; i++) { hud.lag[i] = m.fighters[i].hp; hud.last[i] = m.fighters[i].hp; } }
     for (let i = 0; i < 2; i++) {
@@ -5500,6 +5550,7 @@ Game.scenes.fight = {
     drawHUD(ctx, m, this.hud, Game.t);
     if (!this.paused) drawText(ctx, 'Esc: ポーズ / 技一覧', 480, 503, { size: 11, align: 'center', color: '#8fa3c8', alpha: 0.75 });
     drawFightBanners(ctx, m, this);
+    if (this.tut && !this.paused) this.tutRender(ctx);
     if (Input.idle > 1800 && !this.paused) {
       drawText(ctx, '10秒後にタイトルへ戻ります', 480, 150, { size: 20, align: 'center', color: '#ffb347', alpha: 0.6 + 0.4 * Math.sin(Game.t * 8) });
     }
