@@ -3231,7 +3231,7 @@ const FX = {
       def.pup.glitchEnd = this.t + dur; def.pup.glitchDur = dur; def.pup.glitchPow = imp;
       if (imp >= 2 && fxRng.chance(0.75)) {
         const w = this.glitchWords[fxRng.int(this.glitchWords.length)];
-        this.addText(w, i.x + fxRng.range(-20, 20), i.y + fxRng.range(10, 40), fxRng.chance(0.5) ? '#ff3b5c' : '#19f3ff', 12 + imp * 2, 26, 0.5, 'mono');
+        this.addText(w, i.x + fxRng.range(-30, 30), i.y + fxRng.range(60, 90), fxRng.chance(0.5) ? 'rgba(255,59,92,0.7)' : 'rgba(25,243,255,0.7)', 9 + imp, 20, 0.7, 'mono');
       }
     }
     if (i.ko) { this.skyFlash = 1; this.flash(0.8, '#ffffff', 2); }
@@ -4766,6 +4766,7 @@ Game.scenes.boot = {
   },
   render(ctx) {
     ctx.fillStyle = '#05060f'; ctx.fillRect(0, 0, CFG.W, CFG.H);
+    try { Backdrop.draw(ctx, 0.62); } catch (e) { /* 背景が無くても続ける */ }
     const t = Game.t;
     drawText(ctx, Game.data.texts.titleEn, 480, 170, { size: 20, font: 'en', color: '#19f3ff', align: 'center', glow: '#19f3ff' });
     drawText(ctx, Game.data.texts.title, 480, 240, { size: 54, color: '#ffffff', align: 'center', glow: '#ff3b5c' });
@@ -5132,12 +5133,17 @@ Game.scenes.charSelect = {
     drawText(ctx, this.training ? '1人で遊ぶ  キャラクター選択' : 'キャラクター選択', 480, 44, { size: 28, align: 'center', color: '#ffffff', glow: '#19f3ff' });
     /* 左右の大きな人形を先に描き、カードを手前に重ねる（カードが隠れないように） */
     for (let i = 0; i < 2; i++) {
-      const p = this.p[i], col = i === 0 ? UI_COL.p1 : UI_COL.p2, cx = i === 0 ? 170 : 790;
-      if (p.pup) { ctx.save(); ctx.globalAlpha = 0.85; drawPreview(ctx, p.pup, cx, 330, 1.05, 1, i === 0 ? 1 : -1); ctx.restore(); }
+      const p = this.p[i], col = i === 0 ? UI_COL.p1 : UI_COL.p2, cx = i === 0 ? 105 : 855;
+      if (p.pup) { ctx.save(); ctx.globalAlpha = 0.9; drawPreview(ctx, p.pup, cx, 335, 0.95, 1, i === 0 ? 1 : -1); ctx.restore(); }
       else drawText(ctx, '?', cx, 270, { size: 90, font: 'en', align: 'center', color: '#e6f1ff', glow: col, alpha: 0.6 });
     }
     const n = this.cards.length, cw = Math.min(120, 520 / n), gap = 8;
     const fit = (str, max, w) => Math.max(8, Math.min(max, (w - 10) / Math.max(1, str.length)));
+    {
+      const tw = n * cw + (n - 1) * gap, bx = 480 - tw / 2 - 18;
+      ctx.save(); ctx.fillStyle = 'rgba(4,5,16,0.72)'; fillRR(ctx, bx, 62, tw + 36, 236, 10); ctx.fill();
+      ctx.strokeStyle = 'rgba(143,163,200,0.25)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+    }
     const total = n * cw + (n - 1) * gap, x0 = 480 - total / 2;
     for (let c = 0; c < n; c++) {
       const x = x0 + c * (cw + gap), y = 78, h = 160, id = this.cards[c];
@@ -5171,7 +5177,7 @@ Game.scenes.charSelect = {
     for (let i = 0; i < 2; i++) {
       const p = this.p[i], col = i === 0 ? UI_COL.p1 : UI_COL.p2;
       const cx = i === 0 ? 170 : 790, id = this.hoverId(i);
-      drawText(ctx, 'P' + (i + 1), i === 0 ? 40 : 920, 124, { size: 26, font: 'en', align: i === 0 ? 'left' : 'right', color: col, glow: col });
+      drawText(ctx, 'P' + (i + 1), i === 0 ? 24 : 936, 80, { size: 26, font: 'en', align: i === 0 ? 'left' : 'right', color: col, glow: col });
       const ix = i === 0 ? 24 : 636, iw = 300;
       panel(ctx, ix, 348, iw, 156, col, 0.8);
       if (id) {
@@ -5509,46 +5515,77 @@ function drawHPBar(ctx, side, hp, lag, max, color, t) {
   const base = low ? (Math.floor(t * 10) % 2 ? '#ff3b5c' : '#ff9aa8') : color;
   gr.addColorStop(0, mixHex(base, '#ffffff', 0.45)); gr.addColorStop(0.5, base); gr.addColorStop(1, mixHex(base, '#000000', 0.45));
   ctx.fillStyle = gr; ctx.fillRect(rx(rHp), y, fillW(rHp), h);
+  /* つや（上半分の光の帯）がゆっくり流れる */
+  const sw = ((t * 0.35 + side * 0.5) % 1.4 - 0.2) * w;
+  const sg = ctx.createLinearGradient(x0 + sw - 60, 0, x0 + sw + 60, 0);
+  sg.addColorStop(0, 'rgba(255,255,255,0)'); sg.addColorStop(0.5, 'rgba(255,255,255,0.28)'); sg.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = sg; ctx.fillRect(rx(rHp), y + 2, fillW(rHp), h * 0.35);
+  /* 10% ごとの目盛り */
+  ctx.fillStyle = 'rgba(4,5,16,0.55)';
+  for (let k = 1; k < 10; k++) ctx.fillRect(x0 + w * k / 10 - 1, y + h * 0.55, 2, h * 0.45);
   ctx.restore();
   ctx.save();
   path(); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
-  ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = rgba(color, 0.25); ctx.lineWidth = 6; ctx.stroke();
+  ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = rgba(low ? '#ff3b5c' : color, low ? 0.35 + 0.3 * Math.sin(t * 10) : 0.25); ctx.lineWidth = low ? 10 : 6; ctx.stroke();
   ctx.restore();
 }
 
 function drawHUD(ctx, m, hud, t) {
   const F = m.fighters, T = Game.data.texts;
+  /* 上下の帯（HUD を背景から浮かせる） */
+  { const g = ctx.createLinearGradient(0, 0, 0, 96); g.addColorStop(0, 'rgba(3,3,10,0.72)'); g.addColorStop(1, 'rgba(3,3,10,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, CFG.W, 96); }
+  { const g = ctx.createLinearGradient(0, 470, 0, CFG.H); g.addColorStop(0, 'rgba(3,3,10,0)'); g.addColorStop(1, 'rgba(3,3,10,0.7)'); ctx.fillStyle = g; ctx.fillRect(0, 470, CFG.W, CFG.H - 470); }
   for (let i = 0; i < 2; i++) {
     const f = F[i], col = f.pup.glow(), a = i === 0 ? 'left' : 'right';
     drawHPBar(ctx, i, f.hp, hud.lag[i], f.maxHp, col, t);
-    const nx = i === 0 ? 48 : 912;
-    drawText(ctx, 'P' + (i + 1) + ' ' + f.ch.name, nx, 56, { size: 16, color: '#ffffff', align: a, glow: col });
+    /* 名前の札（斜めの台） */
+    {
+      const nx = i === 0 ? 40 : 920, w = 210, y0 = 40, h = 22, dir = i === 0 ? 1 : -1;
+      ctx.save(); ctx.beginPath();
+      ctx.moveTo(nx, y0); ctx.lineTo(nx + dir * w, y0); ctx.lineTo(nx + dir * (w - 10), y0 + h); ctx.lineTo(nx, y0 + h); ctx.closePath();
+      const g = ctx.createLinearGradient(nx, 0, nx + dir * w, 0); g.addColorStop(0, rgba(col, 0.45)); g.addColorStop(1, rgba(col, 0));
+      ctx.fillStyle = g; ctx.fill(); ctx.restore();
+      drawText(ctx, 'P' + (i + 1), nx + dir * 8, y0 + 12, { size: 12, font: 'en', color: '#ffffff', align: a, base: 'middle' });
+      drawText(ctx, f.ch.name, nx + dir * 34, y0 + 12, { size: 15, color: '#ffffff', align: a, base: 'middle', glow: col });
+    }
+    /* 取ったラウンド: お札の形（ひし形） */
     for (let p = 0; p < m.need; p++) {
-      const px = i === 0 ? 48 + 4 + p * 18 : 912 - 4 - p * 18, on = p < m.wins[i];
-      ctx.beginPath(); ctx.arc(px, 74, 6, 0, 6.2832);
-      ctx.fillStyle = on ? col : 'rgba(255,255,255,0.08)'; ctx.fill();
-      ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.stroke();
-      if (on) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = rgba(col, 0.4); ctx.beginPath(); ctx.arc(px, 74, 10, 0, 6.2832); ctx.fill(); ctx.restore(); }
+      const px = i === 0 ? 50 + p * 20 : 910 - p * 20, py = 76, on = p < m.wins[i];
+      ctx.save(); ctx.translate(px, py); ctx.rotate(Math.PI / 4);
+      ctx.fillStyle = on ? col : 'rgba(255,255,255,0.06)'; ctx.fillRect(-5, -5, 10, 10);
+      ctx.strokeStyle = on ? '#ffffff' : rgba(col, 0.7); ctx.lineWidth = 1.5; ctx.strokeRect(-5, -5, 10, 10);
+      if (on) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = rgba(col, 0.35); ctx.fillRect(-9, -9, 18, 18); }
+      ctx.restore();
     }
-    /* ゲージ */
-    const gx = i === 0 ? 40 : 600, gw = 320, y = 500, full = f.gauge >= CFG.GAUGE_MAX;
-    for (let s = 0; s < 10; s++) {
-      const sx = i === 0 ? gx + s * 32 : gx + (9 - s) * 32;
-      const fill = Util.clamp(f.gauge / 100 - s, 0, 1);
-      ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(sx + 1, y, 30, 10);
-      if (fill > 0) {
-        ctx.fillStyle = full ? mixHex('#ffd24a', '#ffffff', 0.5 + 0.5 * Math.sin(t * 12)) : (i === 0 ? '#ff8aa0' : '#8ff6ff');
-        if (i === 0) ctx.fillRect(sx + 1, y, 30 * fill, 10); else ctx.fillRect(sx + 1 + 30 * (1 - fill), y, 30 * fill, 10);
-      }
-    }
-    ctx.strokeStyle = rgba(col, 0.6); ctx.lineWidth = 1; ctx.strokeRect(gx + 0.5, y + 0.5, gw, 9);
+    /* ゲージ（斜めの帯・10目盛り。半分の所にガードキャンセルの印） */
+    const gx = i === 0 ? 40 : 600, gw = 320, y = 497, gh = 14, full = f.gauge >= CFG.GAUGE_MAX;
+    ctx.save();
+    const sk = 8, gp = new Path2D();
+    if (i === 0) { gp.moveTo(gx + sk, y); gp.lineTo(gx + gw, y); gp.lineTo(gx + gw - sk, y + gh); gp.lineTo(gx, y + gh); }
+    else { gp.moveTo(gx, y); gp.lineTo(gx + gw - sk, y); gp.lineTo(gx + gw, y + gh); gp.lineTo(gx + sk, y + gh); }
+    gp.closePath();
+    ctx.fillStyle = 'rgba(4,5,16,0.85)'; ctx.fill(gp);
+    ctx.clip(gp);
+    const r = Util.clamp(f.gauge / CFG.GAUGE_MAX, 0, 1), fw = gw * r;
+    const gc = full ? mixHex('#ffd24a', '#ffffff', 0.5 + 0.5 * Math.sin(t * 12)) : (i === 0 ? '#ff8aa0' : '#8ff6ff');
+    const gg = ctx.createLinearGradient(0, y, 0, y + gh); gg.addColorStop(0, mixHex(gc, '#ffffff', 0.4)); gg.addColorStop(1, mixHex(gc, '#000000', 0.25));
+    ctx.fillStyle = gg; ctx.fillRect(i === 0 ? gx : gx + gw - fw, y, fw, gh);
+    ctx.fillStyle = 'rgba(4,5,16,0.6)';
+    for (let k = 1; k < 10; k++) ctx.fillRect(gx + gw * k / 10 - 1, y, 2, gh);
+    ctx.restore();
+    ctx.save(); ctx.strokeStyle = full ? '#ffd24a' : rgba(col, 0.7); ctx.lineWidth = 1.5; ctx.stroke(gp);
+    if (full) { ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = rgba('#ffd24a', 0.35 + 0.25 * Math.sin(t * 9)); ctx.lineWidth = 7; ctx.stroke(gp); }
+    /* 半分の印（ガードキャンセルに使える量） */
+    const hx = gx + gw / 2; ctx.fillStyle = f.gauge >= CFG.GC_COST ? '#ffffff' : 'rgba(255,255,255,0.35)';
+    ctx.beginPath(); ctx.moveTo(hx - 4, y - 5); ctx.lineTo(hx + 4, y - 5); ctx.lineTo(hx, y); ctx.closePath(); ctx.fill();
+    ctx.restore();
     if (full) {
       const pu = 0.65 + 0.35 * Math.sin(t * 9);
       drawText(ctx, T.banners.superReady, i === 0 ? gx : gx + gw, y - 8, { size: 15, font: 'en', color: '#ffd24a', align: a, glow: '#ffd24a', alpha: pu });
-    } else drawText(ctx, '大祓', i === 0 ? gx : gx + gw, y - 6, { size: 12, color: '#8fa3c8', align: a });
+    } else drawText(ctx, '大祓', i === 0 ? gx + 14 : gx + gw - 14, y - 6, { size: 12, color: '#b9c7e6', align: a });
     if (f.easy) {
       const bx = i === 0 ? gx + gw + 8 : gx - 8;
-      drawText(ctx, 'かんたん', bx, y + 9, { size: 10, color: '#ffe94d', align: i === 0 ? 'left' : 'right' });
+      drawText(ctx, 'かんたん', bx, y + 11, { size: 10, color: '#ffe94d', align: i === 0 ? 'left' : 'right' });
     }
     /* コンボ表示 */
     const D = F[1 - i];
@@ -5860,8 +5897,8 @@ Game.scenes.result = {
     const winCol = this.win === 0 ? UI_COL.p1 : (this.win === 1 ? UI_COL.p2 : '#8fa3c8');
     /* 人形 */
     if (this.win >= 0) {
-      drawPreview(ctx, this.pw, this.win === 0 ? 170 : 790, 400, 1.35, 1, this.win === 0 ? 1 : -1);
-      drawPreview(ctx, this.pl, this.win === 0 ? 790 : 170, 400, 1.15, 1, this.win === 0 ? -1 : 1);
+      drawPreview(ctx, this.pw, this.win === 0 ? 170 : 790, 455, 1.12, 1, this.win === 0 ? 1 : -1);
+      drawPreview(ctx, this.pl, this.win === 0 ? 790 : 170, 455, 0.95, 0.85, this.win === 0 ? -1 : 1);
     } else {
       drawPreview(ctx, this.pw, 170, 400, 1.2, 1, 1); drawPreview(ctx, this.pl, 790, 400, 1.2, 1, -1);
     }
@@ -5876,10 +5913,11 @@ Game.scenes.result = {
       /* 勝者のセリフ */
       const qa = Util.clamp((t - 40) / 14, 0, 1);
       if (qa > 0) {
-        const bx = this.win === 0 ? 70 : 590, by = 108;
+        const bx = this.win === 0 ? 20 : 640, by = 152;
         ctx.save(); ctx.globalAlpha = qa;
-        panel(ctx, bx, by, 300, 34, winCol, 0.85);
-        drawText(ctx, '「' + this.quote + '」', bx + 150, by + 18, { size: 14, align: 'center', base: 'middle', color: '#ffffff' });
+        panel(ctx, bx, by, 300, 40, winCol, 0.9);
+        drawText(ctx, Game.charName(r.ids[this.win]), bx + 12, by + 10, { size: 11, color: winCol, base: 'middle' });
+        drawText(ctx, '「' + this.quote + '」', bx + 150, by + 26, { size: 14, align: 'center', base: 'middle', color: '#ffffff' });
         ctx.restore();
       }
       /* おみくじ */
