@@ -214,7 +214,7 @@ const Store = {
 
 const Settings = {
   data: null,
-  defaults() { return { volume: 7, shake: true, glitch: true, scanline: true, rounds: 2, time: 99, easy: { p1: true, p2: true } }; },
+  defaults() { return { volume: 7, shake: true, glitch: true, scanline: true, rounds: 2, time: 99, easy: { p1: true, p2: true }, lock: false }; },
   load() {
     const d = this.defaults();
     const s = Store.get('settings', null);
@@ -227,6 +227,7 @@ const Settings = {
       if (s.time === 60 || s.time === 99 || s.time === 0) d.time = s.time;
       if (s.easy && typeof s.easy.p1 === 'boolean') d.easy.p1 = s.easy.p1;
       if (s.easy && typeof s.easy.p2 === 'boolean') d.easy.p2 = s.easy.p2;
+      if (typeof s.lock === 'boolean') d.lock = s.lock;
     }
     this.data = d;
     return d;
@@ -2835,6 +2836,84 @@ class Match {
 /* ================================================================
  * S6  Audio (Web Audio 合成) / FX（パーティクル・リング・揺れ・グリッチ）
  * ================================================================ */
+/* ================================================================
+ * BGM（Web Audio で合成。外部ファイルなし）
+ * 都節音階（D Eb G A Bb）で和の雰囲気。曲は 16 ステップ × 4 小節のループ。
+ *   title : ゆっくりの琴風アルペジオ + 低いパッド
+ *   fight : 速いベース + キック/ハット + 琴風の旋律
+ *   hurry : fight と同じで テンポを上げる（残り10秒）
+ * ================================================================ */
+const BGM = {
+  cur: null, bus: null, next: 0, step: 0, timer: 0, tempo: 1,
+  SCALE: [0, 1, 5, 7, 8],           /* D からの半音: D Eb G A Bb */
+  note(deg, oct) { const n = Math.floor(deg / 5), k = ((deg % 5) + 5) % 5; return 146.83 * Math.pow(2, (this.SCALE[k] + 12 * (n + (oct || 0))) / 12); },
+  SONGS: {
+    title: { bpm: 76, mel: [7, -1, 9, -1, 8, -1, 7, -1, 5, -1, 6, -1, 7, -1, -1, -1,  7, -1, 9, -1, 10, -1, 9, -1, 8, -1, 7, -1, 5, -1, -1, -1],
+             bass: [0, 0, 0, 0, 3, 3, 0, 0], drums: false },
+    fight: { bpm: 148, mel: [10, -1, 9, 10, 12, -1, 10, -1, 9, -1, 8, -1, 7, -1, 8, 9,  10, -1, 12, -1, 13, 12, 10, -1, 9, -1, 10, 9, 7, -1, -1, -1],
+             bass: [0, 0, 0, 0, 2, 2, 3, 3], drums: true }
+  },
+  ensure() {
+    const A = Audio; if (!A.ctx) return false;
+    if (!this.bus) { this.bus = A.ctx.createGain(); this.bus.gain.value = 0.55; this.bus.connect(A.comp); }
+    return true;
+  },
+  play(name) {
+    if (this.cur === name) return;
+    this.cur = name; this.step = 0;
+    if (!this.ensure()) return;
+    this.next = Audio.ctx.currentTime + 0.1;
+    if (!this.timer) this.timer = setInterval(() => this.tick(), 50);
+  },
+  stop() { this.cur = null; },
+  setHurry(on) { this.tempo = on ? 1.18 : 1; },
+  voice(type, f, t, dur, gain, attack) {
+    const c = Audio.ctx, o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(gain, t + (attack || 0.005)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.bus); o.start(t); o.stop(t + dur + 0.05);
+  },
+  koto(f, t, gain) {       /* 撥弦: 三角波 + 1オクターブ上の短い倍音 */
+    this.voice('triangle', f, t, 0.9, gain);
+    this.voice('sine', f * 2, t, 0.25, gain * 0.35);
+  },
+  hit(t, kind) {
+    const c = Audio.ctx;
+    if (kind === 'kick') { const o = c.createOscillator(), g = c.createGain(); o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.12); g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18); o.connect(g); g.connect(this.bus); o.start(t); o.stop(t + 0.2); return; }
+    const src = c.createBufferSource(); src.buffer = Audio.noiseBuf;
+    const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = kind === 'hat' ? 7000 : 1800;
+    const g = c.createGain(), d = kind === 'hat' ? 0.04 : 0.12, v = kind === 'hat' ? 0.06 : 0.14;
+    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    src.connect(f); f.connect(g); g.connect(this.bus); src.start(t, Math.random() * 0.5); src.stop(t + d + 0.02);
+  },
+  tick() {
+    if (!this.cur || !Audio.ctx || Audio.ctx.state !== 'running') return;
+    const S = this.SONGS[this.cur], c = Audio.ctx;
+    const dt = 60 / (S.bpm * this.tempo) / 4;
+    if (this.next < c.currentTime - 0.5) this.next = c.currentTime + 0.05;   /* タブ復帰などで遅れたら追いつく */
+    while (this.next < c.currentTime + 0.2) {
+      const i = this.step % 32, t = this.next;
+      const m = S.mel[i];
+      if (m >= 0) this.koto(this.note(m, 0), t, this.cur === 'title' ? 0.09 : 0.07);
+      if (i % 4 === 0) {
+        const b = S.bass[(i / 4) | 0];
+        if (S.drums) this.voice('sawtooth', this.note(b, -1), t, dt * 3.6, 0.07, 0.003);
+        else this.voice('sine', this.note(b, -1), t, dt * 15, 0.06, 0.4);
+      }
+      if (S.drums) {
+        if (i % 2 === 1) this.voice('sawtooth', this.note(S.bass[(i / 4) | 0], -1), t, dt * 0.8, 0.04, 0.002);
+        if (i % 4 === 0) this.hit(t, 'kick');
+        if (i % 8 === 4) this.hit(t, 'snare');
+        if (i % 2 === 0) this.hit(t, 'hat');
+      } else if (i % 8 === 0) {
+        /* 遠くで鳴る鈴 */
+        this.voice('sine', this.note(12, 1), t, 1.4, 0.025);
+      }
+      this.next += dt; this.step++;
+    }
+  }
+};
+
 const Audio = {
   ctx: null, master: null, comp: null, muted: false, last: {}, active: 0, noiseBuf: null, ready: false,
   MIN_INT: { swingL: 30, swingH: 40, cast: 60, hitL: 30, hitM: 30, hitH: 30, block: 30, launch: 100, land: 40, step: 60, dash: 80, jump: 80, menuMove: 30, menuOk: 30, menuCancel: 30, error: 120 },
@@ -4216,6 +4295,11 @@ const Game = {
     Input.lockFor(CFG.INPUT_LOCK);
     Input.navRep.prev = 0;
     this.scene.enter(args || {});
+    /* 場面ごとの BGM（テスト・ギャラリーでは鳴らさない） */
+    if (this.mode === 'game') {
+      if (name === 'versus' || name === 'fight') BGM.play('fight');
+      else if (name !== 'boot') { BGM.play('title'); BGM.setHurry(false); }
+    }
   },
   charName(id) { return this.chars[id] ? this.chars[id].ch.name : id; },
   /* ロスターの先頭から。1体なら同キャラ対戦 */
@@ -4523,7 +4607,8 @@ Game.scenes.boot = {
 /* ================= TITLE ================= */
 Game.scenes.title = {
   idleLimit: 0,
-  items: ['2人で対戦', '1人で遊ぶ (CPU)', '技一覧', 'あそびかた', '入力設定', '設定'],
+  ALL: ['2人で対戦', '1人で遊ぶ (CPU)', '技一覧', 'あそびかた', '入力設定', '設定'],
+  get items() { return (Settings.data.lock && !Game.staff) ? this.ALL.slice(0, 4) : this.ALL; },
   enter() {
     this.sel = 0; this.hintT = 0; this.demo = false; this.demoT = 0; this.demoI = 0; this.pups = [];
     FX.reset();
@@ -4548,11 +4633,13 @@ Game.scenes.title = {
       this.pups.forEach(p => previewStep(p));
       return;
     }
-    if (Input.idle > 1800) { this.startDemo(); return; }
-    this.sel = menuMove(this.sel, this.items.length, n);
+    if (Input.idle > 1800) { Game.staff = false; this.startDemo(); return; }
+    if (Input.keyPressed('F9')) { Game.staff = !Game.staff; Audio.play('menuOk'); Toast.push(Game.staff ? 'スタッフ用メニューを表示' : 'スタッフ用メニューを隠しました'); }
+    this.sel = Math.min(menuMove(this.sel, this.items.length, n), this.items.length - 1);
     if (n & B_L) {
       Audio.play('menuOk');
       Game.training = false;
+      this.sel = Math.min(this.sel, this.items.length - 1);
       if (this.sel === 0) Game.go('charSelect');
       else if (this.sel === 1) Game.go('cpuSelect');
       else if (this.sel === 2) Game.go('moves');
@@ -4696,6 +4783,8 @@ Game.scenes.settings = {
       { label: '制限時間', val: () => (s.time === 0 ? '無制限' : s.time + ' 秒') },
       { label: 'かんたん操作 P1', val: () => onoff(s.easy.p1) },
       { label: 'かんたん操作 P2', val: () => onoff(s.easy.p2) },
+      { label: 'お客さんモード', val: () => (s.lock ? 'ON（設定を隠す）' : 'OFF') },
+      { label: '文化祭プリセット', val: () => '決定で 60秒・1本勝負' },
       { label: '設定の初期化', val: () => '決定で実行' },
       { label: '戻る', val: () => '' }
     ];
@@ -4710,18 +4799,20 @@ Game.scenes.settings = {
     else if (i === 5) { const o = [60, 99, 0]; s.time = o[(o.indexOf(s.time) + dir + 3) % 3]; }
     else if (i === 6) s.easy.p1 = !s.easy.p1;
     else if (i === 7) s.easy.p2 = !s.easy.p2;
+    else if (i === 8) s.lock = !s.lock;
     else return;
     Settings.save();
     Audio.play(i === 0 ? 'hitL' : 'menuMove');
   },
   update() {
-    const n = Input.nav, rows = this.rows();
+    const n = Input.nav, rows = this.rows(), s0 = () => Settings.data;
     this.sel = menuMove(this.sel, rows.length, n);
     if (n & B_LEFT) this.change(-1);
     if (n & B_RIGHT) this.change(1);
     if (n & B_L) {
-      if (this.sel === 8) { Settings.reset(); Audio.applyVol(); Audio.play('menuOk'); Toast.push('設定を初期化しました'); }
-      else if (this.sel === 9) { Audio.play('menuCancel'); Game.go('title'); }
+      if (this.sel === 9) { s0().time = 60; s0().rounds = 1; Settings.save(); Audio.play('menuOk'); Toast.push('60秒・1本勝負にしました'); }
+      else if (this.sel === 10) { Settings.reset(); Audio.applyVol(); Audio.play('menuOk'); Toast.push('設定を初期化しました'); }
+      else if (this.sel === 11) { Audio.play('menuCancel'); Game.go('title'); }
       else this.change(1);
     }
     if (n & B_H) { Audio.play('menuCancel'); Game.go('title'); }
@@ -4732,13 +4823,13 @@ Game.scenes.settings = {
     panel(ctx, 190, 84, 580, 392, '#19f3ff');
     const rows = this.rows();
     for (let i = 0; i < rows.length; i++) {
-      const y = 118 + i * 36, on = i === this.sel;
-      if (on) { ctx.fillStyle = 'rgba(25,243,255,0.14)'; fillRR(ctx, 204, y - 18, 552, 32, 4); ctx.fill(); }
+      const y = 112 + i * 32, on = i === this.sel;
+      if (on) { ctx.fillStyle = 'rgba(25,243,255,0.14)'; fillRR(ctx, 204, y - 16, 552, 30, 4); ctx.fill(); }
       drawText(ctx, rows[i].label, 228, y, { size: 19, color: on ? '#ffffff' : '#8fa3c8', base: 'middle' });
       const v = rows[i].val();
-      if (v) drawText(ctx, (on && i < 8 ? '◀  ' : '') + v + (on && i < 8 ? '  ▶' : ''), 730, y, { size: 18, align: 'right', color: on ? '#19f3ff' : '#e6f1ff', base: 'middle' });
+      if (v) drawText(ctx, (on && i < 9 ? '◀  ' : '') + v + (on && i < 9 ? '  ▶' : ''), 730, y, { size: 18, align: 'right', color: on ? '#19f3ff' : '#e6f1ff', base: 'middle' });
     }
-    drawText(ctx, '左右で変更 / 即時保存 / 戻る: 強 / Esc', 480, 506, { size: 14, align: 'center', color: '#8fa3c8' });
+    drawText(ctx, '左右で変更 / 即時保存 / お客さんモード中は、タイトルで F9 を押すと設定が出ます', 480, 506, { size: 14, align: 'center', color: '#8fa3c8' });
     drawConn(ctx);
   }
 };
@@ -4818,7 +4909,7 @@ Game.scenes.charSelect = {
       if (anyDecided) { this.p.forEach(p => { p.decided = false; p.picked = null; }); this.cd = -1; Audio.play('menuCancel'); }
       else { Audio.play('menuCancel'); Game.go('title'); return; }
     }
-    if (Input.startHold[0] === 45 || Input.startHold[1] === 45 || Input.keyPressed('Tab')) { Game.go('inputConfig', { from: 'charSelect' }); return; }
+    if (!(Settings.data.lock && !Game.staff) && (Input.startHold[0] === 45 || Input.startHold[1] === 45 || Input.keyPressed('Tab'))) { Game.go('inputConfig', { from: 'charSelect' }); return; }
     /* 1人で練習: P2 は CPU。P1 が決めたら同じキャラ・別の配色で自動的に決まる */
     if (this.training) {
       const a = this.p[0], b = this.p[1];
@@ -4925,7 +5016,7 @@ Game.scenes.charSelect = {
       const msg = this.training ? 'P1 の 弱ボタン（' + keyName(0, 'L') + '）を押すと始まります'
         : '2人とも 弱ボタンを押すと始まります（P1: ' + keyName(0, 'L') + '   P2: ' + keyName(1, 'L') + '）';
       drawText(ctx, msg, 480, 262, { size: 15, align: 'center', color: '#ffe94d', alpha: 0.75 + 0.25 * Math.sin(Game.t * 4) });
-      drawText(ctx, 'Tab: 入力設定    Esc: 戻る', 480, 284, { size: 12, align: 'center', color: '#8fa3c8' });
+      drawText(ctx, (Settings.data.lock && !Game.staff) ? 'Esc: 戻る' : 'Tab: 入力設定    Esc: 戻る', 480, 284, { size: 12, align: 'center', color: '#8fa3c8' });
     }
     if (this.cd >= 0) {
       const k = this.cd / 60;
@@ -5295,7 +5386,7 @@ Game.scenes.fight = {
   /* ポーズ中もメニュー操作のため update は回す（シミュレーションは進めない） */
   timeScale() { return (this.paused || !this.match) ? 1 : this.match.timeScale(); },
   fxScale() { return (this.paused || !this.match) ? 0 : (this.match.phase === 'KO' ? 0.5 : 1); },
-  pauseItems() { return this.pauseWhy === 'disconnect' ? ['キーボードで継続', 'タイトルへ'] : ['再開', '技一覧', '入力設定', 'キャラ選択へ', 'タイトルへ']; },
+  pauseItems() { return this.pauseWhy === 'disconnect' ? ['キーボードで継続', 'タイトルへ'] : ((Settings.data.lock && !Game.staff) ? ['再開', '技一覧', 'キャラ選択へ', 'タイトルへ'] : ['再開', '技一覧', '入力設定', 'キャラ選択へ', 'タイトルへ']); },
   openPause(why) {
     if (this.paused) return;
     this.paused = true; this.pauseSel = 0; this.pauseWhy = why || 'menu'; this.showMoves = false;
@@ -5315,6 +5406,7 @@ Game.scenes.fight = {
     const masks = [Input.raw[0] & ~B_START, Input.raw[1] & ~B_START];
     if (this.cpu) masks[1] = this.cpu.next(m, 1);
     m.step(masks);
+    BGM.setHurry(m.timeMax > 0 && m.timer <= 10 && m.phase === 'FIGHTING');
     /* HUD の遅延バー */
     if (m.round !== hud.round) { hud.round = m.round; for (let i = 0; i < 2; i++) { hud.lag[i] = m.fighters[i].hp; hud.last[i] = m.fighters[i].hp; } }
     for (let i = 0; i < 2; i++) {
@@ -6843,7 +6935,7 @@ function boot() {
   Game.pal2 = [false, true];
   const eff = Settings.eff();
   Game.easy = [eff.easy.p1, eff.easy.p2];
-  window.__denno = { Game: Game, Input: Input, Devices: Devices, FX: FX, Debug: Debug, SelfTest: SelfTest, Gallery: Gallery, Settings: Settings, validateGameData: validateGameData, CFG: CFG, Match: Match, NullFX: NullFX, CpuPolicy: CpuPolicy };
+  window.__denno = { Game: Game, Input: Input, Devices: Devices, FX: FX, Debug: Debug, SelfTest: SelfTest, Gallery: Gallery, Settings: Settings, validateGameData: validateGameData, CFG: CFG, Match: Match, NullFX: NullFX, CpuPolicy: CpuPolicy, BGM: BGM };
   Main.applyMode();
   Main.startLoops();
 }
