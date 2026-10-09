@@ -247,6 +247,26 @@ const Settings = {
   }
 };
 Settings.load();
+
+/* ---- 本日の記録（日付が変わったら自動で空になる） ---- */
+const Records = {
+  today() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); },
+  get() {
+    const r = Store.get('records', null);
+    if (!r || r.date !== this.today()) return { date: this.today(), streak: { easy: 0, normal: 0, hard: 0 }, combo: 0, comboWho: '', matches: 0 };
+    return r;
+  },
+  /* 新記録の項目名を返す（なければ空配列） */
+  note(o) {
+    const r = this.get(), news = [];
+    r.matches = (r.matches || 0) + 1;
+    if (o.level && o.streak > (r.streak[o.level] || 0)) { r.streak[o.level] = o.streak; news.push('streak'); }
+    if (o.combo > (r.combo || 0)) { r.combo = o.combo; r.comboWho = o.who || ''; news.push('combo'); }
+    Store.set('records', r);
+    return news;
+  },
+  reset() { Store.remove('records'); }
+};
 if (HASH.p.seed != null && HASH.p.seed !== true) fxRng = new Rng(parseInt(HASH.p.seed, 10) || 1);
 
 /* ================================================================
@@ -4672,6 +4692,16 @@ Game.scenes.title = {
     drawText(ctx, T.titleEn, 480, 206, { size: 18, font: 'en', align: 'center', color: '#19f3ff', glow: '#19f3ff' });
     drawText(ctx, T.tagline, 480, 238, { size: 16, align: 'center', color: '#e6f1ff' });
     drawMenuList(ctx, this.items, this.sel, 480, 274, 31, { size: 19 });
+    {
+      const R = Records.get(), S = R.streak;
+      if (R.matches > 0) {
+        panel(ctx, 742, 270, 196, 132, '#ffe94d', 0.75);
+        drawText(ctx, '本日の記録', 840, 290, { size: 15, align: 'center', color: '#ffe94d' });
+        const rows = [['CPU やさしい', S.easy + ' 連勝'], ['CPU ふつう', S.normal + ' 連勝'], ['CPU つよい', S.hard + ' 連勝'], ['最大コンボ', R.combo + ' HIT']];
+        rows.forEach((x, i) => { drawText(ctx, x[0], 754, 318 + i * 21, { size: 12, color: '#b9c7e6' }); drawText(ctx, x[1], 926, 318 + i * 21, { size: 13, align: 'right', color: '#ffffff' }); });
+        if (R.comboWho) drawText(ctx, '（' + R.comboWho + '）', 926, 394, { size: 10, align: 'right', color: '#8fa3c8' });
+      }
+    }
     drawText(ctx, 'メニュー:  ↑↓ で選ぶ   Enter か 弱 で決定', 480, 462, { size: 13, align: 'center', color: '#ffe94d' });
     drawText(ctx, keyLegend(0), 480, 490, { size: 13, align: 'center', color: UI_COL.p1 });
     drawText(ctx, keyLegend(1), 480, 510, { size: 13, align: 'center', color: UI_COL.p2 });
@@ -4785,6 +4815,7 @@ Game.scenes.settings = {
       { label: 'かんたん操作 P2', val: () => onoff(s.easy.p2) },
       { label: 'お客さんモード', val: () => (s.lock ? 'ON（設定を隠す）' : 'OFF') },
       { label: '文化祭プリセット', val: () => '決定で 60秒・1本勝負' },
+      { label: '本日の記録を消す', val: () => '決定で実行' },
       { label: '設定の初期化', val: () => '決定で実行' },
       { label: '戻る', val: () => '' }
     ];
@@ -4811,8 +4842,9 @@ Game.scenes.settings = {
     if (n & B_RIGHT) this.change(1);
     if (n & B_L) {
       if (this.sel === 9) { s0().time = 60; s0().rounds = 1; Settings.save(); Audio.play('menuOk'); Toast.push('60秒・1本勝負にしました'); }
-      else if (this.sel === 10) { Settings.reset(); Audio.applyVol(); Audio.play('menuOk'); Toast.push('設定を初期化しました'); }
-      else if (this.sel === 11) { Audio.play('menuCancel'); Game.go('title'); }
+      else if (this.sel === 10) { Records.reset(); Audio.play('menuOk'); Toast.push('本日の記録を消しました'); }
+      else if (this.sel === 11) { Settings.reset(); Audio.applyVol(); Audio.play('menuOk'); Toast.push('設定を初期化しました'); }
+      else if (this.sel === 12) { Audio.play('menuCancel'); Game.go('title'); }
       else this.change(1);
     }
     if (n & B_H) { Audio.play('menuCancel'); Game.go('title'); }
@@ -4823,8 +4855,8 @@ Game.scenes.settings = {
     panel(ctx, 190, 84, 580, 392, '#19f3ff');
     const rows = this.rows();
     for (let i = 0; i < rows.length; i++) {
-      const y = 112 + i * 32, on = i === this.sel;
-      if (on) { ctx.fillStyle = 'rgba(25,243,255,0.14)'; fillRR(ctx, 204, y - 16, 552, 30, 4); ctx.fill(); }
+      const y = 108 + i * 29.5, on = i === this.sel;
+      if (on) { ctx.fillStyle = 'rgba(25,243,255,0.14)'; fillRR(ctx, 204, y - 14, 552, 28, 4); ctx.fill(); }
       drawText(ctx, rows[i].label, 228, y, { size: 19, color: on ? '#ffffff' : '#8fa3c8', base: 'middle' });
       const v = rows[i].val();
       if (v) drawText(ctx, (on && i < 9 ? '◀  ' : '') + v + (on && i < 9 ? '  ▶' : ''), 730, y, { size: 18, align: 'right', color: on ? '#19f3ff' : '#e6f1ff', base: 'middle' });
@@ -5504,6 +5536,12 @@ Game.scenes.result = {
     /* CPU 戦の連勝数 */
     this.vsCpu = !!Game.training && CPU_LEVELS[Game.cpuLevel];
     if (this.vsCpu) Game.cpuStreak = r.winner === 0 ? (Game.cpuStreak || 0) + 1 : 0;
+    /* 本日の記録（CPU 戦は P1 だけ、2人対戦は両方のコンボを記録） */
+    {
+      const combo = this.vsCpu ? r.maxCombo[0] : Math.max(r.maxCombo[0], r.maxCombo[1]);
+      const whoI = this.vsCpu ? 0 : (r.maxCombo[0] >= r.maxCombo[1] ? 0 : 1);
+      this.news = Records.note({ level: this.vsCpu && r.winner === 0 ? Game.cpuLevel : null, streak: Game.cpuStreak || 0, combo: combo, who: Game.charName(r.ids[whoI]) });
+    }
     this.win = r.winner >= 0 ? r.winner : -1;
     const ids = r.ids;
     if (this.win >= 0) {
@@ -5599,6 +5637,10 @@ Game.scenes.result = {
           for (let i = 0; i < lines.length; i++) drawText(ctx, lines[i], cx, top + 176 + i * 20, { size: 15, align: 'center', color: '#3a2418', alpha: la });
         }
       }
+    }
+    if (this.news && this.news.length && t > 20) {
+      const msg = this.news.map(k => k === 'streak' ? '連勝' : '最大コンボ').join('・') + ' 本日の新記録！';
+      drawText(ctx, msg, 480, 128, { size: 18, align: 'center', color: '#ffe94d', glow: '#ffe94d', alpha: 0.6 + 0.4 * Math.sin(t * 0.2) });
     }
     if (this.vsCpu) {
       const lv = CPU_LEVELS[Game.cpuLevel].label, st = Game.cpuStreak || 0;
