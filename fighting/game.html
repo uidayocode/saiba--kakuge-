@@ -1414,7 +1414,8 @@ const Devices = {
   },
   cfgToDev(c, i, auto) {
     let dev = null;
-    if (c.kind === 'kb1' || c.kind === 'kb2' || c.kind === 'kb3') dev = this.kb[c.kind];
+    /* テンキー(kb3)は選べないようにした。以前の保存値に kb3 が残っていても自動に戻す */
+    if (c.kind === 'kb1' || c.kind === 'kb2') dev = this.kb[c.kind];
     else if (c.kind === 'pad') {
       const pads = this.connectedPads();
       for (let n = 0; n < pads.length; n++) if (pads[n].profileKey === c.key && pads[n].index === c.index) dev = pads[n];
@@ -1457,7 +1458,7 @@ const Devices = {
     this.resolve();
   },
   slotChoices() {
-    const a = [{ spec: 'auto', label: '自動' }, { spec: 'kb1', label: this.kb.kb1.name }, { spec: 'kb2', label: this.kb.kb2.name }, { spec: 'kb3', label: this.kb.kb3.name }];
+    const a = [{ spec: 'auto', label: '自動' }, { spec: 'kb1', label: this.kb.kb1.name }, { spec: 'kb2', label: this.kb.kb2.name }];
     this.connectedPads().forEach(p => a.push({ spec: p, label: 'PAD ' + p.name + ' #' + p.index }));
     return a;
   },
@@ -5510,7 +5511,8 @@ Game.scenes.inputConfig = {
     if (n & B_H) { this.leave(); return; }
     switch (row.t) {
       case 'slot':
-        if (lr || ok) {
+        /* 決定ボタンでは切り替えない（決定の押し間違いで機器が変わるのを防ぐ） */
+        if (lr) {
           const ch = Devices.slotChoices(), cur = this.slotIndex(row.i);
           const nx = (cur + (lr || 1) + ch.length) % ch.length;
           Devices.setSlot(row.i, ch[nx].spec);
