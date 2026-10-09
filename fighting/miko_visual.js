@@ -5,7 +5,7 @@
  *   MikoVisual.solve(body, pose)            … 設計書4.9のFK。キャラ空間(x前+, y上+)の関節14点
  *   MikoVisual.clipPose(ch, clipName, t)    … data.js のクリップを時刻 t で評価（ループ対応）
  *   MikoVisual.draw(ctx, joints, opts)      … 関節から衣装の形を作り、影絵で描く
- *        opts = { x, y, facing, scale, color, flash, alpha, chains }
+ *        opts = { x, y, facing, scale, color, flash, alpha, chains, id }  id = キャラ（miko/komainu/oni404/fox）
  *        chains = { ponytail, ribbon, sleeveF, sleeveB, haoriTail }（任意）各値は節の位置 [[x,y],...]（足元原点・x前+・y下+）
  *        x,y = 足元の画面座標 / facing = 1 右向き, -1 左向き / color = 縁のネオン色
  * ===================================================================== */
@@ -112,7 +112,7 @@ function strip(nodes, w0, w1) {
 /* 衣装: 後ろ髪・袴・大きな袖・白衣・御幣。layer "main" は体の一枚シルエット、"front" は手前の腕。
  * ch（任意）= エンジンの ChainSim が計算した節の位置 { ponytail, ribbon, sleeveF, sleeveB, haoriTail }。
  * 各値は [[x,y],...]（足元原点、x前+、y下+）。あれば髪・リボン・袖・羽織の先をその位置に置き換える。 */
-function costume(j, ch) {
+function costumeMiko(j, ch) {
   ch = ch || {};
   const P = i => [j.x[i], -j.y[i]];
   const pel = P(J.P), neck = P(J.NECK), head = P(J.HEAD), sh = P(J.SH);
@@ -162,11 +162,110 @@ function costume(j, ch) {
   return parts;
 }
 
+
+/* ---- ほかのキャラ（style.html の画風比較で作った形を、影絵用に移したもの） ----
+ * 座標は足元原点・y下+。ch = 揺れ物の節（あれば尻尾や髪をその位置で揺らす） */
+function bodyFrame(j) {
+  const P = i => [j.x[i], -j.y[i]];
+  const pel = P(J.P), neck = P(J.NECK), head = P(J.HEAD), sh = P(J.SH);
+  const tUp = unit(sub(neck, pel)), back = perpL(tUp), fwd = [-back[0], -back[1]], down = [0, 1];
+  const parts = [];
+  const put = (g, layer, eye) => parts.push({ g, layer: layer || "main", eye: !!eye });
+  const legs = (rT, rS, rF) => {
+    for (const [K, A, T] of [[J.KB, J.AB, J.TB], [J.KF, J.AF, J.TF]]) {
+      put(capsule(pel, P(K), rT, rT * 0.85)); put(capsule(P(K), P(A), rT * 0.8, rS)); put(capsule(P(A), P(T), rF, rF * 0.8));
+    }
+  };
+  const arm = (E, H, rU, rF, rH, layer) => {
+    put(capsule(sh, P(E), rU, rU * 0.9), layer); put(capsule(P(E), P(H), rU * 0.85, rF), layer); put(circle(P(H), rH), layer);
+  };
+  return { P, pel, neck, head, sh, tUp, back, fwd, down, parts, put, legs, arm };
+}
+function costumeKomainu(j, ch) {
+  ch = ch || {};
+  const { P, pel, neck, head, sh, tUp, back, fwd, down, parts, put, legs, arm } = bodyFrame(j);
+  const r = 14;
+  // 巻いた尻尾（揺れ物があれば、その先を揺らす）
+  if (ch.shortTail && ch.shortTail.length > 1) put(polyPath(strip(ch.shortTail, 20, 8)));
+  else { const tb = add(add(pel, back, 18), tUp, 10); put(circle(add(tb, [0, -6]), 11)); put(polyPath([add(pel, back, 6), add(tb, [8, -14]), add(tb, [-14, -22]), add(tb, [-16, 2])])); }
+  legs(9, 7, 7);
+  arm(J.EB, J.HB, 9, 7, 9);
+  put(polyPath(hull([add(pel, back, 13), add(pel, fwd, 11), add(neck, back, 15), add(add(neck, fwd, 17), down, 6), add(sh, fwd, 18)])));
+  // たてがみ
+  const mane = [];
+  for (let k = 0; k < 14; k++) { const t = k / 14 * Math.PI * 2, rr = k % 2 ? r * 1.25 : r * 2.0; mane.push(add(add(head, back, 4), [Math.cos(t) * rr, Math.sin(t) * rr])); }
+  put(polyPath(mane));
+  for (const id of ["maneTuft1", "maneTuft2"]) if (ch[id] && ch[id].length > 1) put(polyPath(strip(ch[id], 10, 3)));
+  // 角ばった頭と鼻づら・耳
+  put(polyPath(hull([add(head, [-r * 0.9, -r * 0.8]), add(head, [r * 0.6, -r * 0.9]), add(head, [-r * 0.9, r * 0.8]),
+                     add(head, fwd, r * 1.55), add(add(head, fwd, r * 1.5), [0, r * 0.6]), add(head, [r * 0.5, r * 0.9])])));
+  put(polyPath([add(head, [-r * 0.4, -r * 0.7]), add(head, [-r * 0.2, -r * 1.6]), add(head, [r * 0.3, -r * 0.8])]));
+  put(ell(add(add(head, fwd, r * 0.55), [0, -r * 0.25]), 3, 1.4), "main", true);
+  arm(J.EF, J.HF, 10, 8, 10, "front");
+  return parts;
+}
+function costumeOni(j, ch) {
+  ch = ch || {};
+  const { P, pel, neck, head, tUp, back, fwd, down, parts, put, legs, arm } = bodyFrame(j);
+  const r = 17;
+  legs(13, 11, 9);
+  // 腰布（揺れ物があれば裾を揺らす）
+  put(polyPath(hull([add(pel, back, 22), add(pel, fwd, 21), add(lerp(pel, P(J.KF), 0.75), fwd, 10), add(lerp(pel, P(J.KB), 0.75), back, 10)])));
+  if (ch.loincloth && ch.loincloth.length > 1) put(polyPath(strip(ch.loincloth, 22, 14)));
+  arm(J.EB, J.HB, 14, 12, 12);
+  // 逆三角形の上半身
+  put(polyPath(hull([add(pel, back, 18), add(pel, fwd, 18), add(add(neck, back, 30), down, 6), add(add(neck, fwd, 30), down, 6), add(neck, back, 16), add(neck, fwd, 16)])));
+  // ざんばら髪・頭・2本の角
+  const hair = [];
+  for (let k = 0; k < 11; k++) { const t = Math.PI * (0.95 + k / 10 * 1.1), rr = k % 2 ? r * 1.15 : r * 1.65; hair.push(add(add(head, back, 5), [Math.cos(t) * rr, Math.sin(t) * rr])); }
+  hair.push(add(head, [0, r * 0.4]));
+  put(polyPath(hair));
+  for (const id of ["hairTuft1", "hairTuft2"]) if (ch[id] && ch[id].length > 1) put(polyPath(strip(ch[id], 12, 3)));
+  put(circle(head, r));
+  put(polyPath([add(head, [-r * 0.5, -r * 0.8]), add(head, [-r * 0.9, -r * 2.0]), add(head, [-r * 0.05, -r * 0.95])]));
+  put(polyPath([add(head, [r * 0.25, -r * 0.85]), add(head, [r * 0.55, -r * 2.05]), add(head, [r * 0.85, -r * 0.6])]));
+  put(polyPath([add(add(head, fwd, r * 0.15), [0, -r * 0.2]), add(add(head, fwd, r * 0.8), [0, -r * 0.35]), add(add(head, fwd, r * 0.75), [0, -r * 0.05])]), "main", true);
+  // 金棒（手前の手）
+  const hf = P(J.HF), fa = unit(sub(hf, P(J.EF))), clubDir = unit(add(fa, [0, -0.6]));
+  put(capsule(add(hf, clubDir, -10), add(hf, clubDir, 70), 5, 10), "front");
+  arm(J.EF, J.HF, 15, 13, 13, "front");
+  return parts;
+}
+function costumeFox(j, ch) {
+  ch = ch || {};
+  const { P, pel, neck, head, tUp, back, fwd, parts, put, legs, arm } = bodyFrame(j);
+  const r = 13;
+  // 3本の尻尾（揺れ物の節があればそれに沿わせる）
+  const tails = ["tailA", "tailB", "tailC"];
+  if (tails.every(id => ch[id] && ch[id].length > 1)) tails.forEach(id => put(polyPath(strip(ch[id], 22, 3))));
+  else for (const [ang, L] of [[-35, 62], [-60, 70], [-85, 58]]) {
+    const DEGR = Math.PI / 180;
+    const dir = unit([back[0] * Math.cos(ang * DEGR) + tUp[0] * Math.sin(-ang * DEGR), back[1] * Math.cos(ang * DEGR) + tUp[1] * Math.sin(-ang * DEGR)]);
+    const base = add(pel, back, 4), mid = add(base, dir, L * 0.55), tip = add(base, dir, L), n = perpL(dir);
+    put(polyPath([base, add(mid, n, 13), add(tip, n, 3), tip, add(tip, n, -4), add(mid, n, -11)]));
+  }
+  legs(6.5, 4.5, 4.5);
+  arm(J.EB, J.HB, 5.5, 4.5, 5);
+  // 細身の着物と帯
+  put(polyPath(hull([add(pel, back, 10), add(pel, fwd, 10), add(neck, back, 9), add(neck, fwd, 9), add(lerp(pel, P(J.KF), 0.45), fwd, 11), add(lerp(pel, P(J.KB), 0.45), back, 11)])));
+  // 狐の面（とがった鼻先と2本の耳）
+  put(polyPath([add(head, [-r * 0.85, -r * 0.45]), add(head, [-r * 0.6, -r * 2.0]), add(head, [-r * 0.05, -r * 0.85])]));
+  put(polyPath([add(head, [r * 0.1, -r * 0.85]), add(head, [r * 0.55, -r * 2.05]), add(head, [r * 0.85, -r * 0.35])]));
+  put(polyPath(hull([add(head, [-r, -r * 0.5]), add(head, [-r * 0.7, r * 0.8]), add(head, [r * 0.2, r * 0.9]),
+                     add(add(head, fwd, r * 1.7), [0, r * 0.25]), add(head, [r * 0.5, -r * 0.9]), add(head, [-r * 0.4, -r])])));
+  put(polyPath([add(add(head, fwd, r * 0.15), [0, -r * 0.05]), add(add(head, fwd, r * 0.85), [0, -r * 0.4]), add(add(head, fwd, r * 0.7), [0, r * 0.05])]), "main", true);
+  if (ch.sleeve && ch.sleeve.length > 1) put(polyPath(strip(ch.sleeve, 12, 8)), "front");
+  arm(J.EF, J.HF, 6, 5, 5.5, "front");
+  return parts;
+}
+const COSTUMES = { miko: costumeMiko, komainu: costumeKomainu, oni404: costumeOni, fox: costumeFox };
+function costume(j, ch, id) { return (COSTUMES[id] || costumeMiko)(j, ch); }
+
 function rgba(h, a) { const n = parseInt(h.slice(1), 16); return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")"; }
 
 /* 影絵: 全部品を「光る太い線」で描いてから黒で塗る → 外側の輪郭だけが光る。手前の腕は細い縁で別に重ねる */
 function draw(ctx, joints, o) {
-  const c = o.color || "#ff4a6b", parts = costume(joints, o.chains), flash = o.flash || 0;
+  const c = o.color || "#ff4a6b", parts = costume(joints, o.chains, o.id || "miko"), flash = o.flash || 0;
   ctx.save();
   ctx.translate(o.x, o.y); ctx.scale((o.facing || 1) * (o.scale || 1), o.scale || 1);
   ctx.globalAlpha = o.alpha == null ? 1 : o.alpha;
@@ -186,5 +285,5 @@ function draw(ctx, joints, o) {
   ctx.restore();
 }
 
-window.MikoVisual = { solve, clipPose, draw, costume, J };
+window.MikoVisual = { solve, clipPose, draw, costume, J, has: id => !!COSTUMES[id] };
 })();

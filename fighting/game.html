@@ -45,8 +45,8 @@ const CFG = {
   WORLD_W: 1280, GROUND_Y: 460, START_X: [500, 780],
   WALL_MIN: 40, WALL_MAX: 1240, MAX_DIST: 880, CAM_MARGIN: 30,
   CAM_FOLLOW_X: 0.18, CAM_FOLLOW_Z: 0.10,
-  GAUGE_MAX: 1000, SUPER_COST: 1000, GAUGE_GAIN: 1.4, GAUGE_COMEBACK: 2.0,
-  DOWN_FRAMES: 28, WAKEUP_FRAMES: 18, WAKEUP_QUICK: 14, QUICK_WINDOW: 6,
+  GAUGE_MAX: 1000, SUPER_COST: 1000, GAUGE_GAIN: 1.4, GAUGE_COMEBACK: 2.0, PROJ_GUARD_GAUGE: 25,
+  DOWN_FRAMES: 28, WAKEUP_FRAMES: 18, WAKEUP_QUICK: 14, QUICK_WINDOW: 6, WAKE_DELAY: 22, ROLL_FRAMES: 20, ROLL_SPEED: 6, WAKE_THROW_INV: 6,
   JUGGLE_DEFAULT: 3, THROW_HITSTOP: 12, THROW_TECH: 7, THROW_TECH_PUSH: 40, THROW_TECH_STUN: 12,
   GUARD_GRACE: 3, CROSSUP_EPS: 12, BTN_BUFFER: 6, CHORD_WINDOW: 3, DTAP_WINDOW: 12,
   CMD_WINDOW: 16, CMD_WINDOW_SUPER: 36, THROW_INV_AFTER_STUN: 3,
@@ -71,7 +71,7 @@ const CI = {}; CH.forEach((n, i) => { CI[n] = i; });
 const NCH = CH.length;
 const EASE_NAMES = ['linear', 'inQuad', 'outQuad', 'inOutQuad', 'inCubic', 'outCubic', 'inOutCubic', 'outExpo', 'inExpo', 'inBack', 'outBack', 'inOutBack', 'outElastic', 'hold'];
 const BACK_EASES = ['outBack', 'inBack', 'inOutBack'];
-const MOVE_IDS = ['5L', '5H', '2L', '2H', 'jL', 'jH', 'throw', 'sp1', 'sp2', 'super'];
+const MOVE_IDS = ['5L', '5H', '2L', '2H', 'jL', 'jH', 'throw', 'sp1', 'sp2', 'sp3', 'super'];
 const REQ_CLIPS = ['idle', 'walkF', 'walkB', 'crouch', 'jumpUp', 'jumpFall', 'dashF', 'dashB', 'landing', 'guardStand', 'guardCrouch', 'hurtHigh', 'hurtLow', 'hurtAir', 'down', 'wakeup', 'thrown', 'intro', 'win', 'lose'];
 const BONES = ['pelvis', 'torso', 'head', 'uarmF', 'farmF', 'uarmB', 'farmB', 'thighF', 'shinF', 'footF', 'thighB', 'shinB', 'footB'];
 const BONE_IDX = {}; BONES.forEach((n, i) => { BONE_IDX[n] = i; });
@@ -891,6 +891,7 @@ function validateGameData(D) {
       rangeChk(P + '.stats.gravity', S.gravity, 0.65, 0.85); rangeChk(P + '.stats.airJumps', S.airJumps, 0, 1, true);
       rangeChk(P + '.stats.prejump', S.prejump, 1, 12, true); rangeChk(P + '.stats.landLag', S.landLag, 0, 12, true);
       rangeChk(P + '.stats.gaugeMul', S.gaugeMul, 0.9, 1.2);
+      if (S.dmgMul != null) rangeChk(P + '.stats.dmgMul', S.dmgMul, 0.6, 1.4);
       if (!isObj(S.dashF) || !isInt(S.dashF.frames) || !isNum(S.dashF.speed)) E(P + '.stats.dashF', '{frames,speed} が必要');
       if (!isObj(S.dashB) || !isInt(S.dashB.frames) || !isNum(S.dashB.speed) || !isInt(S.dashB.invuln)) E(P + '.stats.dashB', '{frames,speed,invuln} が必要');
     }
@@ -997,8 +998,8 @@ function validateGameData(D) {
     }
     /* moves */
     if (!isObj(c.moves)) { E(P + '.moves', '欠落'); return; }
-    const kindOf = { '5L': 'normal', '5H': 'normal', '2L': 'normal', '2H': 'normal', 'jL': 'normal', 'jH': 'normal', throw: 'throw', sp1: 'special', sp2: 'special', super: 'super' };
-    const stanceOf = { '5L': 'stand', '5H': 'stand', '2L': 'crouch', '2H': 'crouch', 'jL': 'air', 'jH': 'air', throw: 'stand', sp1: 'stand', sp2: 'stand', super: 'stand' };
+    const kindOf = { '5L': 'normal', '5H': 'normal', '2L': 'normal', '2H': 'normal', 'jL': 'normal', 'jH': 'normal', throw: 'throw', sp1: 'special', sp2: 'special', sp3: 'special', super: 'super' };
+    const stanceOf = { '5L': 'stand', '5H': 'stand', '2L': 'crouch', '2H': 'crouch', 'jL': 'air', 'jH': 'air', throw: 'stand', sp1: 'stand', sp2: 'stand', sp3: 'stand', super: 'stand' };
     MOVE_IDS.forEach(mid => {
       const m = c.moves[mid], mp = P + '.moves.' + mid;
       if (!isObj(m)) { E(mp, '技がありません'); return; }
@@ -1029,8 +1030,9 @@ function validateGameData(D) {
       }
       if (m.hurtOverride) m.hurtOverride.forEach((h, i) => { if (!Array.isArray(h.boxes)) E(mp + '.hurtOverride[' + i + ']', 'boxes が必要'); else h.boxes.forEach((b, k) => vBox(mp + '.hurtOverride[' + i + '].boxes[' + k + ']', b)); });
       if (m.invuln) m.invuln.forEach((v, i) => {
-        if (['strike', 'throw', 'all'].indexOf(v.type) < 0) E(mp + '.invuln[' + i + '].type', 'strike|throw|all');
-        if (isInt(v.f0) && isInt(v.f1) && (v.f1 - v.f0 + 1 > 15) && mid !== 'super') Wn(mp + '.invuln[' + i + ']', '無敵が長い (' + (v.f1 - v.f0 + 1) + 'F)');
+        if (['strike', 'throw', 'all', 'proj'].indexOf(v.type) < 0) E(mp + '.invuln[' + i + '].type', 'strike|throw|all|proj');
+        /* proj = 飛び道具だけ無敵（打撃・投げは当たる）。長くても問題ないので警告しない */
+        if (isInt(v.f0) && isInt(v.f1) && (v.f1 - v.f0 + 1 > 15) && mid !== 'super' && v.type !== 'proj') Wn(mp + '.invuln[' + i + ']', '無敵が長い (' + (v.f1 - v.f0 + 1) + 'F)');
       });
       if (m.motion) m.motion.forEach((v, i) => { if (!isInt(v.f0) || !isInt(v.f1) || !isNum(v.vx)) E(mp + '.motion[' + i + ']', '{f0,f1,vx} が必要'); });
       if (m.spawn) m.spawn.forEach((s, i) => {
@@ -1636,7 +1638,8 @@ const CommandParser = {
     while ((m = re.exec(s)) !== null) { end = m.index + m[0].length; if (m[0].length === 0) re.lastIndex++; }
     return end;
   },
-  /* 必殺ボタンの押下フレーム pf で評価。戻り値: 'super'|'sp1'|'sp2'|'' (空=不発) */
+  /* 必殺ボタンの押下フレーム pf で評価。戻り値: 'super'|'sp1'|'sp2'|'sp3'|'' (空=不発)
+   * sp1 = ↓↘→ / sp2 = ↓↙← / sp3 = →↓↘ 。かんたん操作: 必殺だけ=sp1 / →=sp2 / ←=sp3 / ↓=super */
   parse(buf, pf, gauge, easy) {
     const s16 = this.dirString(buf, pf, CFG.CMD_WINDOW);
     const s36 = this.dirString(buf, pf, CFG.CMD_WINDOW_SUPER);
@@ -1645,6 +1648,8 @@ const CommandParser = {
     if (/23$/.test(s16)) e236 = Math.max(e236, s16.length);
     let e214 = this.lastEnd(/2(1)?4/g, s16);
     if (/21$/.test(s16)) e214 = Math.max(e214, s16.length);
+    const e623 = this.lastEnd(/623/g, s16);
+    if (e623 >= 0 && e623 >= e236 && e623 >= e214) return 'sp3';
     if (e236 >= 0 || e214 >= 0) return e236 >= e214 ? 'sp1' : 'sp2';
     if (!easy) return '';
     /* 簡易操作: Sを押した瞬間(猶予2F)の方向 */
@@ -1656,6 +1661,7 @@ const CommandParser = {
       if (v !== 5) { n = v; break; }
     }
     if (n === 6 || n === 9) return 'sp2';
+    if (n === 4 || n === 7) return 'sp3';
     if (n === 1 || n === 2 || n === 3) return gauge >= CFG.SUPER_COST ? 'super' : '';
     return 'sp1';
   }
@@ -2066,13 +2072,19 @@ class Fighter {
         }
         break;
       case 'DOWN':
+        /* 起き上がりの選択肢:
+         *   倒れてすぐボタン = 早起き / 倒れてすぐ後ろを入れる = 後ろ受け身（転がって離れる）
+         *   下を押しっぱなし = 遅らせ起き（相手の重ねをずらす） / 何もしない = 通常 */
         if (!this.ko) {
-          if (this.stateT <= CFG.QUICK_WINDOW && (b.anyPressEdge() || (b.edge & B_DOWN))) this.startWake(true);
-          else if (this.stateT >= CFG.DOWN_FRAMES) this.startWake(false);
+          const back = b.horiz(0) * this.facing < 0;
+          if (this.stateT <= CFG.QUICK_WINDOW && back && (b.anyPressEdge() || b.horiz(0) !== 0)) this.startWake(true, true);
+          else if (this.stateT <= CFG.QUICK_WINDOW && (b.anyPressEdge() || (b.edge & B_UP))) this.startWake(true);
+          else if (this.stateT >= CFG.DOWN_FRAMES + (b.down() ? CFG.WAKE_DELAY : 0)) this.startWake(false);
         }
         break;
       case 'WAKEUP':
-        if (this.stateT >= this.wakeLen) free = true;
+        if (this.roll) this.dx = -this.facing * CFG.ROLL_SPEED;
+        if (this.stateT >= this.wakeLen) { free = true; this.roll = false; this.throwInv = Math.max(this.throwInv, CFG.WAKE_THROW_INV); }
         break;
       case 'GRAB':
         free = this.grabUpdate();
@@ -2111,8 +2123,10 @@ class Fighter {
     }
     this.dx = this.vx;
   }
-  startWake(quick) {
-    this.quick = quick; this.wakeLen = quick ? CFG.WAKEUP_QUICK : CFG.WAKEUP_FRAMES;
+  startWake(quick, roll) {
+    this.quick = quick; this.roll = !!roll;
+    this.wakeLen = roll ? CFG.ROLL_FRAMES : (quick ? CFG.WAKEUP_QUICK : CFG.WAKEUP_FRAMES);
+    if (roll) this.fx.dust(this.x, 0, this.facing, 6);
     this.setState('WAKEUP', 'wakeup', 1, true);
     this.pup.cp.speed = CFG.WAKEUP_FRAMES / this.wakeLen;
     this.fx.sfx('step', this.x);
@@ -2320,7 +2334,7 @@ class Combat {
   collectProj(p, strikes) {
     if (!p.alive || !p.def.box || !p.def.hit || p.hitTimer > 0) return;
     const O = p.owner, D = this.m.opp(O);
-    if (!this.hittable(D)) return;
+    if (!this.hittable(D) || D.invulnerable('proj')) return;
     const bw = this.m.projs.boxWorld(p);
     const hb = D.hurtBoxes();
     if (!hb) return;
@@ -2372,7 +2386,7 @@ class Combat {
     if (guarded) {
       const chip = Math.max(0, Math.min(hit.chip, D.hp - 1));
       D.hp -= chip; D.dmgRound += chip;
-      if (!isSuperHit) { this.addGauge(A, hit.gauge.block); this.addGauge(D, Math.floor(chip * 0.6)); }
+      if (!isSuperHit) { this.addGauge(A, hit.gauge.block); this.addGauge(D, Math.floor(chip * 0.6) + (isProj ? CFG.PROJ_GUARD_GAUGE : 0)); }
       D.mv = null; D.vx = 0;
       const cg = D.buf.down();
       D.setState('BLOCKSTUN', cg ? 'guardCrouch' : 'guardStand', 1, true);
@@ -2392,7 +2406,8 @@ class Combat {
       const ti = Math.min(c.techs, 8) - 1;
       let scale = CFG.COMBO_SCALE[ti];
       if (isSuperHit) scale = Math.max(scale, 0.4);
-      const dmg = Math.max(1, Math.round(hit.damage * scale));
+      /* stats.dmgMul = キャラ全体の攻撃力の倍率（調整用。既定 1） */
+      const dmg = Math.max(1, Math.round(hit.damage * scale * (A.st.dmgMul || 1)));
       D.hp = Math.max(0, D.hp - dmg); D.dmgRound += dmg;
       c.hits++; c.dmg += dmg;
       m.noteCombo(A.slot, c.hits);
@@ -2469,7 +2484,11 @@ class Combat {
     D.setState('THROWN', 'thrown', 2, true);
     D.combo = { techs: 1, hits: 0, dmg: 0, serial: t.mv.serial };
     const hp = holdAt(def.hold, 0);
-    D.x = A.x + A.facing * hp.x; D.y = Math.max(0, hp.y); D.facing = -A.facing; D.pup.rotOv = hp.rot;
+    /* 壁際: 掴んだ瞬間も、掴まれた側が壁の外に出るなら投げた側を内側へずらす（grabUpdate と同じ） */
+    let tx = A.x + A.facing * hp.x;
+    const over = tx - Util.clamp(tx, CFG.WALL_MIN, CFG.WALL_MAX);
+    if (over !== 0) { A.x = Util.clamp(A.x - over, CFG.WALL_MIN, CFG.WALL_MAX); tx = Util.clamp(A.x + A.facing * hp.x, CFG.WALL_MIN, CFG.WALL_MAX); }
+    D.x = tx; D.y = Math.max(0, hp.y); D.facing = -A.facing; D.pup.rotOv = hp.rot;
     A.hitstop = CFG.THROW_HITSTOP; A.hitstopTotal = CFG.THROW_HITSTOP;
     D.hitstop = CFG.THROW_HITSTOP; D.hitstopTotal = CFG.THROW_HITSTOP; D.hitstopHit = true;
     D.pup.onHit(2, A.facing);
@@ -2496,7 +2515,7 @@ class Combat {
     const m = this.m;
     D.pup.rotOv = null; D.thrownBy = null;
     const scale = Math.max(CFG.COMBO_SCALE[0], 0.5);
-    const dmg = Math.max(1, Math.round(def.damage * scale));
+    const dmg = Math.max(1, Math.round(def.damage * scale * (A.st.dmgMul || 1)));
     D.hp = Math.max(0, D.hp - dmg); D.dmgRound += dmg;
     D.combo.hits = 1; D.combo.dmg = dmg;
     m.noteCombo(A.slot, 1);
@@ -3474,7 +3493,8 @@ function drawPuppet(ctx, pup, alpha, o) {
 }
 
 /* ---- 影絵＋ネオンの縁（miko_visual.js の MikoVisual）---- */
-function useMiko(pup) { return !!window.MikoVisual && pup.rt.id === 'miko'; }
+/* 影絵の形があるキャラは全員これで描く（miko_visual.js に形が無いキャラだけ、下の予備描画） */
+function useMiko(pup) { return !!window.MikoVisual && (MikoVisual.has ? MikoVisual.has(pup.rt.id) : pup.rt.id === 'miko'); }
 function drawMikoVisual(ctx, pup, j, o) {
   /* ChainSim の節を、足元原点・x前+・y下+ の座標へ（補間込み）。残像は固定形で描く */
   let chains = null;
@@ -3492,7 +3512,7 @@ function drawMikoVisual(ctx, pup, j, o) {
     }
   }
   MikoVisual.draw(ctx, j, {
-    x: 0, y: 0, facing: o.face, scale: 1, color: LookAdapter.edge(pup.rt.ch, pup.pal),
+    x: 0, y: 0, facing: o.face, scale: 1, color: LookAdapter.edge(pup.rt.ch, pup.pal), id: pup.rt.id,
     flash: o.ghost ? 0 : pup.flash, alpha: ctx.globalAlpha * (o.ghost ? o.ghostA : 1), chains: chains
   });
 }
@@ -4360,74 +4380,118 @@ function keyLegend(slot) {
 }
 
 /* ---- 技一覧（タイトル・ポーズ共通） ---- */
-function moveListRows(ch) {
-  const M = ch.moves, nm = id => (M[id] && M[id].name) || id;
+/* 必殺技の説明（キャラごと）。通常技の説明はデータ（下段・上段・打ち上げなど）から自動で作る */
+const SPECIAL_DESC = {
+  miko:    { sp1: 'お札の飛び道具', sp2: '出始め無敵の対空', sp3: '飛び道具をすり抜けて踏み込む', super: '大祓ゲージ満タンで使える' },
+  komainu: { sp1: '前へ突っ込む体当たり', sp2: '出始め無敵の対空', sp3: '弾を飛び越えて上から襲う（立ちガード）', super: '大祓ゲージ満タンで使える' },
+  oni404:  { sp1: '地を這う遅い弾（下段）', sp2: 'ガードできない掴み', sp3: '弾を受け流して突っ込む', super: '一撃が重い。大祓ゲージ満タンで' },
+  fox:     { sp1: '分身が前に飛ぶ（2ヒット）', sp2: '相手の後ろへ瞬間移動', sp3: '弾の下を滑る下段', super: '大祓ゲージ満タンで使える' }
+};
+function normalDesc(m, base) {
+  const h = m.hit || {}, t = [];
+  if (h.level === 'low') t.push('下段');
+  if (h.level === 'high') t.push('上段（立ちガードのみ）');
+  if (h.effect === 'launch') t.push(h.juggle > 0 ? '当たると相手が浮く' : '当たると相手が転ぶ');
+  if (m.cancel && m.cancel.into && m.cancel.into.some(x => x.indexOf('sp') === 0)) t.push('必殺技でキャンセルできる');
+  return (t.length ? t.slice(0, 2).join('。').replace('。必殺技でキャンセルできる', '。必殺技につながる') : base);
+}
+function moveListRows(ch, id) {
+  /* 通常技の名前の（爪）（頭突き）などは表では省く（列からはみ出すため）。必殺技は名前そのまま */
+  const M = ch.moves, D = SPECIAL_DESC[id] || SPECIAL_DESC.miko;
+  const nm = k => { const n = (M[k] && M[k].name) || k; return (k.indexOf('sp') === 0 || k === 'super') ? n : n.replace(/[（(].*?[）)]/g, ''); };
   return [
     ['移動 / ジャンプ', '←→ / ↑', '同じ', '↗↖ で前後にジャンプ'],
     ['ダッシュ / バックステップ', '→→ / ←←', '同じ', 'すばやく近づく・離れる'],
     ['ガード', '← (相手と反対)', '同じ', '下段は ↙ でしゃがんでガード'],
-    [nm('5L'), '弱', '同じ', '速い。弱→強→必殺とつながる'],
-    [nm('2L'), '↓ + 弱', '同じ', '下段。しゃがみガードでしか防げない'],
-    [nm('5H'), '強', '同じ', '必殺技でキャンセルできる'],
-    [nm('2H'), '↓ + 強', '同じ', '下段。当たると相手が転ぶ'],
-    [nm('jL') + ' / ' + nm('jH'), 'ジャンプ中に 弱 / 強', '同じ', '飛び込みに'],
+    [nm('5L'), '弱', '同じ', normalDesc(M['5L'], '速い。弱→強→必殺とつながる')],
+    [nm('2L'), '↓ + 弱', '同じ', normalDesc(M['2L'], '速い下段')],
+    [nm('5H'), '強', '同じ', normalDesc(M['5H'], '強い一撃')],
+    [nm('2H'), '↓ + 強', '同じ', normalDesc(M['2H'], '足払い')],
+    ['ジャンプ弱 / 強', 'ジャンプ中に 弱 / 強', '同じ', '飛び込みに'],
     [nm('throw'), '弱+強 同時 / 投げ', '同じ', '密着で。ガードを崩せる'],
-    [nm('sp1'), '↓↘→ + 必殺', '必殺', 'お札の飛び道具'],
-    [nm('sp2'), '↓↙← + 必殺', '→ + 必殺', '出始め無敵の対空'],
-    [nm('super'), '↓↘→↓↘→ + 必殺', '↓ + 必殺', '大祓ゲージ満タンで使える']
+    [nm('sp1'), '↓↘→ + 必殺', '必殺', D.sp1],
+    [nm('sp2'), '↓↙← + 必殺', '→ + 必殺', D.sp2],
+    [nm('sp3'), '→↓↘ + 必殺', '← + 必殺', D.sp3],
+    [nm('super'), '↓↘→↓↘→ + 必殺', '↓ + 必殺', D.super]
   ];
 }
-const COMBO_ROWS = [
-  ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。まずはこれ'],
-  ['下段から打ち上げ', '↓弱 → 弱 → 強 → →+必殺', '4ヒット。昇り鈴で空中へ'],
-  ['足払い打ち上げ', '↓弱 → ↓強 → →+必殺', '3ヒット。↓強が当たると相手が浮く'],
-  ['飛び込み', 'ジャンプ強 → 弱 → 強 → 必殺', '深めに当てると着地からつながる'],
-  ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '6ヒット。いちばん減る'],
-  ['逆転の一手', '負けているとゲージが早くたまる', '体力差が大きいほど最大2倍']
+/* コンボ（キャラごと。どれも実際につながることを自動テストで確認したもの） */
+const COMBO_ROWS = {
+  miko: [
+    ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。まずはこれ'],
+    ['下段から', '↓弱 → 弱 → 強 → 必殺', '4ヒット。しゃがみガードを崩す'],
+    ['足払い打ち上げ', '↓弱 → ↓強 → →+必殺', '3ヒット。↓強が当たると相手が浮く'],
+    ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '6ヒット。いちばん減る']
+  ],
+  komainu: [
+    ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。突進で締める'],
+    ['下段から', '↓弱 → 弱 → 強 → 必殺', '4ヒット'],
+    ['打ち上げ', '↓強 → →+必殺', '2ヒット。↓強で浮かせて噛砕き'],
+    ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '7ヒット']
+  ],
+  oni404: [
+    ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。1発が重い'],
+    ['下段から', '↓弱 → 弱 → 強 → 必殺', '4ヒット'],
+    ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '一撃で約4割']
+  ],
+  fox: [
+    ['基本コンボ', '弱 → 弱 → 強 → 必殺', '5ヒット。分身が2回当たる'],
+    ['下段から', '↓弱 → 弱 → 強 → 必殺', '5ヒット'],
+    ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '9ヒット']
+  ]
+};
+const SYSTEM_ROWS = [
+  ['逆転', '負けているとゲージが早くたまる。弾をガードしてもたまる'],
+  ['起き上がり', '倒れてすぐボタン=早起き / すぐ後ろ=転がって離れる / 下押しっぱなし=遅く起きる']
 ];
-function drawComboList(ctx, ch) {
+function drawComboList(ctx, ch, id) {
   panel(ctx, 40, 110, 880, 384, '#ff4fa3', 0.8);
-  const cols = [60, 270, 600];
+  const cols = [60, 250, 590], rows = COMBO_ROWS[id] || COMBO_ROWS.miko;
   ['コンボ', 'ボタン（かんたん操作）', 'ポイント'].forEach((h, i) => drawText(ctx, h, cols[i], 134, { size: 13, color: '#8fa3c8' }));
-  for (let r = 0; r < COMBO_ROWS.length; r++) {
-    const y = 172 + r * 40, row = COMBO_ROWS[r];
-    if (r % 2 === 0) { ctx.fillStyle = 'rgba(255,79,163,0.07)'; ctx.fillRect(48, y - 24, 864, 38); }
+  for (let r = 0; r < rows.length; r++) {
+    const y = 168 + r * 36, row = rows[r];
+    if (r % 2 === 0) { ctx.fillStyle = 'rgba(255,79,163,0.07)'; ctx.fillRect(48, y - 22, 864, 34); }
     drawText(ctx, row[0], cols[0], y, { size: 16, color: '#ffd0e4' });
     drawText(ctx, row[1], cols[1], y, { size: 17, color: '#ffffff' });
     drawText(ctx, row[2], cols[2], y, { size: 13, color: '#b9c7e6' });
   }
-  drawText(ctx, 'コツ: 技が当たった瞬間に次のボタン。少し早くても遅くても受け付けます', 480, 438, { size: 14, align: 'center', color: '#ffe94d' });
-  drawText(ctx, '通常操作なら  →+必殺 = ↓↙←+必殺 / ↓+必殺 = ↓↘→↓↘→+必殺', 480, 466, { size: 12, align: 'center', color: '#8fa3c8' });
+  for (let r = 0; r < SYSTEM_ROWS.length; r++) {
+    const y = 330 + r * 30;
+    drawText(ctx, SYSTEM_ROWS[r][0], cols[0], y, { size: 14, color: '#19f3ff' });
+    drawText(ctx, SYSTEM_ROWS[r][1], cols[1] - 60, y, { size: 13, color: '#e6f1ff' });
+  }
+  drawText(ctx, 'コツ: 技が当たった瞬間に次のボタン。少し早くても遅くても受け付けます', 480, 432, { size: 14, align: 'center', color: '#ffe94d' });
+  drawText(ctx, '通常操作なら  →+必殺 = ↓↙←+必殺 / ←+必殺 = →↓↘+必殺 / ↓+必殺 = ↓↘→↓↘→+必殺', 480, 462, { size: 12, align: 'center', color: '#8fa3c8' });
 }
-function drawMoveList(ctx, ch, title, page) {
+function drawMoveList(ctx, ch, title, page, id, hint) {
+  id = id || 'miko';
   drawText(ctx, title || '技一覧', 480, 40, { size: 28, align: 'center', color: '#ffffff', glow: '#19f3ff' });
   /* ページ見出し（←→ で切り替え） */
   ['技', 'コンボ'].forEach((n, i) => {
     const on = (page || 0) === i, x = i === 0 ? 150 : 810;
     drawText(ctx, (i === 0 ? '◀ ' : '') + n + (i === 1 ? ' ▶' : ''), x, 40, { size: 15, align: i === 0 ? 'left' : 'right', color: on ? '#ffffff' : '#6a7490', glow: on ? '#19f3ff' : null });
   });
-  if (page === 1) {
-    drawText(ctx, keyLegend(0), 480, 76, { size: 14, align: 'center', color: UI_COL.p1 });
-    drawText(ctx, keyLegend(1), 480, 96, { size: 14, align: 'center', color: UI_COL.p2 });
-    drawComboList(ctx, ch);
-    drawText(ctx, '←→: 技 / コンボ 切り替え', 480, 512, { size: 12, align: 'center', color: '#8fa3c8' });
-    return;
-  }
   drawText(ctx, keyLegend(0), 480, 76, { size: 14, align: 'center', color: UI_COL.p1 });
   drawText(ctx, keyLegend(1), 480, 96, { size: 14, align: 'center', color: UI_COL.p2 });
+  const foot = '←→: 技 / コンボ' + (hint ? '   ' + hint : '');
+  if (page === 1) {
+    drawComboList(ctx, ch, id);
+    drawText(ctx, foot, 480, 512, { size: 12, align: 'center', color: '#8fa3c8' });
+    return;
+  }
   panel(ctx, 40, 110, 880, 384, '#19f3ff', 0.8);
   const cols = [60, 300, 500, 640];
   ['技', '通常操作', 'かんたん操作', 'ポイント'].forEach((h, i) => drawText(ctx, h, cols[i], 134, { size: 13, color: '#8fa3c8' }));
-  const rows = moveListRows(ch);
+  const rows = moveListRows(ch, id);
   for (let r = 0; r < rows.length; r++) {
-    const y = 162 + r * 27, sp = r >= 9;
-    if (sp) { ctx.fillStyle = 'rgba(255,79,163,0.10)'; ctx.fillRect(48, y - 18, 864, 26); }
-    drawText(ctx, rows[r][0], cols[0], y, { size: 15, color: sp ? '#ffd0e4' : '#ffffff' });
-    drawText(ctx, rows[r][1], cols[1], y, { size: 15, color: '#e6f1ff' });
-    drawText(ctx, rows[r][2], cols[2], y, { size: 15, color: rows[r][2] === '同じ' ? '#6a7490' : '#ffe94d' });
+    const y = 160 + r * 25, sp = r >= 9;
+    if (sp) { ctx.fillStyle = 'rgba(255,79,163,0.10)'; ctx.fillRect(48, y - 17, 864, 24); }
+    drawText(ctx, rows[r][0], cols[0], y, { size: 14, color: sp ? '#ffd0e4' : '#ffffff' });
+    drawText(ctx, rows[r][1], cols[1], y, { size: 14, color: '#e6f1ff' });
+    drawText(ctx, rows[r][2], cols[2], y, { size: 14, color: rows[r][2] === '同じ' ? '#6a7490' : '#ffe94d' });
     drawText(ctx, rows[r][3], cols[3], y, { size: 12, color: '#b9c7e6' });
   }
-  drawText(ctx, '方向は右向きのとき（左向きなら ←→ が逆）   ←→: 技 / コンボ 切り替え', 480, 512, { size: 12, align: 'center', color: '#8fa3c8' });
+  drawText(ctx, '方向は右向きのとき（左向きなら ←→ が逆）   ' + foot, 480, 512, { size: 12, align: 'center', color: '#8fa3c8' });
 }
 
 /* ================= BOOT ================= */
@@ -4552,12 +4616,13 @@ Game.scenes.howto = {
       ['技', '通常操作', 'かんたん操作'],
       ['波動系 (sp1)', '↓↘→ + 必殺', '必殺のみ'],
       ['昇り系 (sp2)', '↓↙← + 必殺', '→ + 必殺'],
+      ['突進系 (sp3)', '→↓↘ + 必殺', '← + 必殺'],
       ['大祓 (超必殺)', '↓↘→↓↘→ + 必殺 (ゲージ満タン)', '↓ + 必殺 (ゲージ満タン)'],
       ['投げ', '弱 + 強 または 投げボタン', '同じ'],
       ['ダッシュ', '→→  /  バックステップ ←←', '同じ']
     ];
     for (let i = 0; i < rows.length; i++) {
-      const y = 352 + i * 20, c = i === 0 ? '#8fa3c8' : '#e6f1ff';
+      const y = 346 + i * 18, c = i === 0 ? '#8fa3c8' : '#e6f1ff';
       drawText(ctx, rows[i][0], 100, y, { size: 14, color: c });
       drawText(ctx, rows[i][1], 280, y, { size: 14, color: c });
       drawText(ctx, rows[i][2], 640, y, { size: 14, color: c });
@@ -4599,14 +4664,18 @@ Game.scenes.cpuSelect = {
 /* ================= MOVES（技一覧） ================= */
 Game.scenes.moves = {
   idleLimit: 5400,
-  enter() { this.page = 0; },
+  enter() { this.page = 0; this.ci = 0; },
   update() {
     if (Input.nav & (B_LEFT | B_RIGHT)) { this.page = 1 - this.page; Audio.play('menuMove'); }
+    const R = Game.roster.length;
+    if (Input.nav & B_UP) { this.ci = (this.ci + R - 1) % R; Audio.play('menuMove'); }
+    if (Input.nav & B_DOWN) { this.ci = (this.ci + 1) % R; Audio.play('menuMove'); }
     if ((Input.nav & (B_H | B_L)) || Input.keyPressed('Escape')) { Audio.play('menuCancel'); Game.go('title'); }
   },
   render(ctx) {
     Backdrop.draw(ctx, 0.7);
-    drawMoveList(ctx, Game.chars[Game.roster[0]].ch, '技一覧  ' + Game.chars[Game.roster[0]].ch.name, this.page);
+    const id = Game.roster[this.ci || 0], ch = Game.chars[id].ch;
+    drawMoveList(ctx, ch, '技一覧  ' + ch.name, this.page, id, Game.roster.length > 1 ? '↑↓: キャラ' : '');
     drawText(ctx, '戻る: 強 / Esc', 480, 532, { size: 12, align: 'center', color: '#8fa3c8' });
     drawConn(ctx);
   }
@@ -4713,7 +4782,8 @@ Game.scenes.charSelect = {
     p.pal = 1 - p.pal;
     /* 同じキャラ同士なら配色がかぶらないよう、相手と入れ替える */
     const a = this.hoverId(i), b = this.hoverId(1 - i);
-    if (a && a === b && q.pal === p.pal) { q.pal = 1 - q.pal; this.refreshPreview(1 - i); }
+    /* 縁の色は配色で決まる（赤/シアン）。キャラが違っても、相手と同じ配色にはしない */
+    if (q.pal === p.pal) { q.pal = 1 - q.pal; this.refreshPreview(1 - i); }
     Audio.play('menuMove');
     this.refreshPreview(i);
   },
@@ -4735,7 +4805,7 @@ Game.scenes.charSelect = {
           Audio.play('menuOk');
           /* 同キャラかつ同配色なら、後から決めた側が自動で入れ替わる */
           const q = this.p[1 - i];
-          if (q.decided && q.picked === p.picked && q.pal === p.pal) { p.pal = 1 - p.pal; }
+          if (q.decided && q.pal === p.pal) { p.pal = 1 - p.pal; }
         }
       } else if (ed & B_H) {
         p.decided = false; p.picked = null; this.cd = -1; Audio.play('menuCancel');
@@ -4767,14 +4837,21 @@ Game.scenes.charSelect = {
     Game.sel = [a.picked, b.picked];
     Game.pal2 = [a.pal === 1, b.pal === 1];
     Game.easy = [a.easy, b.easy];
-    if (Game.sel[0] === Game.sel[1] && Game.pal2[0] === Game.pal2[1]) Game.pal2[1] = !Game.pal2[0];
+    if (Game.pal2[0] === Game.pal2[1]) Game.pal2[1] = !Game.pal2[0];
     Store.set('last', { p1: Game.sel[0], p2: Game.sel[1] });
     Game.go('versus', { training: this.training });
   },
   render(ctx) {
     Backdrop.draw(ctx, 0.6);
     drawText(ctx, this.training ? '1人で遊ぶ  キャラクター選択' : 'キャラクター選択', 480, 44, { size: 28, align: 'center', color: '#ffffff', glow: '#19f3ff' });
-    const n = this.cards.length, cw = Math.min(120, 340 / n), gap = 10;
+    /* 左右の大きな人形を先に描き、カードを手前に重ねる（カードが隠れないように） */
+    for (let i = 0; i < 2; i++) {
+      const p = this.p[i], col = i === 0 ? UI_COL.p1 : UI_COL.p2, cx = i === 0 ? 170 : 790;
+      if (p.pup) { ctx.save(); ctx.globalAlpha = 0.85; drawPreview(ctx, p.pup, cx, 330, 1.05, 1, i === 0 ? 1 : -1); ctx.restore(); }
+      else drawText(ctx, '?', cx, 270, { size: 90, font: 'en', align: 'center', color: '#e6f1ff', glow: col, alpha: 0.6 });
+    }
+    const n = this.cards.length, cw = Math.min(120, 520 / n), gap = 8;
+    const fit = (str, max, w) => Math.max(8, Math.min(max, (w - 10) / Math.max(1, str.length)));
     const total = n * cw + (n - 1) * gap, x0 = 480 - total / 2;
     for (let c = 0; c < n; c++) {
       const x = x0 + c * (cw + gap), y = 78, h = 160, id = this.cards[c];
@@ -4784,9 +4861,9 @@ Game.scenes.charSelect = {
         drawText(ctx, 'RANDOM', x + cw / 2, y + 140, { size: 12, font: 'en', align: 'center', color: '#8fa3c8' });
       } else {
         const rt = Game.chars[id];
-        drawText(ctx, rt.ch.name, x + cw / 2, y + 100, { size: Math.min(20, cw / 4.4), align: 'center', color: '#e6f1ff' });
-        drawText(ctx, rt.ch.nameEn, x + cw / 2, y + 126, { size: 9, font: 'en', align: 'center', color: '#8fa3c8' });
-        drawText(ctx, rt.ch.title, x + cw / 2, y + 144, { size: 12, align: 'center', color: '#8fa3c8' });
+        drawText(ctx, rt.ch.name, x + cw / 2, y + 100, { size: fit(rt.ch.name, 20, cw), align: 'center', color: '#e6f1ff' });
+        drawText(ctx, rt.ch.nameEn, x + cw / 2, y + 126, { size: Math.min(9, fit(rt.ch.nameEn, 9, cw * 1.7)), font: 'en', align: 'center', color: '#8fa3c8' });
+        drawText(ctx, rt.ch.title, x + cw / 2, y + 144, { size: fit(rt.ch.title, 12, cw), align: 'center', color: '#8fa3c8' });
         /* 代表の色見本 */
         ctx.fillStyle = LookAdapter.edge(rt.ch, 'palette'); ctx.fillRect(x + cw / 2 - 18, y + 34, 16, 16);
         ctx.fillStyle = LookAdapter.edge(rt.ch, 'paletteP2'); ctx.fillRect(x + cw / 2 + 2, y + 34, 16, 16);
@@ -4808,9 +4885,7 @@ Game.scenes.charSelect = {
     for (let i = 0; i < 2; i++) {
       const p = this.p[i], col = i === 0 ? UI_COL.p1 : UI_COL.p2;
       const cx = i === 0 ? 170 : 790, id = this.hoverId(i);
-      drawText(ctx, 'P' + (i + 1), cx, 124, { size: 26, font: 'en', align: 'center', color: col, glow: col });
-      if (p.pup) drawPreview(ctx, p.pup, cx, 330, 1.05, 1, i === 0 ? 1 : -1);
-      else drawText(ctx, '?', cx, 270, { size: 90, font: 'en', align: 'center', color: '#e6f1ff', glow: col, alpha: 0.6 });
+      drawText(ctx, 'P' + (i + 1), i === 0 ? 40 : 920, 124, { size: 26, font: 'en', align: i === 0 ? 'left' : 'right', color: col, glow: col });
       const ix = i === 0 ? 24 : 636, iw = 300;
       panel(ctx, ix, 348, iw, 156, col, 0.8);
       if (id) {
@@ -5237,6 +5312,7 @@ Game.scenes.fight = {
     const n = Input.nav, items = this.pauseItems();
     if (this.showMoves) {
       if (n & (B_LEFT | B_RIGHT)) { this.movePage = 1 - (this.movePage || 0); Audio.play('menuMove'); }
+      if (n & (B_UP | B_DOWN)) { this.moveWho = 1 - (this.moveWho || 0); Audio.play('menuMove'); }
       if ((n & (B_H | B_L | B_START)) || Input.keyPressed('Escape') || Input.keyPressed('Enter')) { this.showMoves = false; Audio.play('menuCancel'); }
       return;
     }
@@ -5285,7 +5361,8 @@ Game.scenes.fight = {
     const items = this.pauseItems();
     if (this.showMoves) {
       ctx.fillStyle = 'rgba(3,4,12,0.6)'; ctx.fillRect(0, 0, CFG.W, CFG.H);
-      drawMoveList(ctx, this.match.fighters[0].ch, '技一覧', this.movePage || 0);
+      const f = this.match.fighters[this.moveWho || 0];
+      drawMoveList(ctx, f.ch, '技一覧  P' + ((this.moveWho || 0) + 1) + ' ' + f.ch.name, this.movePage || 0, f.rt.id, '↑↓: P1 / P2');
       drawText(ctx, '閉じる: 強 / Esc', 480, 532, { size: 12, align: 'center', color: '#8fa3c8' });
       return;
     }
@@ -5787,27 +5864,34 @@ const CPU_LEVELS = {
     label: 'やさしい', desc: 'はじめての人向け。大祓を当てるチャンスもくれる',
     guard: 0.12, readLow: false, antiAir: 0, combo: 0.15, drop: 0.5, waitMin: 22, waitMax: 50, waitGuard: false,
     useSuper: false, comboSuper: false, openForSuper: true, fireball: 0.12, jumpIn: 0.05,
-    routes: [['5L', '5H']]
+    punish: 0, projGuard: 0.15, projJump: 0, projPass: 0, dash: 0, routeN: 1, routeLen: 2
   },
   normal: {
-    label: 'ふつう', desc: 'ガードもコンボもする。慣れてきたら',
+    label: 'ふつう', desc: 'ガードも反撃もする。慣れてきたら',
     guard: 0.4, readLow: false, antiAir: 0.3, combo: 0.45, drop: 0.15, waitMin: 8, waitMax: 22, waitGuard: false,
-    useSuper: true, comboSuper: false, openForSuper: false, fireball: 0.3, jumpIn: 0.12,
-    routes: [['5L', '5H', 'sp1'], ['2L', '5L'], ['5H', 'sp2']]
+    useSuper: true, comboSuper: false, openForSuper: false, fireball: 0.25, jumpIn: 0.12,
+    punish: 0.45, projGuard: 0.6, projJump: 0.2, projPass: 0.15, dash: 0.15, routeN: 2, routeLen: 9
   },
   hard: {
-    label: 'つよい', desc: '下段を見切り、対空も出す。腕に自信がある人へ',
+    label: 'つよい', desc: '弾をかわし、スキを見逃さない。腕に自信がある人へ',
     guard: 0.75, readLow: true, antiAir: 0.65, combo: 0.7, drop: 0, waitMin: 0, waitMax: 10, waitGuard: true,
-    useSuper: true, comboSuper: true, openForSuper: false, fireball: 0.35, jumpIn: 0.2,
-    routes: [['5L', '5L', '5H', 'sp1'], ['2L', '2H', 'sp2'], ['2L', '5L', '5H', 'sp2'], ['5H', 'sp1']]
+    useSuper: true, comboSuper: true, openForSuper: false, fireball: 0.3, jumpIn: 0.2,
+    punish: 0.85, projGuard: 0.5, projJump: 0.35, projPass: 0.4, dash: 0.35, routeN: 9, routeLen: 9
   }
+};
+/* キャラごとの技の役割（どれも実際につながることを確認したコンボ） */
+const CPU_CHAR = {
+  miko:    { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '2H', 'sp2'], ['2L', '5L', '5H', 'sp1'], ['5H', 'sp2']], punish: ['5H', 'sp2'] },
+  komainu: { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2H', 'sp2'], ['2L', '5L', '5H', 'sp1'], ['5H', 'sp2']], punish: ['5H', 'sp1'] },
+  oni404:  { aa: '5H', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['5H', 'sp1']], punish: ['5H', 'sp1'], closeGrab: 'sp2' },
+  fox:     { aa: '5H', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['5H', 'sp1']], punish: ['5L', '5H', 'sp1'] }
 };
 class CpuPolicy {
   /* mode: 'test' = ランダムに全技を踏む / 'dummy' = 立ち・ガード固定の練習相手 / 'cpu' = 対戦用（level: easy|normal|hard） */
   constructor(slot, mode, level) {
     this.slot = slot; this.mode = mode || 'test';
     this.q = []; this.cool = 0;
-    this.L = CPU_LEVELS[level] || CPU_LEVELS.normal; this.combo = null; this.wait = 30; this.guarding = false;
+    this.L = CPU_LEVELS[level] || CPU_LEVELS.normal; this.combo = null; this.wait = 30; this.guarding = false; this.downSeen = -99;
   }
   fwdBit(f) { return f.facing > 0 ? B_RIGHT : B_LEFT; }
   /* 相手の飛び道具が近くまで来ているか */
@@ -5841,6 +5925,10 @@ class CpuPolicy {
         if (easy && rng.chance(0.5)) q.push(F | B_S, 0);
         else { this.rep(D, 2, q); this.rep(D | Bk, 2, q); q.push(Bk, Bk | B_S, 0); }
         break;
+      case 'sp3':
+        if (easy && rng.chance(0.5)) q.push(Bk | B_S, 0);
+        else { this.rep(F, 2, q); this.rep(D, 2, q); q.push(D | F, D | F | B_S, 0); }
+        break;
       case 'super':
         if (easy && rng.chance(0.5)) q.push(D | B_S, 0);
         else { this.rep(D, 2, q); this.rep(D | F, 1, q); this.rep(F, 1, q); this.rep(D, 2, q); this.rep(D | F, 1, q); q.push(F | B_S, 0); }
@@ -5855,7 +5943,7 @@ class CpuPolicy {
     switch (id) {
       case '5L': return [B_L, 0]; case '5H': return [B_H, 0];
       case '2L': return [B_DOWN | B_L, B_DOWN]; case '2H': return [B_DOWN | B_H, B_DOWN];
-      case 'sp1': return [B_S, 0]; case 'sp2': return [F | B_S, F];
+      case 'sp1': return [B_S, 0]; case 'sp2': return [F | B_S, F]; case 'sp3': return [this.backBit(me) | B_S, this.backBit(me)];
       case 'super': return [B_DOWN | B_S, B_DOWN]; case 'throw': return [B_T, 0];
     }
     return [0, 0];
@@ -5877,17 +5965,74 @@ class CpuPolicy {
   startCombo(list, rng) {
     this.combo = { list: list, i: 0, t: 0, tog: 0, dropAt: rng.chance(this.L.drop) ? 1 + rng.int(Math.max(1, list.length - 1)) : -1 };
   }
+  /* 相手が技を出し終わってスキだらけか（硬直・着地硬直の残りフレーム） */
+  oppOpenFrames(o) {
+    if (o.state === 'ATTACK' && o.mv) { const mm = o.mv.m, end = mm.startup + mm.active; if (o.mv.n > end) return mm.startup + mm.active + mm.recovery - o.mv.n; }
+    if (o.state === 'LANDING') return o.landFrames - o.stateT;
+    if (o.state === 'AIR' && o.noAct) {
+      /* 技のあと無防備に落ちてくる: 着地までの時間 + 着地硬直 */
+      const g = o.st.gravity || 0.75, vy = o.vy || 0, fall = (vy + Math.sqrt(Math.max(0, vy * vy + 2 * g * o.y))) / g;
+      return Math.round(fall) + (o.airLag != null ? o.airLag : o.st.landLag);
+    }
+    return 0;
+  }
+  incomingProj(m, me) {
+    const L = m.projs.list;
+    for (let i = 0; i < L.length; i++) {
+      const p = L[i]; if (!p.alive || p.owner === me || !p.def.box) continue;
+      const d = (me.x - p.x) * Math.sign(p.vx || p.dir || 1);
+      if (d > 0 && d < 280) return { p: p, d: d };
+    }
+    return null;
+  }
   nextCpu(m, slot) {
     const me = m.fighters[slot], opp = m.fighters[1 - slot], rng = m.rng, L = this.L;
+    const C = CPU_CHAR[me.rt.id] || CPU_CHAR.miko;
     if (!m.controlsOn()) { this.q.length = 0; this.combo = null; return 0; }
     const F = this.fwdBit(me), Bk = this.backBit(me), dist = Math.abs(opp.x - me.x);
+    /* 起き上がり: 早起き / 後ろ受け身 / 遅らせ起き をばらばらに選ぶ（つよい ほど混ぜる） */
+    if (me.state === 'DOWN') {
+      const k = m.frame - me.stateT;   /* 倒れたフレーム（倒れるたびに変わる） */
+      if (Math.abs(this.downSeen - k) > 2) {
+        this.downSeen = k;
+        const r = rng.next(), mix = L.punish;
+        this.wakeChoice = r < mix * 0.35 ? 'roll' : r < mix * 0.65 ? 'quick' : r < mix * 0.9 ? 'delay' : 'normal';
+      }
+      if (me.stateT <= 3) return this.wakeChoice === 'roll' ? Bk : this.wakeChoice === 'quick' ? ((me.stateT & 1) ? B_L : 0) : 0;
+      return this.wakeChoice === 'delay' ? B_DOWN : 0;
+    }
+    /* 無敵技（昇り鈴など）を出されるたびに慎重になる。慎重なほど、近距離で手を出さずガードして待つ */
+    if (opp.state === 'ATTACK' && opp.mv && opp.mv.serial !== this.oppMvSeen) {
+      this.oppMvSeen = opp.mv.serial;
+      if (opp.mv.m.invuln && opp.mv.id !== 'super' && dist < 260) this.caution = Math.min(1, (this.caution || 0) + 0.3);
+    }
+    this.caution = (this.caution || 0) * 0.9985;
     if (this.combo) return this.stepCombo(me, rng);
-    /* 守り（行動中でも割り込む） */
-    const threat = (opp.state === 'ATTACK' && opp.mv && dist < 280) || this.projNear(m, me);
+    const free = me.state === 'IDLE' || me.state === 'WALK_F' || me.state === 'WALK_B' || me.state === 'CROUCH';
+    /* 反撃: 相手の技の硬直・着地のスキに、決まったコンボを入れる */
+    const open = this.oppOpenFrames(opp);
+    if (free && open >= 10 && dist < 175 && opp.hp > 0) {
+      if (this.punishKey !== opp.stateT + ':' + opp.state) {
+        this.punishKey = opp.stateT + ':' + opp.state;
+        if (rng.chance(L.punish)) { this.q.length = 0; this.startCombo(C.punish, rng); return this.stepCombo(me, rng); }
+      }
+    }
+    /* 飛び道具: ガード / 飛び越える / すり抜け技（1つの弾につき1回だけ判断） */
+    const ip = this.incomingProj(m, me);
+    if (ip && free && ip.p.serial !== this.projSeen) {
+      this.projSeen = ip.p.serial;
+      const r = rng.next();
+      if (r < L.projPass && dist < 420) { this.q = this.pressFor('sp3', me); return this.q.shift(); }
+      if (r < L.projPass + L.projJump && ip.d > 110) { this.q = []; this.rep(B_UP | F, 3, this.q); this.rep(F, 14, this.q); this.q.push(F | B_H); this.rep(F, 24, this.q); return this.q.shift(); }
+      if (r < L.projPass + L.projJump + L.projGuard) { this.q = this.rep(Bk, Math.min(40, Math.round(ip.d / 6) + 12), []); return this.q.shift(); }
+    }
+    /* 守り（相手の技がまだ当たる時間だけ。硬直中はガードせず反撃を狙う） */
+    const live = opp.state === 'ATTACK' && opp.mv && opp.mv.n <= opp.mv.m.startup + opp.mv.m.active;
+    const threat = live && dist < 280;
     if (threat && me.state !== 'ATTACK' && !this.guarding) {
       this.guarding = true;
       if (rng.chance(L.guard)) {
-        const lvl = opp.mv && opp.mv.m.hit ? opp.mv.m.hit.level : 'mid';
+        const lvl = opp.mv.m.hit ? opp.mv.m.hit.level : 'mid';
         const crouch = L.readLow ? (lvl !== 'high' && !opp.isAir()) : rng.chance(0.4);
         this.q = this.rep(Bk | (crouch ? B_DOWN : 0), 10 + rng.int(10), []);
       }
@@ -5899,27 +6044,30 @@ class CpuPolicy {
     /* やさしい: 相手のゲージが満タンなら、大祓を当てられるスキを作る */
     if (L.openForSuper && opp.gauge >= CFG.SUPER_COST && dist < 360 && rng.chance(0.7)) { this.q = this.rep(0, 40, []); return 0; }
     /* 対空 */
-    if (opp.isAir() && dist < 200 && rng.chance(L.antiAir)) { this.q = this.pressFor('sp2', me).concat(this.rep(F, 6, [])); return this.q.shift(); }
+    if (opp.isAir() && !opp.noAct && dist < 200 && rng.chance(L.antiAir)) { this.q = this.pressFor(C.aa, me).concat(this.rep(F, 6, [])); return this.q.shift(); }
     /* 大祓 */
     if (L.useSuper && me.gauge >= CFG.SUPER_COST && dist < 300 && rng.chance(0.35)) {
       if (L.comboSuper && dist < 150) { this.startCombo(['5H', 'super'], rng); return this.stepCombo(me, rng); }
       this.q = this.pressFor('super', me); return this.q.shift();
     }
+    const routes = C.routes.slice(0, L.routeN).map(r => r.slice(0, L.routeLen));
     if (dist > 360) {
       const r = rng.next();
-      if (r < L.fireball) this.q = this.pressFor('sp1', me);
+      if (r < L.fireball) this.q = this.pressFor(C.zone, me);
       else if (r < L.fireball + L.jumpIn) { this.q = []; this.rep(B_UP | F, 3, this.q); this.rep(F, 16, this.q); this.q.push(F | B_H); this.rep(F, 30, this.q); }
+      else if (r < L.fireball + L.jumpIn + L.dash) { this.q = [F, 0, F]; this.rep(F, 16, this.q); }
       else this.q = this.rep(F, 14 + rng.int(14), []);
     } else if (dist > 150) {
       const r = rng.next();
-      if (r < L.fireball * 0.6) this.q = this.pressFor('sp1', me);
+      if (r < L.fireball * 0.6) this.q = this.pressFor(C.zone, me);
       else if (r < 0.65) this.q = this.rep(F, 8 + rng.int(10), []);
       else if (r < 0.8) this.q = this.pressFor(rng.chance(0.5) ? '2H' : '5H', me);
       else this.q = this.rep(Bk, 8 + rng.int(8), []);
     } else {
       const r = rng.next();
-      if (r < L.combo) { this.startCombo(rng.pick(L.routes), rng); return this.stepCombo(me, rng); }
-      else if (r < L.combo + 0.12) this.q = this.pressFor('throw', me);
+      if (L.punish > 0 && rng.chance(this.caution * 0.75)) this.q = this.rep(Bk | B_DOWN, 18 + rng.int(16), []);
+      else if (r < L.combo) { this.startCombo(rng.pick(routes), rng); return this.stepCombo(me, rng); }
+      else if (r < L.combo + 0.12) this.q = this.pressFor(C.closeGrab && rng.chance(0.5) ? C.closeGrab : 'throw', me);
       else if (r < L.combo + 0.3) this.q = this.pressFor(rng.pick(['5L', '2L', '5H']), me);
       else this.q = this.rep(Bk | (rng.chance(0.5) ? B_DOWN : 0), 8 + rng.int(12), []);
     }
@@ -5954,11 +6102,11 @@ class CpuPolicy {
     if (me.gauge >= CFG.SUPER_COST && dist < 330 && rng.chance(0.3)) { this.q = this.seqFor('super', me, me.easy, rng); return this.q.shift() || 0; }
     if (dist > 380) {
       add(35, walk(F, 12)); add(18, () => { const q = [F, 0, F]; this.rep(F, 14, q); return q; });
-      add(25 * useBoost('sp1'), mv('sp1')); add(15, () => { const q = []; this.rep(B_UP | F, 3, q); this.rep(F, 28, q); return q; });
+      add(25 * useBoost('sp1'), mv('sp1')); add(8 * useBoost('sp3'), mv('sp3')); add(15, () => { const q = []; this.rep(B_UP | F, 3, q); this.rep(F, 28, q); return q; });
     } else if (dist > 140) {
       add(25, walk(F, 8)); add(15 * useBoost('5L'), mv('5L')); add(15 * useBoost('5H'), mv('5H'));
       add(15 * useBoost('2L'), mv('2L')); add(15 * useBoost('2H'), mv('2H')); add(8 * useBoost('sp1'), mv('sp1'));
-      add(8 * useBoost('sp2'), mv('sp2')); add(10 * useBoost('jL'), mv('jL')); add(10 * useBoost('jH'), mv('jH'));
+      add(8 * useBoost('sp2'), mv('sp2')); add(8 * useBoost('sp3'), mv('sp3')); add(10 * useBoost('jL'), mv('jL')); add(10 * useBoost('jH'), mv('jH'));
       add(4, () => { const q = [Bk, 0, Bk]; this.rep(Bk, 10, q); return q; });
     } else {
       add(25 * useBoost('5L'), () => { const q = [B_L, 0, 0, 0, 0, B_L, 0, 0, 0, 0, B_H, 0]; return q; });
@@ -6021,7 +6169,7 @@ const SelfTest = {
   newMatch(idx, pair, forDeterminism) {
     const rts = [Game.chars[pair[0]], Game.chars[pair[1]]];
     const m = new Match({
-      rts: rts, pal2: [false, pair[0] === pair[1]], easy: [idx % 2 === 0, idx % 2 === 1], rounds: 2, time: 99,
+      rts: rts, pal2: [false, true], easy: [idx % 2 === 0, idx % 2 === 1], rounds: 2, time: 99,
       seed: this.seed + idx * 101, fx: NullFX, camLimit: true
     });
     for (let i = 0; i < 2; i++) m.fighters[i].pup.cosmetic = false;
@@ -6097,7 +6245,7 @@ const SelfTest = {
         cov[id].hit += (f.hitMoves[id] || 0) + (id === 'sp1' && f.hitMoves.proj ? 0 : 0);
       });
       /* 飛び道具のヒットは、その技が出した弾として数える */
-      if (f.hitMoves.proj) { ['sp1', 'sp2', 'super'].forEach(id => { if (f.ch.moves[id].spawn && f.ch.moves[id].spawn.length && id !== 'super') cov[id].hit += f.hitMoves.proj; }); }
+      if (f.hitMoves.proj) { ['sp1', 'sp2', 'sp3', 'super'].forEach(id => { if (f.ch.moves[id] && f.ch.moves[id].spawn && f.ch.moves[id].spawn.length && id !== 'super') cov[id].hit += f.hitMoves.proj; }); }
     }
     this.idx++; this.cur = null;
   },
@@ -6132,8 +6280,8 @@ const SelfTest = {
     }
     const a = F[0], b = F[1];
     if (Math.abs(a.x - b.x) > CFG.MAX_DIST + 1.5) this.fail('max-dist', 'dist=' + Math.abs(a.x - b.x).toFixed(1));
-    /* 押し合いで重なったまま */
-    if (!a.isAir() && !b.isAir() && a.state !== 'THROWN' && b.state !== 'THROWN' && a.state !== 'GRAB' && b.state !== 'GRAB') {
+    /* 押し合いで重なったまま（大祓の暗転で止まっている間は押し合いも止まるので数えない） */
+    if (!(m.freeze > 0) && a.state !== 'SUPERFLASH' && b.state !== 'SUPERFLASH' && !a.isAir() && !b.isAir() && a.state !== 'THROWN' && b.state !== 'THROWN' && a.state !== 'GRAB' && b.state !== 'GRAB') {
       const pa = a.pushDims(), pb = b.pushDims();
       if ((pa.w + pb.w) / 2 - Math.abs(a.x - b.x) > 1) c.overlap++; else c.overlap = 0;
       if (c.overlap > 30) { this.fail('overlap', '押し合いで30F以上重なっています'); c.overlap = 0; }
@@ -6587,7 +6735,7 @@ const Main = {
       const r = Game.roster;
       const a = r.indexOf(p.p1) >= 0 ? p.p1 : r[0], b = r.indexOf(p.p2) >= 0 ? p.p2 : r[Math.min(1, r.length - 1)];
       const eff = Settings.eff();
-      Game.sel = [a, b]; Game.pal2 = [false, a === b]; Game.easy = [eff.easy.p1, eff.easy.p2];
+      Game.sel = [a, b]; Game.pal2 = [false, true]; Game.easy = [eff.easy.p1, eff.easy.p2];
       Game.go('versus', { training: !!p.training });
     } else {
       Game.mode = 'game'; document.title = '電脳奉納試合';
@@ -6665,7 +6813,7 @@ function boot() {
   Overlay.build();
   Devices.resolve();
   Game.sel = Game.defaultSel();
-  Game.pal2 = [false, Game.sel[0] === Game.sel[1]];
+  Game.pal2 = [false, true];
   const eff = Settings.eff();
   Game.easy = [eff.easy.p1, eff.easy.p2];
   window.__denno = { Game: Game, Input: Input, Devices: Devices, FX: FX, Debug: Debug, SelfTest: SelfTest, Gallery: Gallery, Settings: Settings, validateGameData: validateGameData, CFG: CFG, Match: Match, NullFX: NullFX, CpuPolicy: CpuPolicy };

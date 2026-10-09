@@ -9,7 +9,7 @@ window.GAME_DATA = {
     banners: { round: "ROUND {n}", finalRound: "FINAL ROUND", fight: "FIGHT!", ko: "浄化完了", timeup: "TIME UP", draw: "DRAW", perfect: "PERFECT", superReady: "大祓 READY", win: "WIN" },
     glitchWords: ["SEGFAULT", "NULL", "404", "0xDEADBEEF", "STACK OVERFLOW"]
   },
-  roster: ["miko"],
+  roster: ["miko", "komainu", "oni404", "fox"],
   stage: {
     name: "電脳神社・参道", subtitle: "ネオン鳥居の境内",
     colors: { skyTop: "#05060f", skyBottom: "#120a2e", torii: "#ff3b5c", grid: "#19f3ff", floor: "#0b0a22", lantern: "#ffd24a", accent: "#ff4fa3" }
@@ -39,7 +39,7 @@ window.GAME_DATA = {
       blurb: "お札の飛び道具と堅実な立ち回りで戦う、基本のキャラ。",
       ratings: { power: 3, speed: 3, range: 4, defense: 3 },
       stats: {
-        hp: 1000, walkF: 3.4, walkB: 2.8, jumpVy: 15, jumpVx: 3.6, gravity: 0.75,
+        dmgMul: 1.08, hp: 1000, walkF: 3.4, walkB: 2.8, jumpVy: 15, jumpVx: 3.6, gravity: 0.75,
         airJumps: 0, prejump: 4, landLag: 3,
         dashF: { frames: 18, speed: 7.0 }, dashB: { frames: 18, speed: 5.5, invuln: 6 },
         gaugeMul: 1.0
@@ -88,6 +88,7 @@ window.GAME_DATA = {
       },
       basePose: { rootX: 0, rootY: 0, rot: 0, torso: 6, head: -3, uarmF: 38, farmF: 75, uarmB: 14, farmB: 60, thighF: 22, shinF: 34, footF: 12, thighB: -14, shinB: 14, footB: 28 },
       clips: {
+        sp3: {"length":46,"plant":"feet","blend":3,"squash":[{"f":9,"sx":1,"sy":1},{"f":11,"sx":1.04,"sy":0.96,"ease":"outExpo"},{"f":15,"sx":1,"sy":1,"ease":"outCubic"}],"keys":[{"f":7,"ease":"inOutQuad","p":{"torso":-8,"rootX":-6,"uarmF":150,"farmF":40,"uarmB":60,"farmB":80}},{"f":15,"ease":"inQuad","p":{"torso":-12,"rootX":-8,"uarmF":172,"farmF":15,"head":-8}},{"f":18,"ease":"outBack","back":1.2,"p":{"torso":26,"head":-8,"rootX":12,"uarmF":85,"farmF":8,"uarmB":-20,"farmB":20,"thighF":36,"shinF":38,"footF":2,"thighB":-22,"shinB":10,"footB":22}},{"f":23,"ease":"linear","p":{"torso":30,"rootX":15,"uarmF":60,"farmF":6}},{"f":45,"ease":"inOutQuad","p":"base"}]},
         idle: { length: 72, loop: true, plant: "feet", blend: 6, keys: [
           { f: 0, ease: "inOutQuad", p: "base" },
           { f: 36, ease: "inOutQuad", p: { torso: 8, head: -4, uarmF: 42, farmF: 70, uarmB: 18, farmB: 56, thighF: 26, shinF: 42, footF: 16, thighB: -15, shinB: 18, footB: 33 } } ] },
@@ -200,7 +201,7 @@ window.GAME_DATA = {
           { f: 26, ease: "outExpo", p: { torso: 35, rootX: 10, uarmF: 40, farmF: 5, uarmB: 40, farmB: 5 } },
           { f: 30, ease: "linear", p: { rootX: 12 } },
           { f: 47, ease: "inOutQuad", p: "base" } ] },
-        sp1: { length: 42, plant: "feet", blend: 3, keys: [
+        sp1: { length: 48, plant: "feet", blend: 3, keys: [
           { f: 5, ease: "inOutQuad", p: { torso: -6, rootX: -4, uarmF: 120, farmF: 60, uarmB: 40, farmB: 70 } },
           { f: 13, ease: "outExpo", p: { torso: 12, rootX: 5, uarmF: 88, farmF: 8, uarmB: 60, farmB: 10, thighF: 30, shinF: 40, footF: 10 } },
           { f: 20, ease: "linear", p: { uarmF: 90, rootX: 7 } },
@@ -218,6 +219,11 @@ window.GAME_DATA = {
           { f: 71, ease: "inOutQuad", p: "base" } ] }
       },
       moves: {
+        sp3: { kind: "special", name: "踏込祓", stance: "stand", startup: 18, active: 6, recovery: 22,
+          boxes: [{ f0: 19, f1: 24, x: 40, y: 85, w: 80, h: 44 }],
+          hit: { damage: 76, chip: 5, level: "mid", hitstun: 22, blockstun: 14, hitstop: 10, knock: { hit: 16, block: 20 }, effect: "stun", gauge: { hit: 50, block: 25 }, impact: 3 },
+          motion: [{ f0: 3, f1: 24, vx: 9 }], invuln: [{ f0: 1, f1: 24, type: "proj" }],
+          trail: { from: "prop", color: "glow", width: 14, frames: 10 }, sfx: "swingH" },
         "5L": { kind: "normal", name: "立ち弱", stance: "stand", startup: 5, active: 3, recovery: 8,
           boxes: [ { f0: 6, f1: 8, x: 34, y: 92, w: 56, h: 30 } ],
           hit: { damage: 30, chip: 0, level: "mid", hitstun: 19, blockstun: 11, hitstop: 6, knock: { hit: 8, block: 10 }, effect: "stun", gauge: { hit: 25, block: 12 }, impact: 1 },
@@ -230,7 +236,7 @@ window.GAME_DATA = {
           trail: { from: "prop", color: "glow", width: 8, frames: 6 }, sfx: "swingL" },
         "5H": { kind: "normal", name: "立ち強", stance: "stand", startup: 11, active: 4, recovery: 17,
           boxes: [ { f0: 12, f1: 15, x: 40, y: 85, w: 78, h: 40 } ],
-          hit: { damage: 72, chip: 0, level: "mid", hitstun: 24, blockstun: 16, hitstop: 10, knock: { hit: 14, block: 18 }, effect: "stun", gauge: { hit: 45, block: 22 }, impact: 3 },
+          hit: { damage: 78, chip: 0, level: "mid", hitstun: 24, blockstun: 16, hitstop: 10, knock: { hit: 14, block: 18 }, effect: "stun", gauge: { hit: 45, block: 22 }, impact: 3 },
           cancel: { into: ["sp1", "sp2", "super"], frames: 16 },
           trail: { from: "prop", color: "glow", width: 14, frames: 8 }, sfx: "swingH" },
         "2H": { kind: "normal", name: "しゃがみ強", stance: "crouch", startup: 9, active: 4, recovery: 21,
@@ -252,7 +258,7 @@ window.GAME_DATA = {
             hold: [ { f: 0, x: 50, y: 60, rot: -10 }, { f: 12, ease: "inOutCubic", x: 24, y: 170, rot: -100 }, { f: 26, ease: "outExpo", x: 70, y: 30, rot: -150 }, { f: 30, ease: "linear", x: 76, y: 20, rot: -160 } ],
             launch: { vx: 3, vy: 7 }, hitstop: 12, impact: 3, gauge: { hit: 40 } },
           sfx: "grab" },
-        sp1: { kind: "special", name: "護符弾", stance: "stand", startup: 13, active: 1, recovery: 28, boxes: [], hit: null,
+        sp1: { kind: "special", name: "護符弾", stance: "stand", startup: 13, active: 1, recovery: 34, boxes: [], hit: null,
           spawn: [ { at: 14, projectile: "fuda", x: 56, y: 104 } ], sfx: "cast" },
         sp2: { kind: "special", name: "昇り鈴", stance: "stand", startup: 6, active: 7, recovery: 28, landLag: 6,
           boxes: [ { f0: 7, f1: 13, x: 12, y: 30, w: 62, h: 140 } ],
@@ -270,7 +276,7 @@ window.GAME_DATA = {
       },
       projectiles: {
         fuda: { life: 90, vx: 8.5, vy: 0, box: { x: -17, y: -14, w: 34, h: 28 }, hits: 1, maxActive: 1, priority: 1,
-          hit: { damage: 52, chip: 7, level: "mid", hitstun: 20, blockstun: 14, hitstop: 8, knock: { hit: 10, block: 14 }, effect: "stun", gauge: { hit: 30, block: 15 }, impact: 2 },
+          hit: { damage: 48, chip: 6, level: "mid", hitstun: 20, blockstun: 14, hitstop: 8, knock: { hit: 10, block: 14 }, effect: "stun", gauge: { hit: 30, block: 15 }, impact: 2 },
           look: { style: "fuda", color: "glow", size: 1.0 } },
         oharae_beam: { life: 36, vx: 0, vy: 0, box: null, hit: null, hits: 1, maxActive: 1, priority: 0, follow: true,
           look: { style: "beam", color: "accent", size: 1.0 } }
@@ -288,7 +294,7 @@ window.GAME_DATA = {
       blurb: "前傾で突っ込む四つ足型。頭突きと対空で相手の動きを押さえる。",
       ratings: { power: 4, speed: 4, range: 2, defense: 3 },
       stats: {
-        hp: 1000, walkF: 3.8, walkB: 3.0, jumpVy: 14.5, jumpVx: 4.2, gravity: 0.78,
+        dmgMul: 1.18, hp: 1050, walkF: 3.8, walkB: 3.0, jumpVy: 14.5, jumpVx: 4.2, gravity: 0.78,
         airJumps: 0, prejump: 4, landLag: 3,
         dashF: { frames: 20, speed: 9.5 }, dashB: { frames: 18, speed: 6.0, invuln: 6 },
         gaugeMul: 1.0
@@ -336,6 +342,7 @@ window.GAME_DATA = {
       },
       basePose: { rootX: 2, rootY: 0, rot: 0, torso: 38, head: 18, uarmF: 52, farmF: 12, uarmB: 50, farmB: 14, thighF: 14, shinF: 26, footF: 12, thighB: 8, shinB: 18, footB: 10 },
       clips: {
+        sp3: {"base":"jumpFall","length":36,"plant":"root","blend":2,"keys":[{"f":12,"ease":"inOutQuad","p":{"torso":20,"uarmF":165,"farmF":30}},{"f":16,"ease":"outExpo","p":{"uarmF":70,"farmF":5,"torso":46,"thighF":40,"shinF":50}},{"f":22,"ease":"linear","p":{"uarmF":55,"torso":48}},{"f":35,"ease":"inOutQuad","p":"base"}]},
         idle: { length: 84, loop: true, plant: "feet", blend: 6, keys: [
           { f: 0, ease: "inOutQuad", p: "base" },
           { f: 42, ease: "inOutQuad", p: { torso: 41, head: 16, uarmF: 56, farmF: 14, uarmB: 54, farmB: 16, thighF: 17, shinF: 30, footF: 13, thighB: 10, shinB: 22, footB: 12 } } ] },
@@ -451,13 +458,13 @@ window.GAME_DATA = {
           { f: 26, ease: "outExpo", p: { torso: 44, rootX: 10, uarmF: 40, farmF: 5, uarmB: 40, farmB: 5 } },
           { f: 30, ease: "linear", p: { rootX: 12 } },
           { f: 45, ease: "inOutQuad", p: "base" } ] },
-        sp1: { length: 52, plant: "feet", blend: 3, keys: [
+        sp1: { length: 48, plant: "feet", blend: 3, keys: [
           { f: 7, ease: "inOutQuad", p: { torso: 46, head: -4, rootX: -6, uarmF: 40, farmF: 30, thighF: 20, shinF: 40, footF: 10, thighB: 14, shinB: 30, footB: 16 } },
           { f: 13, ease: "linear", p: { torso: 46, head: -4, rootX: -6, uarmF: 40, farmF: 30, thighF: 20, shinF: 40, footF: 10, thighB: 14, shinB: 30, footB: 16 } },
           { f: 14, ease: "outCubic", p: { torso: 50, head: -8, rootX: 8, uarmF: 60, farmF: 40, thighF: 36, shinF: 50, footF: 16, thighB: 0, shinB: 24, footB: 14 } },
           { f: 27, ease: "linear", p: { torso: 52, rootX: 10 } },
-          { f: 34, ease: "linear", p: { torso: 52, rootX: 10 } },
-          { f: 51, ease: "inOutQuad", p: "base" } ] },
+          { f: 32, ease: "linear", p: { torso: 52, rootX: 10 } },
+          { f: 48, ease: "inOutQuad", p: "base" } ] },
         sp2: { length: 40, plant: "feet", blend: 2, keys: [
           { f: 5, ease: "inOutQuad", p: { torso: 24, head: -6, rootX: -2, thighF: 60, shinF: 100, footF: 40, thighB: 50, shinB: 100, footB: 50, uarmF: 20, farmF: 80 } },
           { f: 7, ease: "linear", p: { torso: 24, head: -6, rootX: -2, thighF: 60, shinF: 100, footF: 40, thighB: 50, shinB: 100, footB: 50, uarmF: 20, farmF: 80 } },
@@ -474,25 +481,30 @@ window.GAME_DATA = {
           { f: 75, ease: "inOutQuad", p: "base" } ] }
       },
       moves: {
+        sp3: { kind: "special", name: "跳び掛かり", stance: "stand", startup: 16, active: 8, recovery: 12, landLag: 10,
+          boxes: [{ f0: 17, f1: 24, x: 24, y: 60, w: 60, h: 54 }],
+          hit: { damage: 72, chip: 5, level: "high", hitstun: 22, blockstun: 16, hitstop: 10, knock: { hit: 12, block: 16 }, effect: "stun", gauge: { hit: 50, block: 25 }, impact: 3 },
+          motion: [{ f0: 5, f1: 5, vx: 8, vy: 10.5 }], invuln: [{ f0: 1, f1: 20, type: "proj" }],
+          trail: { from: "handF", color: "glow", width: 12, frames: 8 }, sfx: "swingH" },
         "5L": { kind: "normal", name: "立ち弱（前脚）", stance: "stand", startup: 5, active: 3, recovery: 9,
           boxes: [ { f0: 6, f1: 8, x: 36, y: 70, w: 52, h: 28 } ],
-          hit: { damage: 32, chip: 0, level: "mid", hitstun: 16, blockstun: 11, hitstop: 6, knock: { hit: 8, block: 10 }, effect: "stun", gauge: { hit: 25, block: 12 }, impact: 1 },
-          cancel: { into: ["5L", "2L", "5H", "2H", "sp1", "sp2", "super"], frames: 10 },
+          hit: { damage: 32, chip: 0, level: "mid", hitstun: 20, blockstun: 11, hitstop: 6, knock: { hit: 8, block: 10 }, effect: "stun", gauge: { hit: 25, block: 12 }, impact: 1 },
+          cancel: { into: ["5L", "2L", "5H", "2H", "sp1", "sp2", "super"], frames: 14 },
           trail: { from: "handF", color: "glow", width: 8, frames: 6 }, sfx: "swingL" },
         "2L": { kind: "normal", name: "しゃがみ弱（爪）", stance: "crouch", startup: 5, active: 3, recovery: 9,
           boxes: [ { f0: 6, f1: 8, x: 36, y: 16, w: 56, h: 24 } ],
-          hit: { damage: 28, chip: 0, level: "low", hitstun: 16, blockstun: 12, hitstop: 6, knock: { hit: 8, block: 10 }, effect: "stun", gauge: { hit: 25, block: 12 }, impact: 1 },
-          cancel: { into: ["5L", "2L", "5H", "2H", "sp1", "sp2", "super"], frames: 10 },
+          hit: { damage: 28, chip: 0, level: "low", hitstun: 20, blockstun: 12, hitstop: 6, knock: { hit: 8, block: 10 }, effect: "stun", gauge: { hit: 25, block: 12 }, impact: 1 },
+          cancel: { into: ["5L", "2L", "5H", "2H", "sp1", "sp2", "super"], frames: 14 },
           trail: { from: "handF", color: "glow", width: 8, frames: 6 }, sfx: "swingL" },
         "5H": { kind: "normal", name: "立ち強（薙ぎ払い）", stance: "stand", startup: 12, active: 4, recovery: 19,
           boxes: [ { f0: 13, f1: 16, x: 42, y: 70, w: 74, h: 40 } ],
-          hit: { damage: 80, chip: 0, level: "mid", hitstun: 26, blockstun: 16, hitstop: 10, knock: { hit: 16, block: 20 }, effect: "stun", gauge: { hit: 45, block: 22 }, impact: 3 },
-          cancel: { into: ["sp1", "sp2", "super"], frames: 12 },
+          hit: { damage: 88, chip: 0, level: "mid", hitstun: 26, blockstun: 16, hitstop: 10, knock: { hit: 16, block: 20 }, effect: "stun", gauge: { hit: 45, block: 22 }, impact: 3 },
+          cancel: { into: ["sp1", "sp2", "super"], frames: 16 },
           trail: { from: "handF", color: "glow", width: 14, frames: 8 }, sfx: "swingH" },
         "2H": { kind: "normal", name: "しゃがみ強（下段頭突き）", stance: "crouch", startup: 10, active: 4, recovery: 22,
           boxes: [ { f0: 11, f1: 14, x: 30, y: 0, w: 90, h: 28 } ],
-          hit: { damage: 62, chip: 0, level: "low", hitstun: 0, blockstun: 14, hitstop: 10, knock: { hit: 0, block: 18 }, effect: "launch", launch: { vx: 3, vy: 6.5 }, juggle: 0, gauge: { hit: 40, block: 20 }, impact: 3 },
-          cancel: { into: ["sp1", "super"], frames: 10 },
+          hit: { damage: 62, chip: 0, level: "low", hitstun: 0, blockstun: 14, hitstop: 10, knock: { hit: 0, block: 18 }, effect: "launch", launch: { vx: 3, vy: 6.5 }, juggle: 2, gauge: { hit: 40, block: 20 }, impact: 3 },
+          cancel: { into: ["sp2", "super"], frames: 14 },
           trail: { from: "handF", color: "glow", width: 14, frames: 8 }, sfx: "swingH" },
         "jL": { kind: "normal", name: "ジャンプ弱（爪）", stance: "air", startup: 5, active: 8, recovery: 5, landLag: 3,
           boxes: [ { f0: 6, f1: 13, x: 22, y: 34, w: 56, h: 46 } ],
@@ -508,7 +520,7 @@ window.GAME_DATA = {
             hold: [ { f: 0, x: 50, y: 60, rot: -10 }, { f: 12, ease: "inOutCubic", x: 24, y: 170, rot: -100 }, { f: 26, ease: "outExpo", x: 70, y: 30, rot: -150 }, { f: 28, ease: "linear", x: 76, y: 20, rot: -160 } ],
             launch: { vx: 3, vy: 7 }, hitstop: 12, impact: 3, gauge: { hit: 40 } },
           sfx: "grab" },
-        sp1: { kind: "special", name: "阿吽突進", stance: "stand", startup: 14, active: 14, recovery: 24,
+        sp1: { kind: "special", name: "阿吽突進", stance: "stand", startup: 14, active: 14, recovery: 20,
           boxes: [ { f0: 15, f1: 28, x: 26, y: 30, w: 74, h: 84 } ],
           motion: [ { f0: 15, f1: 28, vx: 11 } ],
           hit: { damage: 70, chip: 8, level: "mid", hitstun: 22, blockstun: 20, hitstop: 10, knock: { hit: 6, block: 24 }, effect: "stun", gauge: { hit: 60, block: 30 }, impact: 3 },
@@ -541,7 +553,7 @@ window.GAME_DATA = {
       blurb: "巨体と金棒の大振りで一撃が重い。動きは遅いが、404で場を制圧する。",
       ratings: { power: 5, speed: 1, range: 3, defense: 4 },
       stats: {
-        hp: 1100, walkF: 2.6, walkB: 2.2, jumpVy: 13.5, jumpVx: 2.8, gravity: 0.78,
+        dmgMul: 0.87, hp: 1100, walkF: 2.6, walkB: 2.2, jumpVy: 13.5, jumpVx: 2.8, gravity: 0.78,
         airJumps: 0, prejump: 5, landLag: 4,
         dashF: { frames: 22, speed: 5.5 }, dashB: { frames: 22, speed: 4.0, invuln: 4 },
         gaugeMul: 0.9
@@ -588,6 +600,7 @@ window.GAME_DATA = {
       },
       basePose: { rootX: 0, rootY: 0, rot: 0, torso: 4, head: -2, uarmF: 36, farmF: 36, uarmB: 22, farmB: 40, thighF: 14, shinF: 20, footF: 6, thighB: -10, shinB: 14, footB: 24 },
       clips: {
+        sp3: {"length":48,"plant":"feet","blend":3,"squash":[{"f":14,"sx":0.97,"sy":1.03},{"f":15,"sx":1.04,"sy":0.96,"ease":"outExpo"},{"f":20,"sx":1,"sy":1,"ease":"outCubic"}],"keys":[{"f":9,"ease":"inOutQuad","p":{"torso":-8,"head":-8,"rootX":-8,"uarmF":-30,"farmF":60,"uarmB":0,"farmB":40}},{"f":15,"ease":"linear","p":{"torso":-8,"head":-8,"rootX":-8,"uarmF":-30,"farmF":60,"uarmB":0,"farmB":40}},{"f":16,"ease":"outBack","back":1.2,"p":{"torso":26,"head":-6,"rootX":14,"uarmF":86,"farmF":6,"uarmB":-10,"farmB":20,"thighF":36,"shinF":36,"footF":4,"thighB":-22,"shinB":10,"footB":26}},{"f":20,"ease":"linear","p":{"torso":28,"rootX":16,"uarmF":92,"farmF":4}},{"f":28,"ease":"linear","p":{"torso":28,"rootX":16,"uarmF":92,"farmF":4}},{"f":47,"ease":"inOutQuad","p":"base"}]},
         idle: { length: 90, loop: true, plant: "feet", blend: 6, keys: [
           { f: 0, ease: "inOutQuad", p: "base" },
           { f: 45, ease: "inOutQuad", p: { torso: 2, head: -3, uarmF: 46, farmF: 36, uarmB: 32, farmB: 40, thighF: 15, shinF: 21, footF: 6 } } ] },
@@ -703,7 +716,7 @@ window.GAME_DATA = {
           { f: 28, ease: "outExpo", p: { torso: 35, rootX: 10, uarmF: 40, farmF: 5, uarmB: 40, farmB: 5 } },
           { f: 32, ease: "linear", p: { rootX: 12 } },
           { f: 51, ease: "inOutQuad", p: "base" } ] },
-        sp1: { length: 49, plant: "feet", blend: 3, keys: [
+        sp1: { length: 53, plant: "feet", blend: 3, keys: [
           { f: 11, ease: "inOutQuad", p: { torso: -6, rootX: -4, uarmF: 170, farmF: 24, uarmB: 150, farmB: 24 } },
           { f: 17, ease: "linear", p: { torso: -6, rootX: -4, uarmF: 170, farmF: 24, uarmB: 150, farmB: 24 } },
           { f: 18, ease: "outExpo", p: { torso: 30, head: 10, rootX: 10, uarmF: 60, farmF: 4, uarmB: 50, farmB: 8, thighF: 40, shinF: 50, footF: 10 } },
@@ -731,20 +744,25 @@ window.GAME_DATA = {
           { f: 73, ease: "inOutQuad", p: "base" } ] }
       },
       moves: {
+        sp3: { kind: "special", name: "鬼の体当たり", stance: "stand", startup: 16, active: 8, recovery: 24,
+          boxes: [{ f0: 17, f1: 24, x: 30, y: 60, w: 70, h: 90 }],
+          hit: { damage: 95, chip: 8, level: "mid", hitstun: 24, blockstun: 16, hitstop: 12, knock: { hit: 22, block: 24 }, effect: "stun", gauge: { hit: 50, block: 25 }, impact: 4 },
+          motion: [{ f0: 4, f1: 26, vx: 7 }], invuln: [{ f0: 1, f1: 24, type: "proj" }],
+          trail: { from: "prop", color: "accent", width: 14, frames: 10 }, sfx: "swingH" },
         "5L": { kind: "normal", name: "立ち弱", stance: "stand", startup: 7, active: 3, recovery: 11,
           boxes: [ { f0: 8, f1: 10, x: 36, y: 84, w: 56, h: 30 } ],
-          hit: { damage: 42, chip: 0, level: "mid", hitstun: 18, blockstun: 12, hitstop: 7, knock: { hit: 10, block: 12 }, effect: "stun", gauge: { hit: 25, block: 12 }, impact: 1 },
-          cancel: { into: ["5L", "2L", "5H", "sp1", "super"], frames: 10 },
+          hit: { damage: 42, chip: 0, level: "mid", hitstun: 22, blockstun: 12, hitstop: 7, knock: { hit: 10, block: 12 }, effect: "stun", gauge: { hit: 25, block: 12 }, impact: 1 },
+          cancel: { into: ["5L", "2L", "5H", "sp1", "super"], frames: 14 },
           trail: { from: "prop", color: "accent", width: 10, frames: 6 }, sfx: "swingL" },
         "2L": { kind: "normal", name: "しゃがみ弱", stance: "crouch", startup: 6, active: 3, recovery: 11,
           boxes: [ { f0: 7, f1: 9, x: 36, y: 14, w: 60, h: 26 } ],
-          hit: { damage: 34, chip: 0, level: "low", hitstun: 18, blockstun: 13, hitstop: 7, knock: { hit: 10, block: 12 }, effect: "stun", gauge: { hit: 25, block: 12 }, impact: 1 },
-          cancel: { into: ["5L", "2L", "5H", "sp1", "super"], frames: 10 },
+          hit: { damage: 34, chip: 0, level: "low", hitstun: 22, blockstun: 13, hitstop: 7, knock: { hit: 10, block: 12 }, effect: "stun", gauge: { hit: 25, block: 12 }, impact: 1 },
+          cancel: { into: ["5L", "2L", "5H", "sp1", "super"], frames: 14 },
           trail: { from: "prop", color: "accent", width: 9, frames: 6 }, sfx: "swingL" },
         "5H": { kind: "normal", name: "立ち強（金棒の大振り）", stance: "stand", startup: 15, active: 5, recovery: 24,
           boxes: [ { f0: 16, f1: 20, x: 40, y: 80, w: 110, h: 46 } ],
-          hit: { damage: 105, chip: 0, level: "mid", hitstun: 32, blockstun: 20, hitstop: 12, knock: { hit: 18, block: 22 }, effect: "stun", gauge: { hit: 45, block: 22 }, impact: 3 },
-          cancel: { into: ["sp1", "sp2", "super"], frames: 12 },
+          hit: { damage: 92, chip: 0, level: "mid", hitstun: 32, blockstun: 20, hitstop: 12, knock: { hit: 18, block: 22 }, effect: "stun", gauge: { hit: 45, block: 22 }, impact: 3 },
+          cancel: { into: ["sp1", "sp2", "super"], frames: 16 },
           trail: { from: "prop", color: "accent", width: 14, frames: 8 }, sfx: "swingH" },
         "2H": { kind: "normal", name: "しゃがみ強（足払い）", stance: "crouch", startup: 12, active: 5, recovery: 26,
           boxes: [ { f0: 13, f1: 17, x: 34, y: 0, w: 100, h: 28 } ],
@@ -764,7 +782,7 @@ window.GAME_DATA = {
             hold: [ { f: 0, x: 50, y: 60, rot: -10 }, { f: 14, ease: "inOutCubic", x: 24, y: 170, rot: -100 }, { f: 28, ease: "outExpo", x: 70, y: 30, rot: -150 }, { f: 32, ease: "linear", x: 76, y: 20, rot: -160 } ],
             launch: { vx: 3, vy: 7 }, hitstop: 12, impact: 3, gauge: { hit: 40 } },
           sfx: "grab" },
-        sp1: { kind: "special", name: "404 NOT FOUND", stance: "stand", startup: 18, active: 1, recovery: 30, boxes: [], hit: null,
+        sp1: { kind: "special", name: "404 NOT FOUND", stance: "stand", startup: 18, active: 1, recovery: 34, boxes: [], hit: null,
           spawn: [ { at: 19, projectile: "nf404", x: 50, y: 0 } ], sfx: "cast" },
         sp2: { kind: "special", name: "掴み", stance: "stand", startup: 9, active: 3, recovery: 34, boxes: [], hit: null,
           throw: {
@@ -779,7 +797,7 @@ window.GAME_DATA = {
           sfx: "super" }
       },
       projectiles: {
-        nf404: { life: 110, vx: 4.5, vy: 0, box: { x: -24, y: -4, w: 48, h: 26 }, hit: { damage: 70, chip: 8, level: "low", hitstun: 22, blockstun: 16, hitstop: 8, knock: { hit: 6, block: 10 }, effect: "stun", gauge: { hit: 30, block: 15 }, impact: 2 }, hits: 1, maxActive: 1, priority: 2, ground: true,
+        nf404: { life: 110, vx: 4.5, vy: 0, box: { x: -24, y: -4, w: 48, h: 26 }, hit: { damage: 52, chip: 8, level: "low", hitstun: 22, blockstun: 16, hitstop: 8, knock: { hit: 6, block: 10 }, effect: "stun", gauge: { hit: 30, block: 15 }, impact: 2 }, hits: 1, maxActive: 1, priority: 2, ground: true,
           look: { style: "shock", color: "accent", size: 1.3 } }
       },
       quotes: {
@@ -795,7 +813,7 @@ window.GAME_DATA = {
       blurb: "俊敏で軽い。三本の尻尾と分身で、読みにくい攻めを仕掛ける。",
       ratings: { power: 2, speed: 5, range: 3, defense: 1 },
       stats: {
-        hp: 900, walkF: 4.2, walkB: 3.6, jumpVy: 16.5, jumpVx: 4.8, gravity: 0.72,
+        dmgMul: 0.83, hp: 900, walkF: 4.2, walkB: 3.6, jumpVy: 16.5, jumpVx: 4.8, gravity: 0.72,
         airJumps: 1, prejump: 3, landLag: 3,
         dashF: { frames: 14, speed: 10.5 }, dashB: { frames: 16, speed: 7.5, invuln: 8 },
         gaugeMul: 1.15
@@ -841,6 +859,7 @@ window.GAME_DATA = {
       },
       basePose: { rootX: 0, rootY: 0, rot: 0, torso: 2, head: -4, uarmF: 30, farmF: 30, uarmB: 14, farmB: 40, thighF: 22, shinF: 26, footF: 4, thighB: -14, shinB: 10, footB: 24 },
       clips: {
+        sp3: {"base":"crouch","length":40,"plant":"feet","blend":3,"keys":[{"f":6,"ease":"inOutQuad","p":{"torso":36,"rootX":-6,"uarmF":20,"farmF":60}},{"f":9,"ease":"linear","p":{"torso":36,"rootX":-6,"uarmF":20,"farmF":60}},{"f":10,"ease":"outBack","back":1.2,"p":{"torso":40,"head":-4,"rootX":14,"uarmF":40,"farmF":60,"thighF":80,"shinF":4,"footF":-30,"thighB":-18,"shinB":40,"footB":30}},{"f":14,"ease":"linear","p":{"rootX":16,"thighF":86,"shinF":6}},{"f":22,"ease":"linear","p":{"rootX":16,"thighF":86,"shinF":6}},{"f":39,"ease":"inOutQuad","p":"base"}]},
         idle: { length: 54, loop: true, plant: "feet", blend: 6, keys: [
           { f: 0, ease: "inOutQuad", p: "base" },
           { f: 27, ease: "inOutQuad", p: { torso: 4, head: -6, uarmF: 34, farmF: 26, uarmB: 18, farmB: 40 } } ] },
@@ -881,7 +900,7 @@ window.GAME_DATA = {
           { f: 0, ease: "inOutQuad", p: { torso: 28, head: -12, uarmF: 50, farmF: 116, uarmB: 40, farmB: 110, thighF: 80, shinF: 124, footF: 44, thighB: 60, shinB: 124, footB: 64 } },
           { f: 15, ease: "inOutQuad", p: { torso: 30, uarmF: 48, farmF: 118 } } ] },
         hurtHigh: { length: 16, plant: "feet", blend: 1, keys: [
-          { f: 2, ease: "outExpo", p: { torso: -16, head: -22, rootX: -6, uarmF: -5, farmF: 25, uarmB: -20, farmB: 30, thighF: 16, shinF: 28, footF: 12, thighB: -18, shinB: 20, footB: 30 } },
+          { f: 2, ease: "outExpo", p: { torso: -16, head: -22, rootX: -6, uarmF: -5, farmF: 25, uarmB: -20, farmB: 30, thighF: 22, shinF: 38, footF: 12, thighB: -18, shinB: 10, footB: 20 } },
           { f: 12, ease: "inOutQuad", p: { torso: -8, head: -12, rootX: -3 } } ] },
         hurtLow: { length: 16, plant: "feet", blend: 1, keys: [
           { f: 2, ease: "outExpo", p: { torso: 34, head: 14, rootX: -4, uarmF: 10, farmF: 40, uarmB: -8, farmB: 30, thighF: 36, shinF: 60, footF: 24, thighB: -8, shinB: 40, footB: 25 } },
@@ -954,7 +973,7 @@ window.GAME_DATA = {
           { f: 24, ease: "outExpo", p: { torso: 35, rootX: 10, uarmF: 40, farmF: 5, uarmB: 40, farmB: 5 } },
           { f: 27, ease: "linear", p: { rootX: 12 } },
           { f: 43, ease: "inOutQuad", p: "base" } ] },
-        sp1: { length: 37, plant: "feet", blend: 3, keys: [
+        sp1: { length: 45, plant: "feet", blend: 3, keys: [
           { f: 6, ease: "inOutQuad", p: { torso: -6, rootX: -6, uarmF: -20, farmF: 70, uarmB: -10, farmB: 60 } },
           { f: 11, ease: "linear", p: { torso: -6, rootX: -6, uarmF: -20, farmF: 70, uarmB: -10, farmB: 60 } },
           { f: 12, ease: "outExpo", p: { torso: 24, rootX: 10, uarmF: 100, farmF: 8, uarmB: 60, farmB: 20 } },
@@ -980,20 +999,24 @@ window.GAME_DATA = {
           { f: 43, ease: "inOutQuad", p: "base" } ] }
       },
       moves: {
+        sp3: { kind: "special", name: "狐の滑り込み", stance: "stand", startup: 10, active: 10, recovery: 20,
+          boxes: [{ f0: 11, f1: 20, x: 20, y: 0, w: 80, h: 26 }],
+          hit: { damage: 58, chip: 4, level: "low", hitstun: 0, blockstun: 14, hitstop: 9, knock: { hit: 0, block: 18 }, effect: "launch", launch: { vx: 3, vy: 6 }, juggle: 0, gauge: { hit: 45, block: 22 }, impact: 3 },
+          motion: [{ f0: 2, f1: 20, vx: 9.5 }], invuln: [{ f0: 1, f1: 20, type: "proj" }], sfx: "swingH" },
         "5L": { kind: "normal", name: "立ち弱", stance: "stand", startup: 4, active: 3, recovery: 7,
           boxes: [ { f0: 5, f1: 7, x: 30, y: 84, w: 50, h: 26 } ],
-          hit: { damage: 24, chip: 0, level: "mid", hitstun: 13, blockstun: 10, hitstop: 6, knock: { hit: 6, block: 8 }, effect: "stun", gauge: { hit: 25, block: 12 }, impact: 1 },
-          cancel: { into: ["5L", "2L", "5H", "2H", "sp1", "sp2", "super"], frames: 10 },
+          hit: { damage: 24, chip: 0, level: "mid", hitstun: 17, blockstun: 10, hitstop: 6, knock: { hit: 6, block: 8 }, effect: "stun", gauge: { hit: 25, block: 12 }, impact: 1 },
+          cancel: { into: ["5L", "2L", "5H", "2H", "sp1", "sp2", "super"], frames: 14 },
           trail: { from: "handF", color: "glow", width: 7, frames: 5 }, sfx: "swingL" },
         "2L": { kind: "normal", name: "しゃがみ弱", stance: "crouch", startup: 4, active: 3, recovery: 8,
           boxes: [ { f0: 5, f1: 7, x: 30, y: 14, w: 56, h: 22 } ],
-          hit: { damage: 20, chip: 0, level: "low", hitstun: 13, blockstun: 10, hitstop: 6, knock: { hit: 6, block: 8 }, effect: "stun", gauge: { hit: 25, block: 12 }, impact: 1 },
-          cancel: { into: ["5L", "2L", "5H", "2H", "sp1", "sp2", "super"], frames: 10 },
+          hit: { damage: 20, chip: 0, level: "low", hitstun: 17, blockstun: 10, hitstop: 6, knock: { hit: 6, block: 8 }, effect: "stun", gauge: { hit: 25, block: 12 }, impact: 1 },
+          cancel: { into: ["5L", "2L", "5H", "2H", "sp1", "sp2", "super"], frames: 14 },
           sfx: "swingL" },
         "5H": { kind: "normal", name: "立ち強（上段）", stance: "stand", startup: 10, active: 4, recovery: 15,
           boxes: [ { f0: 11, f1: 14, x: 34, y: 60, w: 76, h: 60 } ],
-          hit: { damage: 58, chip: 0, level: "high", hitstun: 20, blockstun: 14, hitstop: 9, knock: { hit: 12, block: 16 }, effect: "stun", gauge: { hit: 45, block: 22 }, impact: 3 },
-          cancel: { into: ["sp1", "sp2", "super"], frames: 12 },
+          hit: { damage: 52, chip: 0, level: "high", hitstun: 20, blockstun: 14, hitstop: 9, knock: { hit: 12, block: 16 }, effect: "stun", gauge: { hit: 45, block: 22 }, impact: 3 },
+          cancel: { into: ["sp1", "sp2", "super"], frames: 16 },
           trail: { from: "handF", color: "glow", width: 12, frames: 8 }, sfx: "swingH" },
         "2H": { kind: "normal", name: "しゃがみ強（足払い）", stance: "crouch", startup: 8, active: 4, recovery: 18,
           boxes: [ { f0: 9, f1: 12, x: 26, y: 0, w: 84, h: 24 } ],
@@ -1014,7 +1037,7 @@ window.GAME_DATA = {
             hold: [ { f: 0, x: 50, y: 60, rot: -10 }, { f: 12, ease: "inOutCubic", x: 24, y: 170, rot: -100 }, { f: 24, ease: "outExpo", x: 70, y: 30, rot: -150 }, { f: 28, ease: "linear", x: 76, y: 20, rot: -160 } ],
             launch: { vx: 3, vy: 6 }, hitstop: 10, impact: 3, gauge: { hit: 40 } },
           sfx: "grab" },
-        sp1: { kind: "special", name: "分身斬り", stance: "stand", startup: 12, active: 1, recovery: 24, boxes: [], hit: null,
+        sp1: { kind: "special", name: "分身斬り", stance: "stand", startup: 12, active: 1, recovery: 32, boxes: [], hit: null,
           spawn: [ { at: 13, projectile: "clone", x: 24, y: 60 } ], sfx: "cast" },
         sp2: { kind: "special", name: "狐火転移", stance: "stand", startup: 10, active: 1, recovery: 26, boxes: [], hit: null,
           teleport: { at: 11, to: "behind", gap: 70 },
@@ -1022,14 +1045,14 @@ window.GAME_DATA = {
           sfx: "teleport" },
         super: { kind: "super", name: "大祓「無限ループ分身舞」", stance: "stand", startup: 8, active: 40, recovery: 34, cost: 1000, flash: 40,
           boxes: [ { f0: 9, f1: 48, x: 12, y: 10, w: 90, h: 120 } ],
-          hit: { damage: 30, chip: 8, level: "mid", hitstun: 14, blockstun: 14, hitstop: 4, knock: { hit: 2, block: 4 }, effect: "stun", gauge: { hit: 0, block: 0 }, impact: 2 },
+          hit: { damage: 24, chip: 8, level: "mid", hitstun: 14, blockstun: 14, hitstop: 4, knock: { hit: 2, block: 4 }, effect: "stun", gauge: { hit: 0, block: 0 }, impact: 2 },
           multi: { count: 8, every: 5, final: { damage: 100, chip: 14, level: "mid", hitstun: 0, blockstun: 24, hitstop: 16, knock: { hit: 0, block: 20 }, effect: "launch", launch: { vx: 4, vy: 9 }, juggle: 0, gauge: { hit: 0, block: 0 }, impact: 4 } },
           teleport: { at: 9, to: "front", gap: 50 },
           invuln: [ { f0: 1, f1: 8, type: "all" } ],
           sfx: "super" }
       },
       projectiles: {
-        clone: { life: 44, vx: 6.5, vy: 0, box: { x: -20, y: -30, w: 40, h: 60 }, hit: { damage: 30, chip: 4, level: "mid", hitstun: 16, blockstun: 12, hitstop: 8, knock: { hit: 6, block: 10 }, effect: "stun", gauge: { hit: 20, block: 10 }, impact: 2 }, hits: 2, hitEvery: 12, maxActive: 1, priority: 1,
+        clone: { life: 44, vx: 6.5, vy: 0, box: { x: -20, y: -30, w: 40, h: 60 }, hit: { damage: 20, chip: 4, level: "mid", hitstun: 16, blockstun: 12, hitstop: 8, knock: { hit: 6, block: 10 }, effect: "stun", gauge: { hit: 20, block: 10 }, impact: 2 }, hits: 2, hitEvery: 12, maxActive: 1, priority: 1,
           look: { style: "ghost", clip: "clone", color: "glow", size: 1.0 } }
       },
       quotes: {
