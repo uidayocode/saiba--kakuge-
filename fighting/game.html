@@ -45,7 +45,7 @@ const CFG = {
   WORLD_W: 1280, GROUND_Y: 460, START_X: [500, 780],
   WALL_MIN: 40, WALL_MAX: 1240, MAX_DIST: 880, CAM_MARGIN: 30,
   CAM_FOLLOW_X: 0.18, CAM_FOLLOW_Z: 0.10,
-  GAUGE_MAX: 1000, SUPER_COST: 1000, GC_COST: 500, PUSHBLOCK_DIST: 90, COUNTER_DMG: 1.25, COUNTER_STUN: 6, AIR_TECH_AFTER: 20, AIR_TECH_INV: 12, GAUGE_GAIN: 1.4, GAUGE_COMEBACK: 2.0, PROJ_GUARD_GAUGE: 25,
+  GAUGE_MAX: 1000, SUPER_COST: 1000, JG_WINDOW: 5, JG_STUN_CUT: 5, JG_GAUGE: 40, OTG_SCALE: 0.6, GC_COST: 500, PUSHBLOCK_DIST: 90, COUNTER_DMG: 1.25, COUNTER_STUN: 6, AIR_TECH_AFTER: 20, AIR_TECH_INV: 12, GAUGE_GAIN: 1.4, GAUGE_COMEBACK: 2.0, PROJ_GUARD_GAUGE: 25,
   DOWN_FRAMES: 28, WAKEUP_FRAMES: 18, WAKEUP_QUICK: 14, QUICK_WINDOW: 6, WAKE_DELAY: 22, ROLL_FRAMES: 20, ROLL_SPEED: 6, WAKE_THROW_INV: 6,
   JUGGLE_DEFAULT: 3, THROW_HITSTOP: 12, THROW_TECH: 7, THROW_TECH_PUSH: 40, THROW_TECH_STUN: 12,
   GUARD_GRACE: 3, CROSSUP_EPS: 12, BTN_BUFFER: 6, CHORD_WINDOW: 3, DTAP_WINDOW: 12,
@@ -1075,7 +1075,7 @@ function validateGameData(D) {
       }
       if (m.cancel) {
         if (!Array.isArray(m.cancel.into)) E(mp + '.cancel.into', '配列が必要');
-        else m.cancel.into.forEach(t => { if (MOVE_IDS.indexOf(t) < 0) E(mp + '.cancel.into', '不明な技ID "' + t + '"'); });
+        else m.cancel.into.forEach(t => { if (MOVE_IDS.indexOf(t) < 0 && t !== 'jump' && t !== 'jS') E(mp + '.cancel.into', '不明な技ID "' + t + '"'); });
         if (!isInt(m.cancel.frames)) E(mp + '.cancel.frames', '整数が必要');
       }
       if (mid === 'super' && m.cost !== 1000) E(mp + '.cost', 'super には cost:1000 が必要');
@@ -1587,7 +1587,7 @@ class InputBuf {
     this.age = { L: -1, H: -1, S: -1, T: -1 };
     this.pf = { L: -999, H: -999, S: -999, T: -999 };
     this.prevMask = 0; this.cur = 0; this.facing = 1; this.edge = 0;
-    this.lastFwd = -999; this.prevFwd = -999; this.lastBack = -999; this.prevBack = -999;
+    this.lastFwd = -999; this.prevFwd = -999; this.lastBack = -999; this.prevBack = -999; this.backEdge = -999;
     this.prevF = false; this.prevB = false;
     this.lastActFrame = -1;
   }
@@ -1612,7 +1612,7 @@ class InputBuf {
     }
     const f = fw > 0, b = fw < 0;
     if (f && !this.prevF) { this.prevFwd = this.lastFwd; this.lastFwd = this.frame; }
-    if (b && !this.prevB) { this.prevBack = this.lastBack; this.lastBack = this.frame; }
+    if (b && !this.prevB) { this.prevBack = this.lastBack; this.lastBack = this.frame; this.backEdge = this.frame; }
     this.prevF = f; this.prevB = b;
     this.prevMask = mask; this.cur = mask; this.facing = facing; this.edge = edge;
   }
@@ -2133,7 +2133,7 @@ class Fighter {
         this.vy -= st.gravity; this.y += this.vy; this.dx = this.vx;
         if (this.y <= 0 && this.vy <= 0) {
           this.y = 0; this.vy = 0; this.vx = 0; this.dx = 0;
-          this.setState('DOWN', 'down', 3);
+          this.setState('DOWN', 'down', 3); this.otgUsed = false;
           this.pup.landT = 0;
           this.fx.sfx('down', this.x); this.fx.dust(this.x, 0, -this.facing, 8);
           this.endCombo();
@@ -2220,6 +2220,10 @@ class Fighter {
         this.performMove('throw');
         return true;
       }
+    }
+    if (mv.contact === 'hit' && m.cancel && mv.cancelLeft > 0 && m.cancel.into.indexOf('jump') >= 0 && b.up()) {
+      this.mv = null; this.takeOff(); this.vx = this.facing * this.st.jumpVx * 0.6;
+      return true;
     }
     if (mv.contact && m.cancel && mv.cancelLeft > 0) {
       mv.cancelLeft--;
@@ -2375,10 +2379,12 @@ class Combat {
   }
   collectMove(A, D, strikes, throws) {
     const mv = A.mv, m = mv.m;
-    if (m.hit && !mv.hitDone && mv.n >= mv.nextHitN && this.hittable(D)) {
+    const otg = !!m.otg && D.state === 'DOWN' && !D.otgUsed && !D.ko && D.hp > 0;
+    if (m.hit && !mv.hitDone && mv.n >= mv.nextHitN && (otg || this.hittable(D))) {
       const boxes = A.attackBoxes();
       if (boxes && boxes.length) {
-        const hb = D.hurtBoxes();
+        /* 倒れている相手は、地面すれすれの低い箱だけ */
+        const hb = otg ? [[D.x - 55, 0, D.x + 55, 28]] : D.hurtBoxes();
         let found = null;
         if (hb) {
           for (let i = 0; i < boxes.length && !found; i++) for (let k = 0; k < hb.length; k++) {
@@ -2450,7 +2456,23 @@ class Combat {
     const dir = D.x > s.ax ? 1 : (D.x < s.ax ? -1 : A.facing);
     const mvn = s.n;
     const isSuperHit = !isProj && mv && mv.m.kind === 'super';
+    if (D.state === 'DOWN') {
+      /* ダウン追い打ち（ガード不能・1回のダウンにつき1回。少し威力を下げる） */
+      const dmg = Math.max(1, Math.round(hit.damage * CFG.OTG_SCALE * (A.st.dmgMul || 1)));
+      D.hp = Math.max(0, D.hp - dmg); D.dmgRound += dmg; D.otgUsed = true;
+      D.combo.hits++; D.combo.dmg += dmg; m.noteCombo(A.slot, D.combo.hits);
+      if (D.hp <= 0) D.ko = true;
+      D.stateT = Math.max(0, D.stateT - 6);   /* 少しだけ起き上がりが遅れる */
+      D.pup.onHit(2, dir);
+      fx.hit({ x: s.px, y: Math.max(10, s.py), impact: 2, dir: dir, att: A, def: D, ko: D.ko, superHit: false, dmg: dmg });
+      fx.otg(s.px, s.py);
+      A.hitstop = Math.max(A.hitstop, 8); D.hitstop = Math.max(D.hitstop, 8);
+      mv.hitCount++; mv.hitDone = true; mv.contact = 'hit';
+      return;
+    }
     const guarded = this.guards(D, s);
+    /* ジャスト防御: 当たる直前（数フレーム以内）に後ろを入れ始めていた */
+    const just = guarded && D.state !== 'BLOCKSTUN' && D.buf.frame - D.buf.backEdge <= CFG.JG_WINDOW;
     let hs = hit.hitstop, advText = null;
     const crouchy = D.isCrouchy();
     /* カウンター: 相手が技を出している途中（発生〜持続）に当てた */
@@ -2469,13 +2491,14 @@ class Combat {
       fx.sfx('block', D.x);
       hs = Math.max(8, hit.hitstop);
     } else if (guarded) {
-      const chip = Math.max(0, Math.min(hit.chip, D.hp - 1));
+      const chip = just ? 0 : Math.max(0, Math.min(hit.chip, D.hp - 1));
       D.hp -= chip; D.dmgRound += chip;
       if (!isSuperHit) { this.addGauge(A, hit.gauge.block); this.addGauge(D, Math.floor(chip * 0.6) + (isProj ? CFG.PROJ_GUARD_GAUGE : 0)); }
       D.mv = null; D.vx = 0;
       const cg = D.buf.down();
       D.setState('BLOCKSTUN', cg ? 'guardCrouch' : 'guardStand', 1, true); D.pushUsed = false;
-      D.blockCrouch = cg; D.stunLeft = hit.blockstun;
+      D.blockCrouch = cg; D.stunLeft = just ? Math.max(2, hit.blockstun - CFG.JG_STUN_CUT) : hit.blockstun;
+      if (just) { this.addGauge(D, CFG.JG_GAUGE); fx.justGuard(s.px, s.py, D); }
       D.kb = { total: hit.knock.block, dir: dir, i: 0 }; D.kbSrc = isProj ? null : A;
       D.pup.onHit(Math.max(1, hit.impact - 1), dir);
       D.pup.kickChains(dir * (0.8 + hit.impact * 0.6), 0.3 * hit.impact);
@@ -3235,6 +3258,15 @@ const FX = {
     this.addRing(x, y, 10, 60, 14, '#ffa13c', 4, 'hex');
     this.addText('ARMOR', x, y + 36, '#ffa13c', 16, 30, 0.6, 'en');
     this.shake(3, 6);
+  },
+  justGuard(x, y, def) {
+    this.addRing(x, y, 6, 70, 12, '#ffffff', 4, 'hex');
+    this.addText('JUST', x, y + 40, '#ffffff', 20, 34, 0.7, 'en');
+    this.flash(0.15, '#a8e8ff', 6);
+    Audio.play('counter', { pan: 0 });
+  },
+  otg(x, y) {
+    this.addText('追い打ち', x, Math.max(20, y) + 40, '#ffa13c', 15, 30, 0.6, 'jp');
   },
   throwTech(x, y) {
     this.addRing(x, y, 6, 90, 16, '#ffe94d', 4, 'hex');
@@ -4638,27 +4670,33 @@ const COMBO_ROWS = {
     ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。まずはこれ'],
     ['下段から', '↓弱 → 弱 → 強 → 必殺', '4ヒット。しゃがみガードを崩す'],
     ['足払い打ち上げ', '↓弱 → ↓強 → →+必殺', '3ヒット。↓強が当たると相手が浮く'],
+    ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット。↓強が当たったらすぐ ↑'],
     ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '6ヒット。いちばん減る']
   ],
   komainu: [
     ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。突進で締める'],
     ['下段から', '↓弱 → 弱 → 強 → 必殺', '4ヒット'],
     ['打ち上げ', '↓強 → →+必殺', '2ヒット。↓強で浮かせて噛砕き'],
+    ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
     ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '7ヒット']
   ],
   oni404: [
     ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。1発が重い'],
     ['下段から', '↓弱 → 弱 → 強 → 必殺', '4ヒット'],
+    ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
     ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '一撃で約4割']
   ],
   fox: [
     ['基本コンボ', '弱 → 弱 → 強 → 必殺', '5ヒット。分身が2回当たる'],
     ['下段から', '↓弱 → 弱 → 強 → 必殺', '5ヒット'],
+    ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
     ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '9ヒット']
   ]
 };
 const SYSTEM_ROWS = [
   ['守り', 'ガード中に →+強 = ガードキャンセル（ゲージ半分） / 弱+強 = 押し返し'],
+  ['ジャスト', '攻撃が当たる直前に ← を入れる = ガード硬直が短く、ゲージが増える'],
+  ['追い打ち', '倒れた相手に ↓弱 が1回だけ当たる'],
   ['受け身', '浮かされて落ちてくるときにボタン = 空中で立て直す'],
   ['カウンター', '相手の技の出始めに当てると、威力とのけぞりが増える'],
   ['起き上がり', '倒れてすぐボタン=早起き / すぐ後ろ=転がる / 下押しっぱなし=遅く起きる']
@@ -4668,19 +4706,19 @@ function drawComboList(ctx, ch, id) {
   const cols = [60, 250, 590], rows = COMBO_ROWS[id] || COMBO_ROWS.miko;
   ['コンボ', 'ボタン（かんたん操作）', 'ポイント'].forEach((h, i) => drawText(ctx, h, cols[i], 134, { size: 13, color: '#8fa3c8' }));
   for (let r = 0; r < rows.length; r++) {
-    const y = 168 + r * 36, row = rows[r];
-    if (r % 2 === 0) { ctx.fillStyle = 'rgba(255,79,163,0.07)'; ctx.fillRect(48, y - 22, 864, 34); }
+    const y = 160 + r * 28, row = rows[r];
+    if (r % 2 === 0) { ctx.fillStyle = 'rgba(255,79,163,0.07)'; ctx.fillRect(48, y - 18, 864, 26); }
     drawText(ctx, row[0], cols[0], y, { size: 16, color: '#ffd0e4' });
     drawText(ctx, row[1], cols[1], y, { size: 17, color: '#ffffff' });
     drawText(ctx, row[2], cols[2], y, { size: 13, color: '#b9c7e6' });
   }
   for (let r = 0; r < SYSTEM_ROWS.length; r++) {
-    const y = 318 + r * 26;
-    drawText(ctx, SYSTEM_ROWS[r][0], cols[0], y, { size: 14, color: '#19f3ff' });
-    drawText(ctx, SYSTEM_ROWS[r][1], cols[1] - 60, y, { size: 13, color: '#e6f1ff' });
+    const y = 300 + r * 21;
+    drawText(ctx, SYSTEM_ROWS[r][0], cols[0], y, { size: 13, color: '#19f3ff' });
+    drawText(ctx, SYSTEM_ROWS[r][1], cols[1] - 60, y, { size: 12, color: '#e6f1ff' });
   }
-  drawText(ctx, 'コツ: 技が当たった瞬間に次のボタン。少し早くても遅くても受け付けます', 480, 438, { size: 14, align: 'center', color: '#ffe94d' });
-  drawText(ctx, '通常操作なら  →+必殺 = ↓↙←+必殺 / ←+必殺 = →↓↘+必殺 / ↓+必殺 = ↓↘→↓↘→+必殺', 480, 464, { size: 12, align: 'center', color: '#8fa3c8' });
+  drawText(ctx, 'コツ: 技が当たった瞬間に次のボタン。少し早くても遅くても受け付けます', 480, 448, { size: 14, align: 'center', color: '#ffe94d' });
+  drawText(ctx, '通常操作なら  →+必殺 = ↓↙←+必殺 / ←+必殺 = →↓↘+必殺 / ↓+必殺 = ↓↘→↓↘→+必殺', 480, 470, { size: 12, align: 'center', color: '#8fa3c8' });
 }
 function drawMoveList(ctx, ch, title, page, id, hint) {
   id = id || 'miko';
@@ -6385,6 +6423,11 @@ class CpuPolicy {
     const C = CPU_CHAR[me.rt.id] || CPU_CHAR.miko;
     if (!m.controlsOn()) { this.q.length = 0; this.combo = null; return 0; }
     const F = this.fwdBit(me), Bk = this.backBit(me), dist = Math.abs(opp.x - me.x);
+    /* 倒れた相手に追い打ち（ふつう・つよい。1回のダウンにつき1回） */
+    if (opp.state === 'DOWN' && !opp.otgUsed && dist < 110 && me.state !== 'ATTACK' && this.otgSeen !== m.frame - opp.stateT) {
+      this.otgSeen = m.frame - opp.stateT;
+      if (rng.chance(L.punish * 0.8)) { this.q = [B_DOWN | B_L, B_DOWN]; return this.q.shift(); }
+    }
     /* 空中受け身（ふつう・つよい） */
     if (me.state === 'AIR_HURT') return (me.stateT >= CFG.AIR_TECH_AFTER && rng.chance(L.punish * 0.15)) ? B_L : 0;
     /* ガードキャンセル（つよい。ゲージがあれば時々） */
