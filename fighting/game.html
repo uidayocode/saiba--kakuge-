@@ -45,7 +45,7 @@ const CFG = {
   WORLD_W: 1280, GROUND_Y: 460, START_X: [500, 780],
   WALL_MIN: 40, WALL_MAX: 1240, MAX_DIST: 880, CAM_MARGIN: 30,
   CAM_FOLLOW_X: 0.18, CAM_FOLLOW_Z: 0.10,
-  GAUGE_MAX: 1000, SUPER_COST: 1000,
+  GAUGE_MAX: 1000, SUPER_COST: 1000, GAUGE_GAIN: 1.4, GAUGE_COMEBACK: 2.0,
   DOWN_FRAMES: 28, WAKEUP_FRAMES: 18, WAKEUP_QUICK: 14, QUICK_WINDOW: 6,
   JUGGLE_DEFAULT: 3, THROW_HITSTOP: 12, THROW_TECH: 7, THROW_TECH_PUSH: 40, THROW_TECH_STUN: 12,
   GUARD_GRACE: 3, CROSSUP_EPS: 12, BTN_BUFFER: 6, CHORD_WINDOW: 3, DTAP_WINDOW: 12,
@@ -2353,7 +2353,9 @@ class Combat {
   }
   addGauge(f, base) {
     if (base <= 0) return;
-    const mul = f.st.gaugeMul * (f.hp <= f.maxHp * 0.25 ? 1.5 : 1);
+    /* 全体を少し速く + 負けている側ほど速い（体力差が最大HPの半分で ×GAUGE_COMEBACK） */
+    const o = this.m.opp(f), behind = Util.clamp((o.hp / o.maxHp - f.hp / f.maxHp) * 2, 0, 1);
+    const mul = f.st.gaugeMul * CFG.GAUGE_GAIN * (1 + (CFG.GAUGE_COMEBACK - 1) * behind) * (f.hp <= f.maxHp * 0.25 ? 1.5 : 1);
     const before = f.gauge;
     f.gauge = Math.min(CFG.GAUGE_MAX, f.gauge + Math.floor(base * mul));
     if (before < CFG.GAUGE_MAX && f.gauge >= CFG.GAUGE_MAX) this.m.fx.gaugeFull(f);
@@ -2646,7 +2648,7 @@ class Match {
     this.cam.snap(F[0], F[1]);
     this.timer = this.overtime ? 99 : this.timeMax;
     this.tickF = 0; this.koWinner = -2; this.timeUp = false; this.roundWinner = -2; this.perfectNow = false;
-    this.freeze = 0;
+    this.freeze = 0; this.deficit = [0, 0]; this.koBySuper = false; this.roundTag = '';
     this.enter('ROUND_INTRO');
   }
   enter(ph) {
@@ -2659,9 +2661,12 @@ class Match {
         this.fx.sfx('fight', 640);
         break;
       case 'FIGHTING': break;
-      case 'KO':
+      case 'KO': {
+        const W = this.koWinner >= 0 ? F[this.koWinner] : null;
+        this.koBySuper = !!(W && ((W.mv && W.mv.id === 'super') || W.state === 'SUPERFLASH'));
         this.fx.ko(this, this.koWinner);
         break;
+      }
       case 'TIME_UP': {
         this.timeUp = true;
         const r0 = F[0].hp / F[0].maxHp, r1 = F[1].hp / F[1].maxHp;
@@ -2684,6 +2689,10 @@ class Match {
       this.wins[w]++; this.lostTo[1 - w]++;
       F[w].setWin(); F[1 - w].setLose();
       if (F[w].dmgRound === 0) { this.perfect[w]++; this.perfectNow = true; }
+      /* 決着の特別表示（パーフェクトが最優先） */
+      else if (this.koBySuper && !this.timeUp) this.roundTag = '大祓フィニッシュ！';
+      else if ((this.deficit[w] || 0) >= 0.4) { this.roundTag = '大逆転！'; this.comebacks = (this.comebacks || 0) + 1; }
+      else if (F[w].hp / F[w].maxHp <= 0.12) this.roundTag = 'ギリギリ勝利！';
       this.fx.sfx('win', 640);
     } else {
       this.wins[0]++; this.wins[1]++;
@@ -2698,6 +2707,7 @@ class Match {
       const f = F[winner];
       pts = Math.round(f.hp / f.maxHp * 60) + (this.lostTo[winner] === 0 ? 25 : 0) + (this.perfect[winner] > 0 ? 15 : 0);
       if (this.lastTimeUp) pts -= 10;
+      if (this.comebacks) pts += 10;
       pts = Util.clamp(pts, 0, 100);
     }
     this.result = {
@@ -2751,6 +2761,9 @@ class Match {
       default: break;
     }
     this.simStep();
+    if (this.phase === 'FIGHTING' && this.deficit) {
+      for (let i = 0; i < 2; i++) { const a = F[i], o = F[1 - i], d = o.hp / o.maxHp - a.hp / a.maxHp; if (d > this.deficit[i]) this.deficit[i] = d; }
+    }
     if (this.combatOn()) {
       const d0 = F[0].hp <= 0, d1 = F[1].hp <= 0;
       if (d0 || d1) { this.koWinner = (d0 && d1) ? -1 : (d0 ? 1 : 0); this.enter('KO'); }
@@ -4364,8 +4377,42 @@ function moveListRows(ch) {
     [nm('super'), '↓↘→↓↘→ + 必殺', '↓ + 必殺', '大祓ゲージ満タンで使える']
   ];
 }
-function drawMoveList(ctx, ch, title) {
+const COMBO_ROWS = [
+  ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。まずはこれ'],
+  ['下段から打ち上げ', '↓弱 → 弱 → 強 → →+必殺', '4ヒット。昇り鈴で空中へ'],
+  ['足払い打ち上げ', '↓弱 → ↓強 → →+必殺', '3ヒット。↓強が当たると相手が浮く'],
+  ['飛び込み', 'ジャンプ強 → 弱 → 強 → 必殺', '深めに当てると着地からつながる'],
+  ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '6ヒット。いちばん減る'],
+  ['逆転の一手', '負けているとゲージが早くたまる', '体力差が大きいほど最大2倍']
+];
+function drawComboList(ctx, ch) {
+  panel(ctx, 40, 110, 880, 384, '#ff4fa3', 0.8);
+  const cols = [60, 270, 600];
+  ['コンボ', 'ボタン（かんたん操作）', 'ポイント'].forEach((h, i) => drawText(ctx, h, cols[i], 134, { size: 13, color: '#8fa3c8' }));
+  for (let r = 0; r < COMBO_ROWS.length; r++) {
+    const y = 172 + r * 40, row = COMBO_ROWS[r];
+    if (r % 2 === 0) { ctx.fillStyle = 'rgba(255,79,163,0.07)'; ctx.fillRect(48, y - 24, 864, 38); }
+    drawText(ctx, row[0], cols[0], y, { size: 16, color: '#ffd0e4' });
+    drawText(ctx, row[1], cols[1], y, { size: 17, color: '#ffffff' });
+    drawText(ctx, row[2], cols[2], y, { size: 13, color: '#b9c7e6' });
+  }
+  drawText(ctx, 'コツ: 技が当たった瞬間に次のボタン。少し早くても遅くても受け付けます', 480, 438, { size: 14, align: 'center', color: '#ffe94d' });
+  drawText(ctx, '通常操作なら  →+必殺 = ↓↙←+必殺 / ↓+必殺 = ↓↘→↓↘→+必殺', 480, 466, { size: 12, align: 'center', color: '#8fa3c8' });
+}
+function drawMoveList(ctx, ch, title, page) {
   drawText(ctx, title || '技一覧', 480, 40, { size: 28, align: 'center', color: '#ffffff', glow: '#19f3ff' });
+  /* ページ見出し（←→ で切り替え） */
+  ['技', 'コンボ'].forEach((n, i) => {
+    const on = (page || 0) === i, x = i === 0 ? 150 : 810;
+    drawText(ctx, (i === 0 ? '◀ ' : '') + n + (i === 1 ? ' ▶' : ''), x, 40, { size: 15, align: i === 0 ? 'left' : 'right', color: on ? '#ffffff' : '#6a7490', glow: on ? '#19f3ff' : null });
+  });
+  if (page === 1) {
+    drawText(ctx, keyLegend(0), 480, 76, { size: 14, align: 'center', color: UI_COL.p1 });
+    drawText(ctx, keyLegend(1), 480, 96, { size: 14, align: 'center', color: UI_COL.p2 });
+    drawComboList(ctx, ch);
+    drawText(ctx, '←→: 技 / コンボ 切り替え', 480, 512, { size: 12, align: 'center', color: '#8fa3c8' });
+    return;
+  }
   drawText(ctx, keyLegend(0), 480, 76, { size: 14, align: 'center', color: UI_COL.p1 });
   drawText(ctx, keyLegend(1), 480, 96, { size: 14, align: 'center', color: UI_COL.p2 });
   panel(ctx, 40, 110, 880, 384, '#19f3ff', 0.8);
@@ -4380,7 +4427,7 @@ function drawMoveList(ctx, ch, title) {
     drawText(ctx, rows[r][2], cols[2], y, { size: 15, color: rows[r][2] === '同じ' ? '#6a7490' : '#ffe94d' });
     drawText(ctx, rows[r][3], cols[3], y, { size: 12, color: '#b9c7e6' });
   }
-  drawText(ctx, '方向は右向きのとき（左向きなら ←→ が逆）。かんたん操作はキャラ選択で切り替え', 480, 512, { size: 12, align: 'center', color: '#8fa3c8' });
+  drawText(ctx, '方向は右向きのとき（左向きなら ←→ が逆）   ←→: 技 / コンボ 切り替え', 480, 512, { size: 12, align: 'center', color: '#8fa3c8' });
 }
 
 /* ================= BOOT ================= */
@@ -4412,7 +4459,7 @@ Game.scenes.boot = {
 /* ================= TITLE ================= */
 Game.scenes.title = {
   idleLimit: 0,
-  items: ['2人で対戦', '1人で練習 (CPU)', '技一覧', 'あそびかた', '入力設定', '設定'],
+  items: ['2人で対戦', '1人で遊ぶ (CPU)', '技一覧', 'あそびかた', '入力設定', '設定'],
   enter() {
     this.sel = 0; this.hintT = 0; this.demo = false; this.demoT = 0; this.demoI = 0; this.pups = [];
     FX.reset();
@@ -4441,8 +4488,9 @@ Game.scenes.title = {
     this.sel = menuMove(this.sel, this.items.length, n);
     if (n & B_L) {
       Audio.play('menuOk');
-      Game.training = this.sel === 1;
-      if (this.sel <= 1) Game.go('charSelect');
+      Game.training = false;
+      if (this.sel === 0) Game.go('charSelect');
+      else if (this.sel === 1) Game.go('cpuSelect');
       else if (this.sel === 2) Game.go('moves');
       else if (this.sel === 3) Game.go('howto');
       else if (this.sel === 4) Game.go('inputConfig', { from: 'title' });
@@ -4519,16 +4567,46 @@ Game.scenes.howto = {
   }
 };
 
+/* ================= CPU の強さ選び ================= */
+Game.scenes.cpuSelect = {
+  idleLimit: 3600,
+  keys: ['easy', 'normal', 'hard', 'dummy'],
+  enter() { const i = this.keys.indexOf(Game.cpuLevel || 'easy'); this.sel = i < 0 ? 0 : i; },
+  update() {
+    const n = Input.nav;
+    this.sel = menuMove(this.sel, this.keys.length, n);
+    if ((n & B_H) || Input.keyPressed('Escape')) { Audio.play('menuCancel'); Game.go('title'); return; }
+    if (n & B_L) {
+      Audio.play('menuOk');
+      Game.training = true; Game.cpuLevel = this.keys[this.sel]; Game.cpuStreak = 0;
+      Game.go('charSelect');
+    }
+  },
+  render(ctx) {
+    Backdrop.draw(ctx, 0.6);
+    drawText(ctx, 'CPU の強さ', 480, 70, { size: 32, align: 'center', color: '#ffffff', glow: '#19f3ff' });
+    const labels = this.keys.map(k => k === 'dummy' ? '練習台（ガードするだけ）' : CPU_LEVELS[k].label);
+    drawMenuList(ctx, labels, this.sel, 480, 170, 56, { size: 24, w: 200 });
+    const k = this.keys[this.sel];
+    const desc = k === 'dummy' ? '攻撃してこない。技やコンボの練習に' : CPU_LEVELS[k].desc;
+    panel(ctx, 200, 392, 560, 46, '#19f3ff', 0.8);
+    drawText(ctx, desc, 480, 416, { size: 16, align: 'center', base: 'middle', color: '#e6f1ff' });
+    drawText(ctx, '↑↓ で選ぶ   Enter か 弱 で決定   Esc で戻る', 480, 470, { size: 13, align: 'center', color: '#ffe94d' });
+    drawConn(ctx);
+  }
+};
+
 /* ================= MOVES（技一覧） ================= */
 Game.scenes.moves = {
   idleLimit: 5400,
-  enter() { },
+  enter() { this.page = 0; },
   update() {
+    if (Input.nav & (B_LEFT | B_RIGHT)) { this.page = 1 - this.page; Audio.play('menuMove'); }
     if ((Input.nav & (B_H | B_L)) || Input.keyPressed('Escape')) { Audio.play('menuCancel'); Game.go('title'); }
   },
   render(ctx) {
     Backdrop.draw(ctx, 0.7);
-    drawMoveList(ctx, Game.chars[Game.roster[0]].ch, '技一覧  ' + Game.chars[Game.roster[0]].ch.name);
+    drawMoveList(ctx, Game.chars[Game.roster[0]].ch, '技一覧  ' + Game.chars[Game.roster[0]].ch.name, this.page);
     drawText(ctx, '戻る: 強 / Esc', 480, 532, { size: 12, align: 'center', color: '#8fa3c8' });
     drawConn(ctx);
   }
@@ -4695,7 +4773,7 @@ Game.scenes.charSelect = {
   },
   render(ctx) {
     Backdrop.draw(ctx, 0.6);
-    drawText(ctx, this.training ? '1人で練習  キャラクター選択' : 'キャラクター選択', 480, 44, { size: 28, align: 'center', color: '#ffffff', glow: '#19f3ff' });
+    drawText(ctx, this.training ? '1人で遊ぶ  キャラクター選択' : 'キャラクター選択', 480, 44, { size: 28, align: 'center', color: '#ffffff', glow: '#19f3ff' });
     const n = this.cards.length, cw = Math.min(120, 340 / n), gap = 10;
     const total = n * cw + (n - 1) * gap, x0 = 480 - total / 2;
     for (let c = 0; c < n; c++) {
@@ -4752,7 +4830,7 @@ Game.scenes.charSelect = {
       } else drawText(ctx, 'おまかせ', ix + iw / 2, 420, { size: 20, align: 'center', color: '#8fa3c8' });
       /* 配色とモード */
       const st = p.decided ? (this.training && i === 1 ? 'CPU' : 'READY')
-        : (this.training && i === 1 ? '練習相手 (CPU)'
+        : (this.training && i === 1 ? 'CPU ' + (CPU_LEVELS[Game.cpuLevel] ? CPU_LEVELS[Game.cpuLevel].label : '練習台')
         : (keyName(i, 'L') + ': 決定    ' + keyName(i, 'T') + ': 配色    ' + keyName(i, 'S') + ': かんたん切替'));
       drawText(ctx, st, ix + iw / 2, 494, { size: p.decided ? 18 : 12, font: p.decided ? 'en' : 'jp', align: 'center', color: p.decided ? '#7cff6b' : '#b9c7e6', glow: p.decided ? '#7cff6b' : null, base: 'middle' });
       if (id) {
@@ -4837,9 +4915,16 @@ const _V = { x: 640, zoom: 1, y: 0 }, _SHK = { x: 0, y: 0 };
 function renderFightWorld(ctx, m, alpha, o) {
   o = o || {};
   m.cam.view(alpha, _V);
-  const z = _V.zoom + FX.zoomPunch();
-  const cam = { x: _V.x, zoom: z, y: _V.y };
   const t = Game.t, F = m.fighters;
+  let z = _V.zoom + FX.zoomPunch(), cx = _V.x;
+  /* KO: 倒れる側へカメラが寄る（描画だけ。当たり判定や移動制限には影響しない） */
+  if (m.koWinner >= 0 && (m.phase === 'KO' || (m.phase === 'ROUND_END' && m.phaseT < 24))) {
+    const k = m.phase === 'KO' ? Ease.outCubic(Util.clamp((m.phaseT + alpha) / 26, 0, 1)) : 1 - Ease.outCubic(m.phaseT / 24);
+    const L = F[1 - m.koWinner];
+    z *= 1 + 0.3 * k; cx += (L.x - cx) * 0.55 * k;
+    const hw = CFG.W / z / 2; cx = Util.clamp(cx, hw, CFG.WORLD_W - hw);
+  }
+  const cam = { x: cx, zoom: z, y: _V.y };
   const sh = FX.shakeOff(_SHK);
   ctx.save();
   ctx.translate(sh.x, sh.y);
@@ -5062,6 +5147,12 @@ function drawFightBanners(ctx, m, scene) {
       const col = m.koWinner === 0 ? UI_COL.p1 : UI_COL.p2;
       drawBannerBand(ctx, m.fighters[m.koWinner].ch.name + '  ' + T.win, 220, Util.clamp((pt - 20) / 12, 0, 1), { color: col, size: 40, font: 'jp' });
     }
+    if (!m.perfectNow && m.roundTag && pt > 36) {
+      const a = Util.clamp((pt - 36) / 10, 0, 1), sc = 1 + 0.5 * (1 - Ease.outBack(a));
+      ctx.save(); ctx.translate(480, 292); ctx.scale(sc, sc);
+      drawText(ctx, m.roundTag, 0, 0, { size: 46, align: 'center', base: 'middle', color: '#ffffff', glow: '#ff4fa3', alpha: a });
+      ctx.restore();
+    }
     if (m.perfectNow && pt > 36) drawText(ctx, T.perfect, 480, 290, { size: 44, font: 'en', align: 'center', color: '#ffe94d', glow: '#ffe94d', alpha: Util.clamp((pt - 36) / 10, 0, 1) * (0.7 + 0.3 * Math.sin(Game.t * 12)) });
   } else if (ph === 'MATCH_END') {
     ctx.fillStyle = 'rgba(5,6,15,' + Util.clamp(pt / 30, 0, 1) + ')'; ctx.fillRect(0, 0, CFG.W, CFG.H);
@@ -5089,7 +5180,9 @@ Game.scenes.fight = {
     });
     this.hud = { lag: [this.match.fighters[0].hp, this.match.fighters[1].hp], wait: [0, 0], last: [0, 0], round: 1 };
     this.paused = false; this.pauseSel = 0; this.pauseWhy = ''; this.devs = [Devices.slots[0], Devices.slots[1]];
-    this.cpu = this.training ? new CpuPolicy(1, 'dummy') : null;
+    const lv = Game.cpuLevel || 'dummy';
+    this.cpu = this.training ? (lv === 'dummy' ? new CpuPolicy(1, 'dummy') : new CpuPolicy(1, 'cpu', lv)) : null;
+    if (this.cpu && lv !== 'dummy') this.match.fighters[1].easy = true;
     this.cutPups = [null, null];
     Audio.resume();
   },
@@ -5143,6 +5236,7 @@ Game.scenes.fight = {
   updatePause() {
     const n = Input.nav, items = this.pauseItems();
     if (this.showMoves) {
+      if (n & (B_LEFT | B_RIGHT)) { this.movePage = 1 - (this.movePage || 0); Audio.play('menuMove'); }
       if ((n & (B_H | B_L | B_START)) || Input.keyPressed('Escape') || Input.keyPressed('Enter')) { this.showMoves = false; Audio.play('menuCancel'); }
       return;
     }
@@ -5191,7 +5285,7 @@ Game.scenes.fight = {
     const items = this.pauseItems();
     if (this.showMoves) {
       ctx.fillStyle = 'rgba(3,4,12,0.6)'; ctx.fillRect(0, 0, CFG.W, CFG.H);
-      drawMoveList(ctx, this.match.fighters[0].ch, '技一覧');
+      drawMoveList(ctx, this.match.fighters[0].ch, '技一覧', this.movePage || 0);
       drawText(ctx, '閉じる: 強 / Esc', 480, 532, { size: 12, align: 'center', color: '#8fa3c8' });
       return;
     }
@@ -5211,6 +5305,9 @@ Game.scenes.result = {
   enter() {
     const r = Game.result;
     this.r = r; this.t = 0; this.sel = 0; this.items = ['もう一度', 'キャラ選択へ', 'タイトルへ'];
+    /* CPU 戦の連勝数 */
+    this.vsCpu = !!Game.training && CPU_LEVELS[Game.cpuLevel];
+    if (this.vsCpu) Game.cpuStreak = r.winner === 0 ? (Game.cpuStreak || 0) + 1 : 0;
     this.win = r.winner >= 0 ? r.winner : -1;
     const ids = r.ids;
     if (this.win >= 0) {
@@ -5265,7 +5362,8 @@ Game.scenes.result = {
     /* WIN / DRAW */
     const k = Ease.outBack(Util.clamp(t / 30, 0, 1));
     ctx.save(); ctx.translate(480, 62); ctx.scale(k, k);
-    if (this.win >= 0) drawText(ctx, 'P' + (this.win + 1) + ' WIN', 0, 0, { size: 58, font: 'en', align: 'center', base: 'middle', color: '#ffffff', glow: winCol });
+    if (this.vsCpu) drawText(ctx, this.win === 0 ? 'YOU WIN' : 'CPU WIN', 0, 0, { size: 58, font: 'en', align: 'center', base: 'middle', color: '#ffffff', glow: winCol });
+    else if (this.win >= 0) drawText(ctx, 'P' + (this.win + 1) + ' WIN', 0, 0, { size: 58, font: 'en', align: 'center', base: 'middle', color: '#ffffff', glow: winCol });
     else drawText(ctx, Game.data.texts.banners.draw, 0, 0, { size: 58, font: 'en', align: 'center', base: 'middle', color: '#ffffff', glow: '#8fa3c8' });
     ctx.restore();
     if (this.win >= 0) {
@@ -5305,6 +5403,10 @@ Game.scenes.result = {
           for (let i = 0; i < lines.length; i++) drawText(ctx, lines[i], cx, top + 176 + i * 20, { size: 15, align: 'center', color: '#3a2418', alpha: la });
         }
       }
+    }
+    if (this.vsCpu) {
+      const lv = CPU_LEVELS[Game.cpuLevel].label, st = Game.cpuStreak || 0;
+      drawText(ctx, 'CPU ' + lv + (st > 0 ? '   ' + st + ' 連勝中！' : ''), 480, 104, { size: 16, align: 'center', color: st > 0 ? '#ffe94d' : '#8fa3c8', glow: st > 1 ? '#ffe94d' : null });
     }
     /* 戦績 */
     const sa = this.win >= 0 ? Util.clamp((t - 255) / 14, 0, 1) : Util.clamp((t - 10) / 14, 0, 1);
@@ -5680,13 +5782,40 @@ Game.scenes.inputConfig = {
 /* ================================================================
  * S9a  CpuPolicy（テスト・練習ダミー用の簡易AI）/ SelfTest
  * ================================================================ */
+const CPU_LEVELS = {
+  easy: {
+    label: 'やさしい', desc: 'はじめての人向け。大祓を当てるチャンスもくれる',
+    guard: 0.12, readLow: false, antiAir: 0, combo: 0.15, drop: 0.5, waitMin: 22, waitMax: 50, waitGuard: false,
+    useSuper: false, comboSuper: false, openForSuper: true, fireball: 0.12, jumpIn: 0.05,
+    routes: [['5L', '5H']]
+  },
+  normal: {
+    label: 'ふつう', desc: 'ガードもコンボもする。慣れてきたら',
+    guard: 0.4, readLow: false, antiAir: 0.3, combo: 0.45, drop: 0.15, waitMin: 8, waitMax: 22, waitGuard: false,
+    useSuper: true, comboSuper: false, openForSuper: false, fireball: 0.3, jumpIn: 0.12,
+    routes: [['5L', '5H', 'sp1'], ['2L', '5L'], ['5H', 'sp2']]
+  },
+  hard: {
+    label: 'つよい', desc: '下段を見切り、対空も出す。腕に自信がある人へ',
+    guard: 0.75, readLow: true, antiAir: 0.65, combo: 0.7, drop: 0, waitMin: 0, waitMax: 10, waitGuard: true,
+    useSuper: true, comboSuper: true, openForSuper: false, fireball: 0.35, jumpIn: 0.2,
+    routes: [['5L', '5L', '5H', 'sp1'], ['2L', '2H', 'sp2'], ['2L', '5L', '5H', 'sp2'], ['5H', 'sp1']]
+  }
+};
 class CpuPolicy {
-  /* mode: 'test' = ランダムに全技を踏む / 'dummy' = 立ち・ガード固定の練習相手 */
-  constructor(slot, mode) {
+  /* mode: 'test' = ランダムに全技を踏む / 'dummy' = 立ち・ガード固定の練習相手 / 'cpu' = 対戦用（level: easy|normal|hard） */
+  constructor(slot, mode, level) {
     this.slot = slot; this.mode = mode || 'test';
     this.q = []; this.cool = 0;
+    this.L = CPU_LEVELS[level] || CPU_LEVELS.normal; this.combo = null; this.wait = 30; this.guarding = false;
   }
   fwdBit(f) { return f.facing > 0 ? B_RIGHT : B_LEFT; }
+  /* 相手の飛び道具が近くまで来ているか */
+  projNear(m, me) {
+    const L = m.projs.list;
+    for (let i = 0; i < L.length; i++) { const p = L[i]; if (p.alive && p.owner !== me && Math.abs(p.x - me.x) < 260) return true; }
+    return false;
+  }
   backBit(f) { return f.facing > 0 ? B_LEFT : B_RIGHT; }
   rep(mask, n, out) { for (let i = 0; i < n; i++) out.push(mask); return out; }
   /* 技IDを出す入力列（コマンドは実際の方向列で入力して CommandParser を通す） */
@@ -5720,7 +5849,84 @@ class CpuPolicy {
     }
     return q;
   }
+  /* ---- 対戦用CPU（やさしい / ふつう / つよい） ---- */
+  pressFor(id, me) {
+    const F = this.fwdBit(me);
+    switch (id) {
+      case '5L': return [B_L, 0]; case '5H': return [B_H, 0];
+      case '2L': return [B_DOWN | B_L, B_DOWN]; case '2H': return [B_DOWN | B_H, B_DOWN];
+      case 'sp1': return [B_S, 0]; case 'sp2': return [F | B_S, F];
+      case 'super': return [B_DOWN | B_S, B_DOWN]; case 'throw': return [B_T, 0];
+    }
+    return [0, 0];
+  }
+  /* コンボ: 1つ目を出し、当たったのを見てから次を入力する（ガードされたら止める） */
+  stepCombo(me, rng) {
+    const c = this.combo, L = this.L, mv = me.mv;
+    c.t++;
+    if (mv && mv.id === c.list[c.i]) { c.i++; c.tog = 0; c.t = 0; }
+    if (c.i >= c.list.length || c.t > 70) { this.combo = null; return 0; }
+    if (c.i > 0) {
+      if (!mv || mv.contact === 'block' || (mv.n > mv.m.startup + mv.m.active + 2 && !mv.contact)) { this.combo = null; return 0; }
+      if (mv.contact !== 'hit') return 0;
+      if (c.dropAt === c.i) return 0;
+    }
+    const p = this.pressFor(c.list[c.i], me);
+    return p[(c.tog++) % 2];
+  }
+  startCombo(list, rng) {
+    this.combo = { list: list, i: 0, t: 0, tog: 0, dropAt: rng.chance(this.L.drop) ? 1 + rng.int(Math.max(1, list.length - 1)) : -1 };
+  }
+  nextCpu(m, slot) {
+    const me = m.fighters[slot], opp = m.fighters[1 - slot], rng = m.rng, L = this.L;
+    if (!m.controlsOn()) { this.q.length = 0; this.combo = null; return 0; }
+    const F = this.fwdBit(me), Bk = this.backBit(me), dist = Math.abs(opp.x - me.x);
+    if (this.combo) return this.stepCombo(me, rng);
+    /* 守り（行動中でも割り込む） */
+    const threat = (opp.state === 'ATTACK' && opp.mv && dist < 280) || this.projNear(m, me);
+    if (threat && me.state !== 'ATTACK' && !this.guarding) {
+      this.guarding = true;
+      if (rng.chance(L.guard)) {
+        const lvl = opp.mv && opp.mv.m.hit ? opp.mv.m.hit.level : 'mid';
+        const crouch = L.readLow ? (lvl !== 'high' && !opp.isAir()) : rng.chance(0.4);
+        this.q = this.rep(Bk | (crouch ? B_DOWN : 0), 10 + rng.int(10), []);
+      }
+    }
+    if (!threat) this.guarding = false;
+    if (this.q.length) return this.q.shift();
+    if (this.wait > 0) { this.wait--; return L.waitGuard && dist < 200 ? Bk | B_DOWN : 0; }
+    this.wait = L.waitMin + rng.int(L.waitMax - L.waitMin + 1);
+    /* やさしい: 相手のゲージが満タンなら、大祓を当てられるスキを作る */
+    if (L.openForSuper && opp.gauge >= CFG.SUPER_COST && dist < 360 && rng.chance(0.7)) { this.q = this.rep(0, 40, []); return 0; }
+    /* 対空 */
+    if (opp.isAir() && dist < 200 && rng.chance(L.antiAir)) { this.q = this.pressFor('sp2', me).concat(this.rep(F, 6, [])); return this.q.shift(); }
+    /* 大祓 */
+    if (L.useSuper && me.gauge >= CFG.SUPER_COST && dist < 300 && rng.chance(0.35)) {
+      if (L.comboSuper && dist < 150) { this.startCombo(['5H', 'super'], rng); return this.stepCombo(me, rng); }
+      this.q = this.pressFor('super', me); return this.q.shift();
+    }
+    if (dist > 360) {
+      const r = rng.next();
+      if (r < L.fireball) this.q = this.pressFor('sp1', me);
+      else if (r < L.fireball + L.jumpIn) { this.q = []; this.rep(B_UP | F, 3, this.q); this.rep(F, 16, this.q); this.q.push(F | B_H); this.rep(F, 30, this.q); }
+      else this.q = this.rep(F, 14 + rng.int(14), []);
+    } else if (dist > 150) {
+      const r = rng.next();
+      if (r < L.fireball * 0.6) this.q = this.pressFor('sp1', me);
+      else if (r < 0.65) this.q = this.rep(F, 8 + rng.int(10), []);
+      else if (r < 0.8) this.q = this.pressFor(rng.chance(0.5) ? '2H' : '5H', me);
+      else this.q = this.rep(Bk, 8 + rng.int(8), []);
+    } else {
+      const r = rng.next();
+      if (r < L.combo) { this.startCombo(rng.pick(L.routes), rng); return this.stepCombo(me, rng); }
+      else if (r < L.combo + 0.12) this.q = this.pressFor('throw', me);
+      else if (r < L.combo + 0.3) this.q = this.pressFor(rng.pick(['5L', '2L', '5H']), me);
+      else this.q = this.rep(Bk | (rng.chance(0.5) ? B_DOWN : 0), 8 + rng.int(12), []);
+    }
+    return this.q.length ? this.q.shift() : 0;
+  }
   next(m, slot) {
+    if (this.mode === 'cpu') return this.nextCpu(m, slot);
     const me = m.fighters[slot], opp = m.fighters[1 - slot];
     if (!m.controlsOn()) { this.q.length = 0; return 0; }
     const rng = m.rng;
@@ -5728,7 +5934,7 @@ class CpuPolicy {
       /* 立ち/しゃがみ/ガード固定 */
       const B = this.backBit(me);
       let mask = 0;
-      if (opp.state === 'ATTACK' || opp.projsNear) mask = B | ((Math.floor(m.frame / 240) % 2) ? B_DOWN : 0);
+      if (opp.state === 'ATTACK' || this.projNear(m, me)) mask = B | ((Math.floor(m.frame / 240) % 2) ? B_DOWN : 0);
       else if (Math.abs(opp.x - me.x) < 120) mask = B;
       return mask;
     }
@@ -5911,7 +6117,9 @@ const SelfTest = {
       /* 状態機械 */
       if (KNOWN_STATES.indexOf(f.state) < 0) this.fail('unknown-state', f.state);
       if (!f.rt.clips[f.pup.cp.name]) this.fail('unknown-clip', f.pup.cp.name);
-      if (f.state === c.lastState[i]) c.dwell[i]++; else { c.dwell[i] = 0; c.lastState[i] = f.state; }
+      /* 同じ状態が続いた長さ。攻撃は「技が切り替わったら」数え直す（連続で違う技を出しているだけなら固まりではない） */
+      const stKey = f.state + (f.state === 'ATTACK' && f.mv ? ':' + f.mv.serial : '');
+      if (stKey === c.lastState[i]) c.dwell[i]++; else { c.dwell[i] = 0; c.lastState[i] = stKey; }
       const exempt = f.state === 'IDLE' || f.state === 'WIN' || f.state === 'LOSE' || (f.state === 'DOWN' && f.ko) || f.state === 'INTRO' || f.state === 'SUPERFLASH';
       if (!exempt && c.dwell[i] > 600) { this.fail('state-hang', 'P' + (i + 1) + ' ' + f.state + ' が600F以上続いています'); c.dwell[i] = 0; }
       if (f.mv && f.mv.n > f.mv.total) this.fail('move-frame', f.mv.id + ' n=' + f.mv.n + '/' + f.mv.total);
@@ -6460,7 +6668,7 @@ function boot() {
   Game.pal2 = [false, Game.sel[0] === Game.sel[1]];
   const eff = Settings.eff();
   Game.easy = [eff.easy.p1, eff.easy.p2];
-  window.__denno = { Game: Game, Input: Input, Devices: Devices, FX: FX, Debug: Debug, SelfTest: SelfTest, Gallery: Gallery, Settings: Settings, validateGameData: validateGameData, CFG: CFG };
+  window.__denno = { Game: Game, Input: Input, Devices: Devices, FX: FX, Debug: Debug, SelfTest: SelfTest, Gallery: Gallery, Settings: Settings, validateGameData: validateGameData, CFG: CFG, Match: Match, NullFX: NullFX, CpuPolicy: CpuPolicy };
   Main.applyMode();
   Main.startLoops();
 }
