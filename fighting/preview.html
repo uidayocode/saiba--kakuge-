@@ -1,0 +1,405 @@
+<title>電脳奉納試合 キャラ図鑑</title>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Orbitron:wght@500;700&display=swap">
+<style>
+/* layout: 1キャラ1ブロック。名前の帯の下に、ポーズの格子を横いっぱいに敷く */
+:root {
+  color-scheme: dark;
+  --bg: #05060f;
+  --panel: #0b0c1e;
+  --line: #1b2350;
+  --text: #e6f1ff;
+  --sub: #8fa3c8;
+  --neon: #ff3b5c;
+  --cyan: #19f3ff;
+  --font-jp: "DotGothic16", "Yu Gothic", "Meiryo", sans-serif;
+  --font-num: "Orbitron", "Consolas", monospace;
+}
+html, body { background: var(--bg); color: var(--text); margin: 0; }
+body { font-family: var(--font-jp); padding-inline: 16px; padding-block: 20px 40px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 20px; margin-bottom: 18px; }
+h1 { font-size: 26px; margin: 0; text-wrap: balance; letter-spacing: 0.04em; color: var(--text); }
+h1 span { color: var(--neon); }
+.note { color: var(--sub); font-size: 13px; margin: 0; max-width: 70ch; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 22px; }
+button {
+  font-family: var(--font-jp); font-size: 14px; color: var(--text); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; padding: 7px 14px; cursor: pointer;
+}
+button[aria-pressed="true"] { border-color: var(--cyan); color: var(--cyan); }
+button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+section { margin-bottom: 28px; }
+.who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; border-bottom: 1px solid var(--line); padding-bottom: 6px; margin-bottom: 8px; }
+.who h2 { font-size: 20px; margin: 0; }
+.who .en { font-family: var(--font-num); font-size: 12px; letter-spacing: 0.12em; color: var(--sub); }
+.who .ttl { font-size: 13px; color: var(--cyan); }
+.who .blurb { font-size: 13px; color: var(--sub); min-width: 0; }
+.grid { width: 100%; overflow-x: auto; }
+canvas { display: block; width: 100%; height: auto; background: var(--panel); border-radius: 6px; }
+.err { color: #ff8fa3; white-space: pre-wrap; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { canvas { animation: none; } }
+</style>
+
+<header>
+  <h1>電脳奉納試合 <span>キャラ図鑑</span></h1>
+  <p class="note">data.js の骨格とキーフレームから描いた確認用の簡易版です。技は攻撃判定が出る瞬間（startup）のポーズ。完成版エンジンの描画とは細部が異なります。</p>
+</header>
+<div class="controls">
+  <button id="btnAnim" type="button" aria-pressed="false">アニメ再生</button>
+  <button id="btnP2" type="button" aria-pressed="false">P2配色</button>
+</div>
+<main id="root"></main>
+
+<script src="data.js" charset="utf-8"></script>
+<script>
+(function () {
+"use strict";
+const D = window.GAME_DATA;
+const root = document.getElementById("root");
+if (!D || !D.characters) { root.innerHTML = '<p class="err">data.js を読み込めませんでした。</p>'; return; }
+
+const CH = ["rootX","rootY","rot","torso","head","uarmF","farmF","uarmB","farmB","thighF","shinF","footF","thighB","shinB","footB"];
+const NCH = CH.length, DEG = Math.PI / 180;
+const isNum = v => typeof v === "number" && isFinite(v);
+
+/* ---- easing ---- */
+function ease(name, u, back) {
+  const c1 = isNum(back) ? back : 1.70158, c3 = c1 + 1, c2 = c1 * 1.525;
+  switch (name) {
+    case "inQuad": return u * u;
+    case "outQuad": return 1 - (1 - u) * (1 - u);
+    case "inOutQuad": return u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+    case "inCubic": return u * u * u;
+    case "outCubic": return 1 - Math.pow(1 - u, 3);
+    case "inOutCubic": return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+    case "outExpo": return u >= 1 ? 1 : 1 - Math.pow(2, -10 * u);
+    case "inExpo": return u <= 0 ? 0 : Math.pow(2, 10 * u - 10);
+    case "inBack": return c3 * u * u * u - c1 * u * u;
+    case "outBack": return 1 + c3 * Math.pow(u - 1, 3) + c1 * Math.pow(u - 1, 2);
+    case "inOutBack": return u < 0.5 ? (Math.pow(2 * u, 2) * ((c2 + 1) * 2 * u - c2)) / 2
+                                     : (Math.pow(2 * u - 2, 2) * ((c2 + 1) * (u * 2 - 2) + c2) + 2) / 2;
+    case "outElastic": { const c4 = 2 * Math.PI / 3; return u <= 0 ? 0 : u >= 1 ? 1 : Math.pow(2, -10 * u) * Math.sin((u * 10 - 0.75) * c4) + 1; }
+    case "hold": return u < 1 ? 0 : 1;
+    default: return u;
+  }
+}
+
+/* ---- clip compile / sample (エンジンと同じ規則: チャンネル独立、到着側の ease) ---- */
+function poseArr(p) { const a = new Float64Array(NCH); for (let i = 0; i < NCH; i++) a[i] = p && isNum(p[CH[i]]) ? p[CH[i]] : 0; return a; }
+function compile(ch) {
+  const base = poseArr(ch.basePose), out = {}, busy = {};
+  function comp(name) {
+    if (out[name]) return out[name];
+    const clip = ch.clips && ch.clips[name]; if (!clip || busy[name]) return null;
+    busy[name] = 1;
+    let b = base;
+    if (clip.base && clip.base !== name && ch.clips[clip.base]) { const bc = comp(clip.base); if (bc) b = sample(bc, 0); }
+    const len = Math.max(1, clip.length | 0), keys = (clip.keys || []).slice().sort((x, y) => x.f - y.f);
+    const k0 = keys.find(k => k.f === 0);
+    const cc = { name, length: len, loop: !!clip.loop, plant: clip.plant === "root" ? 1 : 0, tracks: [] };
+    for (let c = 0; c < NCH; c++) {
+      const tr = { f: [], v: [], e: [], b: [] };
+      for (const k of keys) {
+        let v;
+        if (k.p === "base") v = b[c]; else if (k.p && isNum(k.p[CH[c]])) v = k.p[CH[c]]; else continue;
+        const L = tr.f.length - 1;
+        if (L >= 0 && tr.f[L] === k.f) { tr.v[L] = v; tr.e[L] = k.ease; tr.b[L] = k.back; }
+        else { tr.f.push(k.f); tr.v.push(v); tr.e.push(k.ease); tr.b.push(k.back); }
+      }
+      if (!tr.f.length || tr.f[0] > 0) { tr.f.unshift(0); tr.v.unshift(b[c]); tr.e.unshift(k0 && k0.ease); tr.b.unshift(k0 && k0.back); }
+      if (cc.loop) { tr.f.push(len); tr.v.push(tr.v[0]); tr.e.push(tr.e[0]); tr.b.push(tr.b[0]); }
+      cc.tracks.push(tr);
+    }
+    return (out[name] = cc);
+  }
+  for (const n in ch.clips) comp(n);
+  return { base, clips: out };
+}
+function sample(cc, t) {
+  const o = new Float64Array(NCH);
+  let tt = cc.loop ? ((t % cc.length) + cc.length) % cc.length : Math.max(0, Math.min(cc.length, t));
+  for (let c = 0; c < NCH; c++) {
+    const tr = cc.tracks[c], n = tr.f.length;
+    if (tt <= tr.f[0]) { o[c] = tr.v[0]; continue; }
+    if (tt >= tr.f[n - 1]) { o[c] = tr.v[n - 1]; continue; }
+    let i = 1; while (i < n - 1 && tr.f[i] < tt) i++;
+    const span = tr.f[i] - tr.f[i - 1], u = span > 0 ? (tt - tr.f[i - 1]) / span : 1;
+    o[c] = tr.v[i - 1] + (tr.v[i] - tr.v[i - 1]) * ease(tr.e[i], u, tr.b[i]);
+  }
+  return o;
+}
+
+/* ---- rig (4.9 の FK。キャラ空間 x前+ y上+) ---- */
+const J = { PELVIS:0, NECK:1, HEAD:2, SHOULDER:3, ELBOW_F:4, HAND_F:5, ELBOW_B:6, HAND_B:7, KNEE_F:8, ANKLE_F:9, TOE_F:10, KNEE_B:11, ANKLE_B:12, TOE_B:13 };
+const BONE = { pelvis:0, torso:1, head:2, uarmF:3, farmF:4, uarmB:5, farmB:6, thighF:7, shinF:8, footF:9, thighB:10, shinB:11, footB:12 };
+const BS = [0,0,1,3,4,3,6,0,8,9,0,11,12], BE = [0,1,2,4,5,6,7,8,9,10,11,12,13];
+const TH0 = [0,180,180,0,0,0,0,0,0,90,0,0,90];
+function solve(b, pose, plantW, restH) {
+  const x = new Float64Array(14), y = new Float64Array(14);
+  const rootX = pose[0], rootY = pose[1], rot = pose[2];
+  const tT = 180 - pose[3], tH = tT - pose[4];
+  const tUF = tT + 180 + pose[5], tFF = tUF + pose[6], tUB = tT + 180 + pose[7], tFB = tUB + pose[8];
+  const tThF = pose[9], tShF = tThF - pose[10], tFtF = tShF + 90 + pose[11];
+  const tThB = pose[12], tShB = tThB - pose[13], tFtB = tShB + 90 + pose[14];
+  const sx = t => Math.sin(t * DEG), sy = t => -Math.cos(t * DEG);
+  const set = (i, from, len, th) => { x[i] = x[from] + len * sx(th); y[i] = y[from] + len * sy(th); };
+  set(J.NECK, J.PELVIS, b.torsoLen, tT);
+  set(J.HEAD, J.NECK, b.neckLen + b.headR, tH);
+  x[J.SHOULDER] = x[J.NECK] - b.shoulderDrop * sx(tT); y[J.SHOULDER] = y[J.NECK] - b.shoulderDrop * sy(tT);
+  set(J.ELBOW_F, J.SHOULDER, b.uArmLen, tUF); set(J.HAND_F, J.ELBOW_F, b.fArmLen, tFF);
+  set(J.ELBOW_B, J.SHOULDER, b.uArmLen, tUB); set(J.HAND_B, J.ELBOW_B, b.fArmLen, tFB);
+  set(J.KNEE_F, J.PELVIS, b.thighLen, tThF); set(J.ANKLE_F, J.KNEE_F, b.shinLen, tShF); set(J.TOE_F, J.ANKLE_F, 0.75 * b.footLen, tFtF);
+  set(J.KNEE_B, J.PELVIS, b.thighLen, tThB); set(J.ANKLE_B, J.KNEE_B, b.shinLen, tShB); set(J.TOE_B, J.ANKLE_B, 0.75 * b.footLen, tFtB);
+  const hF = Math.min(y[J.TOE_F], y[J.ANKLE_F] - 0.25 * b.footLen * sy(tFtF)) - b.footH / 2;
+  const hB = Math.min(y[J.TOE_B], y[J.ANKLE_B] - 0.25 * b.footLen * sy(tFtB)) - b.footH / 2;
+  const Hfeet = -Math.min(hF, hB) + rootY, Hroot = restH + rootY;
+  const H = plantW >= 1 ? Hroot : Hfeet + (Hroot - Hfeet) * plantW;
+  const cr = Math.cos(rot * DEG), sr = Math.sin(rot * DEG);
+  for (let i = 0; i < 14; i++) { const px = x[i], py = y[i]; x[i] = px * cr + py * sr + rootX; y[i] = -px * sr + py * cr + H; }
+  const ths = [0, tT, tH, tUF, tFF, tUB, tFB, tThF, tShF, tFtF, tThB, tShB, tFtB];
+  const th = ths.map(v => v - rot), rho = ths.map((v, i) => -(v - TH0[i]) + rot); rho[0] = rot;
+  return { x, y, th, rho, H, footF: tFtF - rot, footB: tFtB - rot };
+}
+
+/* ---- 描画 ---- */
+function hexRgb(h) { const n = parseInt(String(h).slice(1), 16) || 0; return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+function rgba(h, a) { const c = hexRgb(h); return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a + ")"; }
+function darken(h, k) { const c = hexRgb(h); return "rgb(" + Math.round(c[0] * k + 5 * (1 - k)) + "," + Math.round(c[1] * k + 6 * (1 - k)) + "," + Math.round(c[2] * k + 15 * (1 - k)) + ")"; }
+
+function makeChar(id, ch) {
+  const rt = compile(ch), b = ch.look.body;
+  const j0 = solve(b, rt.base, 0, 0);
+  rt.restH = j0.H; rt.height = j0.y[J.HEAD] + b.headR;
+  rt.ch = ch; rt.id = id;
+  return rt;
+}
+
+function draw(ctx, rt, pose, plantW, ox, oy, sc, p2, lift) {
+  const ch = rt.ch, L = ch.look, b = L.body, pal = (p2 && L.paletteP2) || L.palette;
+  const neon = Object.assign({ tubeW: 3, glowW: 8, glowAlpha: 0.24, coreW: 1, fill: 0.9 }, L.neon || {});
+  const col = key => pal[key] || pal[(L.colors || {})[key]] || pal.primary || "#ffffff";
+  const partCol = part => pal[(L.colors || {})[part]] || pal.primary || "#ffffff";
+  const j = solve(b, pose, plantW, rt.restH);
+  const X = i => ox + j.x[i] * sc, Y = i => oy - (j.y[i] + (lift || 0)) * sc;
+
+  /* シルエット描画: グループ内のパーツは「全部の光る縁 → 全部の暗い塗り → 薄い内線」の順に重ねる。
+     関節ごとの輪郭線が塗りで隠れ、体全体が1本のネオン管で縁取られたように見える */
+  let Q = null;
+  function beginGroup() { Q = []; }
+  function flushGroup() {
+    const q = Q; Q = null; if (!q) return;
+    ctx.lineJoin = "round"; ctx.lineCap = "round";
+    ctx.globalCompositeOperation = "lighter";
+    for (const s of q) { s.path(); ctx.strokeStyle = rgba(s.hex, neon.glowAlpha); ctx.lineWidth = (neon.glowW + neon.tubeW) * sc; ctx.stroke(); }
+    ctx.globalCompositeOperation = "source-over";
+    for (const s of q) { s.path(); ctx.strokeStyle = s.hex; ctx.lineWidth = neon.tubeW * 2 * sc; ctx.stroke(); }
+    for (const s of q) { if (s.fill === false) continue; s.path(); ctx.fillStyle = darken(s.hex, 0.3); ctx.fill(); }
+    for (const s of q) { s.path(); ctx.strokeStyle = rgba(s.hex, 0.28); ctx.lineWidth = Math.max(0.8, sc); ctx.stroke(); }
+  }
+  function neonShape(path, hex, fillOn) {
+    if (Q) { Q.push({ path, hex, fill: fillOn }); return; }
+    ctx.lineJoin = "round"; ctx.lineCap = "round";
+    if (fillOn !== false) { path(); ctx.globalAlpha = neon.fill; ctx.fillStyle = darken(hex, 0.28); ctx.fill(); ctx.globalAlpha = 1; }
+    ctx.globalCompositeOperation = "lighter";
+    path(); ctx.strokeStyle = rgba(hex, neon.glowAlpha); ctx.lineWidth = neon.glowW * sc; ctx.stroke();
+    ctx.globalCompositeOperation = "source-over";
+    path(); ctx.strokeStyle = hex; ctx.lineWidth = neon.tubeW * sc; ctx.stroke();
+    path(); ctx.strokeStyle = "rgba(255,255,255,0.65)"; ctx.lineWidth = Math.max(0.6, neon.coreW * sc); ctx.stroke();
+  }
+  function limb(a, c, w, hex) {
+    const ax = X(a), ay = Y(a), cx = X(c), cy = Y(c), dx = cx - ax, dy = cy - ay, d = Math.hypot(dx, dy) || 1;
+    const nx = -dy / d, ny = dx / d, w0 = (w ? w[0] : 10) * sc / 2, w1 = (w ? w[1] : 8) * sc / 2;
+    neonShape(() => {
+      ctx.beginPath();
+      ctx.moveTo(ax + nx * w0, ay + ny * w0); ctx.lineTo(cx + nx * w1, cy + ny * w1);
+      ctx.arc(cx, cy, w1, Math.atan2(ny, nx), Math.atan2(-ny, -nx), false);
+      ctx.lineTo(ax - nx * w0, ay - ny * w0);
+      ctx.arc(ax, ay, w0, Math.atan2(-ny, -nx), Math.atan2(ny, nx), false);
+      ctx.closePath();
+    }, hex);
+  }
+  function foot(ankle, toe, hex) {
+    const ax = X(ankle), ay = Y(ankle), tx = X(toe), ty = Y(toe), dx = tx - ax, dy = ty - ay, d = Math.hypot(dx, dy) || 1;
+    // 足首が甲の上。かかと→つま先の線から、足裏側（進行方向を時計回りに90°）へ厚みを付ける
+    const ux = dx / d, uy = dy / d, back = 0.25 * b.footLen * sc, fh = b.footH * sc, nx = -uy, ny = ux;
+    const hx = ax - ux * back, hy = ay - uy * back;
+    neonShape(() => {
+      ctx.beginPath();
+      ctx.moveTo(hx - nx * fh * 0.3, hy - ny * fh * 0.3); ctx.lineTo(tx, ty);
+      ctx.lineTo(tx + nx * fh * 0.7, ty + ny * fh * 0.7); ctx.lineTo(hx + nx * fh * 0.7, hy + ny * fh * 0.7);
+      ctx.closePath();
+    }, hex);
+  }
+  function anchor(boneName, at, lx, ly) {
+    const bi = BONE[boneName] != null ? BONE[boneName] : 2, s = BS[bi], e = BE[bi];
+    let px = at === "end" ? j.x[e] : at === "mid" ? (j.x[s] + j.x[e]) / 2 : j.x[s];
+    let py = at === "end" ? j.y[e] : at === "mid" ? (j.y[s] + j.y[e]) / 2 : j.y[s];
+    const r = j.rho[bi] * DEG, c = Math.cos(r), sn = Math.sin(r);
+    if (lx || ly) { px += lx * c + ly * sn; py += -lx * sn + ly * c; }
+    return [ox + px * sc, oy - (py + (lift || 0)) * sc, j.rho[bi]];
+  }
+  function decor(d) {
+    const a = anchor(d.attach, d.at, d.x || 0, d.y || 0), hex = col(d.color);
+    ctx.save(); ctx.translate(a[0], a[1]); ctx.rotate((a[2] + (d.rot || 0)) * DEG);
+    ctx.globalAlpha = isNum(d.alpha) ? d.alpha : 1;
+    const s = sc, path = () => {
+      ctx.beginPath();
+      switch (d.shape) {
+        case "circle": ctx.arc(0, 0, (d.r || 3) * s, 0, Math.PI * 2); break;
+        case "ellipse": ctx.ellipse(0, 0, (d.rx || 4) * s, (d.ry || 3) * s, 0, 0, Math.PI * 2); break;
+        case "rect": ctx.rect(-(d.w || 4) * s / 2, -(d.h || 4) * s / 2, (d.w || 4) * s, (d.h || 4) * s); break;
+        case "tri": ctx.moveTo(0, -(d.h || 6) * s / 2); ctx.lineTo((d.w || 6) * s / 2, (d.h || 6) * s / 2); ctx.lineTo(-(d.w || 6) * s / 2, (d.h || 6) * s / 2); ctx.closePath(); break;
+        case "poly": (d.pts || []).forEach((p, i) => { const px = p[0] * s, py = -p[1] * s; if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); }); ctx.closePath(); break;
+        case "line": ctx.moveTo(0, 0); ctx.lineTo((d.x2 || 0) * s, -(d.y2 || 0) * s); break;
+      }
+    };
+    if (d.shape === "text") {
+      ctx.fillStyle = hex; ctx.font = "bold " + Math.round((d.size || 10) * s) + "px " + "Orbitron, monospace";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(d.text || "", 0, 0);
+    } else if (d.shape === "line") {
+      if (d.glow) { ctx.globalCompositeOperation = "lighter"; path(); ctx.strokeStyle = rgba(hex, 0.35); ctx.lineWidth = ((d.w || 2) + 5) * s; ctx.lineCap = "round"; ctx.stroke(); ctx.globalCompositeOperation = "source-over"; }
+      path(); ctx.strokeStyle = hex; ctx.lineWidth = (d.w || 2) * s; ctx.lineCap = "round"; ctx.stroke();
+    } else {
+      neonShape(path, hex, true);
+      if (d.glow) { ctx.globalCompositeOperation = "lighter"; path(); ctx.fillStyle = rgba(hex, 0.35); ctx.fill(); ctx.globalCompositeOperation = "source-over"; }
+    }
+    ctx.restore();
+  }
+  function chain(c) {
+    const a = anchor(c.anchor.bone, c.anchor.at, c.anchor.x || 0, c.anchor.y || 0), hex = col(c.color);
+    const pts = [[a[0], a[1]]];
+    let th = c.rest || 0;
+    for (let i = 1; i <= (c.segs || 3); i++) {
+      if (i > 1) th += (0 - th) * Math.min(0.25, (c.gravity || 0) * 0.4);  // 重力で先へ行くほど下へ垂れる
+      const p = pts[i - 1]; pts.push([p[0] + Math.sin(th * DEG) * c.segLen * sc, p[1] + Math.cos(th * DEG) * c.segLen * sc]);
+    }
+    const n = pts.length, ws = (c.widthStart || 6) * sc / 2, we = (c.widthEnd || 2) * sc / 2;
+    neonShape(() => {
+      ctx.beginPath();
+      const side = (k) => { for (let i = (k > 0 ? 0 : n - 1); k > 0 ? i < n : i >= 0; i += k) {
+        const p = pts[i], q = pts[Math.min(n - 1, i + 1)], r = pts[Math.max(0, i - 1)];
+        let dx = q[0] - r[0], dy = q[1] - r[1]; const d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
+        const w = ws + (we - ws) * (i / (n - 1)) * (c.style === "ribbon" ? 0.6 : 1);
+        const px = p[0] - dy * w * k, py = p[1] + dx * w * k;
+        if (i === (k > 0 ? 0 : n - 1) && k > 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      } };
+      side(1); side(-1); ctx.closePath();
+    }, hex);
+  }
+
+  // 影
+  ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.beginPath(); ctx.ellipse(ox, oy + 2, 34 * sc, 6 * sc, 0, 0, Math.PI * 2); ctx.fill();
+  const lw = b.limbW || {};
+  (L.chains || []).filter(c => c.z === "back").forEach(chain);
+  (L.decor || []).filter(d => d.z === "back").forEach(decor);
+  // 奥の手足（1つのシルエットとして描いてから、全体を少し暗くする）
+  beginGroup();
+  limb(J.PELVIS, J.KNEE_B, lw.thigh, partCol("thigh")); limb(J.KNEE_B, J.ANKLE_B, lw.shin, partCol("shin")); foot(J.ANKLE_B, J.TOE_B, partCol("foot"));
+  limb(J.SHOULDER, J.ELBOW_B, lw.uArm, partCol("uArm")); limb(J.ELBOW_B, J.HAND_B, lw.fArm, partCol("fArm"));
+  ctx.globalAlpha = 0.7; flushGroup(); ctx.globalAlpha = 1;
+  // 胴・頭・手前の脚・手前の腕を1つのシルエットにまとめる
+  beginGroup();
+  {
+    const px = X(J.PELVIS), py = Y(J.PELVIS), nx = X(J.NECK), ny = Y(J.NECK), dx = nx - px, dy = ny - py, d = Math.hypot(dx, dy) || 1;
+    const ux = -dy / d, uy = dx / d, wt = b.torsoWTop * sc / 2, wb = b.torsoWBottom * sc / 2;
+    neonShape(() => { ctx.beginPath(); ctx.moveTo(px + ux * wb, py + uy * wb); ctx.lineTo(nx + ux * wt, ny + uy * wt); ctx.lineTo(nx - ux * wt, ny - uy * wt); ctx.lineTo(px - ux * wb, py - uy * wb); ctx.closePath(); }, partCol("torso"));
+  }
+  // 頭
+  neonShape(() => { ctx.beginPath(); ctx.arc(X(J.HEAD), Y(J.HEAD), b.headR * sc, 0, Math.PI * 2); }, partCol("head"));
+  // 手前の手足
+  limb(J.PELVIS, J.KNEE_F, lw.thigh, partCol("thigh")); limb(J.KNEE_F, J.ANKLE_F, lw.shin, partCol("shin")); foot(J.ANKLE_F, J.TOE_F, partCol("foot"));
+  flushGroup();
+  // 小道具
+  if (L.prop && L.prop.kind && L.prop.kind !== "none") {
+    const hx = X(J.HAND_F), hy = Y(J.HAND_F), th = (j.th[4] + (L.prop.angle || 0)) * DEG, len = (L.prop.len || 40) * sc;
+    const ex = hx + Math.sin(th) * len, ey = hy + Math.cos(th) * len, hex = col(L.prop.color || "accent");
+    neonShape(() => { ctx.beginPath(); ctx.moveTo(hx - Math.sin(th) * len * 0.15, hy - Math.cos(th) * len * 0.15); ctx.lineTo(ex, ey); }, hex, false);
+    if (L.prop.kind === "kanabo") neonShape(() => { ctx.beginPath(); ctx.arc(ex, ey, (L.prop.thick || 8) * sc * 0.7, 0, Math.PI * 2); }, hex);
+  }
+  // 手前の腕は胴に重なるので、別のシルエットにして輪郭を残す
+  beginGroup();
+  limb(J.SHOULDER, J.ELBOW_F, lw.uArm, partCol("uArm")); limb(J.ELBOW_F, J.HAND_F, lw.fArm, partCol("fArm"));
+  neonShape(() => { ctx.beginPath(); ctx.arc(X(J.HAND_F), Y(J.HAND_F), (b.handR || 4) * sc, 0, Math.PI * 2); }, partCol("hand"));
+  flushGroup();
+  (L.decor || []).filter(d => d.z !== "back").forEach(decor);
+  (L.chains || []).filter(c => c.z !== "back").forEach(chain);
+}
+
+/* ---- 表示するポーズ ---- */
+const STATES = [["idle", "待機", 0], ["walkF", "前歩き", 0.25], ["crouch", "しゃがみ", 0], ["jumpFall", "ジャンプ", 0],
+                ["dashF", "ダッシュ", 0.4], ["guardStand", "ガード", 0], ["hurtHigh", "やられ", 0.3], ["down", "ダウン", 0],
+                ["intro", "登場", 0.6], ["win", "勝利", 0.3]];
+const MOVES = ["5L", "5H", "2L", "2H", "jL", "jH", "throw", "sp1", "sp2", "super"];
+
+let p2 = false, anim = /anim/.test(location.hash);
+const views = [];
+const roster = (D.roster && D.roster.length ? D.roster : Object.keys(D.characters)).filter(id => D.characters[id]);
+const COLS = window.innerWidth < 900 ? 5 : 10, CW = 168, CHH = 240;
+
+for (const id of roster) {
+  const ch = D.characters[id];
+  let rt;
+  const sec = document.createElement("section");
+  sec.innerHTML = '<div class="who"><h2></h2><span class="en"></span><span class="ttl"></span><span class="blurb"></span></div><div class="grid"></div>';
+  sec.querySelector("h2").textContent = ch.name || id;
+  sec.querySelector(".en").textContent = ch.nameEn || "";
+  sec.querySelector(".ttl").textContent = ch.title || "";
+  sec.querySelector(".blurb").textContent = ch.blurb || "";
+  root.appendChild(sec);
+  try { rt = makeChar(id, ch); } catch (e) { sec.querySelector(".grid").innerHTML = '<p class="err"></p>'; sec.querySelector(".err").textContent = "描画できません: " + e; continue; }
+  const cells = [];
+  for (const s of STATES) if (rt.clips[s[0]]) cells.push({ label: s[1], clip: s[0], t: Math.round(rt.clips[s[0]].length * s[2]) });
+  for (const m of MOVES) {
+    const mv = ch.moves && ch.moves[m]; if (!mv) continue;
+    const cn = mv.clip || m; if (!rt.clips[cn]) continue;
+    cells.push({ label: m + " " + (mv.name || ""), clip: cn, t: mv.startup || 0, move: mv });
+  }
+  const rows = Math.ceil(cells.length / COLS);
+  const cv = document.createElement("canvas");
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = COLS * CW * dpr; cv.height = rows * CHH * dpr;
+  cv.style.aspectRatio = (COLS * CW) + " / " + (rows * CHH);
+  cv.setAttribute("role", "img"); cv.setAttribute("aria-label", (ch.name || id) + " のポーズ一覧");
+  sec.querySelector(".grid").appendChild(cv);
+  views.push({ rt, cells, cv, dpr });
+}
+
+function render(time) {
+  for (const v of views) {
+    const ctx = v.cv.getContext("2d");
+    ctx.setTransform(v.dpr, 0, 0, v.dpr, 0, 0);
+    ctx.fillStyle = "#0b0c1e"; ctx.fillRect(0, 0, COLS * CW, Math.ceil(v.cells.length / COLS) * CHH);
+    const sc = Math.min(1, 170 / Math.max(120, v.rt.height));
+    v.cells.forEach((c, i) => {
+      const cx = (i % COLS) * CW, cy = Math.floor(i / COLS) * CHH;
+      ctx.strokeStyle = "#1b2350"; ctx.lineWidth = 1; ctx.strokeRect(cx + 0.5, cy + 0.5, CW - 1, CHH - 1);
+      const gy = cy + CHH - 34;
+      ctx.strokeStyle = "rgba(255,59,92,0.35)"; ctx.beginPath(); ctx.moveTo(cx + 10, gy); ctx.lineTo(cx + CW - 10, gy); ctx.stroke();
+      const cc = v.rt.clips[c.clip];
+      let t = c.t;
+      if (anim) { const f = time / (1000 / 60); t = cc.loop ? f % cc.length : (f % (cc.length + 24)); }
+      try {
+        const pose = sample(cc, t);
+        const air = /^(jumpFall|jumpUp)$/.test(c.clip) || (c.move && c.move.stance === "air");
+        draw(ctx, v.rt, pose, cc.plant, cx + CW / 2 - 8, gy, sc, p2, air ? 40 : 0);
+      } catch (e) {
+        ctx.fillStyle = "#ff8fa3"; ctx.font = "11px monospace"; ctx.fillText("ERR " + String(e).slice(0, 26), cx + 6, cy + 40);
+      }
+      ctx.fillStyle = "#e6f1ff"; ctx.font = "13px DotGothic16, 'Yu Gothic', sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+      ctx.fillText(c.label.slice(0, 13), cx + 8, cy + CHH - 12);
+      ctx.fillStyle = "#8fa3c8"; ctx.font = "10px Orbitron, monospace";
+      ctx.fillText(anim ? c.clip : c.clip + " f" + c.t, cx + 8, cy + 16);
+    });
+  }
+}
+let raf = 0;
+function loop(ts) { render(ts); if (anim) raf = requestAnimationFrame(loop); }
+function restart() { cancelAnimationFrame(raf); if (anim) raf = requestAnimationFrame(loop); else render(0); }
+document.getElementById("btnAnim").addEventListener("click", e => { anim = !anim; e.currentTarget.setAttribute("aria-pressed", anim); restart(); });
+document.getElementById("btnP2").addEventListener("click", e => { p2 = !p2; e.currentTarget.setAttribute("aria-pressed", p2); restart(); });
+document.getElementById("btnAnim").setAttribute("aria-pressed", anim);
+render(0);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (!anim) render(0); });
+restart();
+})();
+</script>

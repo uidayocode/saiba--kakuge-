@@ -1,0 +1,384 @@
+<title>電脳奉納試合 画風比較</title>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Shippori+Mincho+B1:wght@700&display=swap">
+<style>
+/* layout: 案ごとに1ブロック。上に対戦画面と同じ縮尺の1枚、下に4キャラの並び（待機と強攻撃） */
+:root {
+  color-scheme: dark;
+  --bg: #07080f;
+  --panel: #0d0f1c;
+  --line: #1e2442;
+  --text: #ece6da;
+  --sub: #9aa3bd;
+  --shu: #d0392e;
+  --kin: #d4a640;
+  --font-jp: "DotGothic16", "Yu Gothic", "Meiryo", sans-serif;
+  --font-title: "Shippori Mincho B1", "Yu Mincho", serif;
+}
+html, body { background: var(--bg); color: var(--text); margin: 0; }
+body { font-family: var(--font-jp); padding-inline: 16px; padding-block: 22px 48px; }
+.wrap { max-width: 1000px; margin: 0 auto; display: grid; gap: 34px; }
+header { display: grid; gap: 6px; }
+h1 { font-family: var(--font-title); font-size: 30px; margin: 0; letter-spacing: 0.06em; text-wrap: balance; }
+.lead { color: var(--sub); font-size: 14px; margin: 0; max-width: 64ch; line-height: 1.7; }
+section { display: grid; gap: 10px; min-width: 0; }
+.wrap > * { min-width: 0; }
+.tag { font-size: 12px; letter-spacing: 0.14em; color: var(--kin); }
+h2 { font-family: var(--font-title); font-size: 24px; margin: 0; }
+.desc { color: var(--sub); font-size: 14px; margin: 0; max-width: 64ch; line-height: 1.7; }
+canvas { display: block; width: 100%; max-width: 100%; height: auto; border-radius: 8px; background: var(--panel); }
+.cap { color: var(--sub); font-size: 12px; margin: 0; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>電脳奉納試合 画風比較</h1>
+    <p class="lead">同じ骨格・同じポーズで、描き方だけを変えた2案です。上は実際の対戦画面と同じ縮尺、下は4キャラの待機ポーズと強攻撃（5H）の瞬間。</p>
+  </header>
+  <section>
+    <span class="tag">案A</span>
+    <h2>影絵 ＋ ネオンの縁</h2>
+    <p class="desc">体は黒い一枚のシルエット。光るのは外側の輪郭と目だけで、色はキャラごとに1色。細部を描かないので画面がすっきりし、動きの形がいちばん読みやすい。</p>
+    <canvas id="aFight" width="960" height="540" role="img" aria-label="影絵案の対戦画面"></canvas>
+    <canvas id="aLine" width="960" height="330" role="img" aria-label="影絵案の4キャラ一覧"></canvas>
+  </section>
+  <section>
+    <span class="tag">案B</span>
+    <h2>切り絵・和風</h2>
+    <p class="desc">和紙を切り抜いたような平たい面。使う色は墨・朱・金・和紙の4色だけで、キャラごとに2〜3色。背景のネオンと対比させて「サイバー神社」を出す。</p>
+    <canvas id="bFight" width="960" height="540" role="img" aria-label="切り絵案の対戦画面"></canvas>
+    <canvas id="bLine" width="960" height="330" role="img" aria-label="切り絵案の4キャラ一覧"></canvas>
+  </section>
+</div>
+
+<script src="data.js" charset="utf-8"></script>
+<script>
+(function () {
+"use strict";
+const D = window.GAME_DATA;
+if (!D || !D.characters) { document.querySelector(".wrap").insertAdjacentHTML("beforeend", "<p>data.js を読み込めませんでした。</p>"); return; }
+
+/* ---------- データからポーズを取り出す（エンジンと同じ規則） ---------- */
+const CH = ["rootX","rootY","rot","torso","head","uarmF","farmF","uarmB","farmB","thighF","shinF","footF","thighB","shinB","footB"];
+const NCH = CH.length, DEG = Math.PI / 180, isNum = v => typeof v === "number" && isFinite(v);
+function ease(n, u, bk) {
+  const c1 = isNum(bk) ? bk : 1.70158, c3 = c1 + 1;
+  switch (n) {
+    case "inQuad": return u*u; case "outQuad": return 1-(1-u)*(1-u);
+    case "inOutQuad": return u<.5?2*u*u:1-Math.pow(-2*u+2,2)/2;
+    case "inCubic": return u*u*u; case "outCubic": return 1-Math.pow(1-u,3);
+    case "inOutCubic": return u<.5?4*u*u*u:1-Math.pow(-2*u+2,3)/2;
+    case "outExpo": return u>=1?1:1-Math.pow(2,-10*u); case "inExpo": return u<=0?0:Math.pow(2,10*u-10);
+    case "inBack": return c3*u*u*u-c1*u*u; case "outBack": return 1+c3*Math.pow(u-1,3)+c1*Math.pow(u-1,2);
+    case "hold": return u<1?0:1; default: return u;
+  }
+}
+function poseArr(p) { const a = new Float64Array(NCH); for (let i = 0; i < NCH; i++) a[i] = p && isNum(p[CH[i]]) ? p[CH[i]] : 0; return a; }
+function clipPose(ch, name, t) {
+  const base0 = poseArr(ch.basePose), clip = ch.clips && ch.clips[name];
+  if (!clip) return base0;
+  let base = base0;
+  if (clip.base && ch.clips[clip.base] && clip.base !== name) base = clipPose(ch, clip.base, 0);
+  const keys = (clip.keys || []).slice().sort((a, b) => a.f - b.f), out = new Float64Array(NCH);
+  for (let c = 0; c < NCH; c++) {
+    const f = [0], v = [base[c]], e = [null], b = [null];
+    for (const k of keys) {
+      const val = k.p === "base" ? base[c] : (k.p && isNum(k.p[CH[c]]) ? k.p[CH[c]] : null);
+      if (val === null) continue;
+      if (k.f === 0) { v[0] = val; continue; }
+      f.push(k.f); v.push(val); e.push(k.ease); b.push(k.back);
+    }
+    if (t >= f[f.length - 1]) { out[c] = v[v.length - 1]; continue; }
+    let i = 1; while (i < f.length - 1 && f[i] < t) i++;
+    const u = (t - f[i - 1]) / Math.max(1e-6, f[i] - f[i - 1]);
+    out[c] = v[i - 1] + (v[i] - v[i - 1]) * ease(e[i], Math.max(0, Math.min(1, u)), b[i]);
+  }
+  return out;
+}
+
+/* ---------- FK（設計書 4.9）。キャラ空間 x前+ y上+ ---------- */
+const J = { P:0, NECK:1, HEAD:2, SH:3, EF:4, HF:5, EB:6, HB:7, KF:8, AF:9, TF:10, KB:11, AB:12, TB:13 };
+function solve(b, pose) {
+  const x = new Float64Array(14), y = new Float64Array(14);
+  const tT = 180 - pose[3], tH = tT - pose[4];
+  const tUF = tT + 180 + pose[5], tFF = tUF + pose[6], tUB = tT + 180 + pose[7], tFB = tUB + pose[8];
+  const tThF = pose[9], tShF = tThF - pose[10], tFtF = tShF + 90 + pose[11];
+  const tThB = pose[12], tShB = tThB - pose[13], tFtB = tShB + 90 + pose[14];
+  const S = t => Math.sin(t * DEG), C = t => -Math.cos(t * DEG);
+  const go = (i, f, l, t) => { x[i] = x[f] + l * S(t); y[i] = y[f] + l * C(t); };
+  go(J.NECK, J.P, b.torsoLen, tT); go(J.HEAD, J.NECK, b.neckLen + b.headR, tH);
+  x[J.SH] = x[J.NECK] - b.shoulderDrop * S(tT); y[J.SH] = y[J.NECK] - b.shoulderDrop * C(tT);
+  go(J.EF, J.SH, b.uArmLen, tUF); go(J.HF, J.EF, b.fArmLen, tFF); go(J.EB, J.SH, b.uArmLen, tUB); go(J.HB, J.EB, b.fArmLen, tFB);
+  go(J.KF, J.P, b.thighLen, tThF); go(J.AF, J.KF, b.shinLen, tShF); go(J.TF, J.AF, 0.75 * b.footLen, tFtF);
+  go(J.KB, J.P, b.thighLen, tThB); go(J.AB, J.KB, b.shinLen, tShB); go(J.TB, J.AB, 0.75 * b.footLen, tFtB);
+  const low = Math.min(y[J.AF], y[J.TF], y[J.AB], y[J.TB]) - b.footH / 2;
+  const H = -low + pose[1], rot = pose[2], cr = Math.cos(rot * DEG), sr = Math.sin(rot * DEG);
+  for (let i = 0; i < 14; i++) { const px = x[i], py = y[i]; x[i] = px * cr + py * sr + pose[0]; y[i] = -px * sr + py * cr + H; }
+  return { x, y };
+}
+
+/* ---------- 形の部品（画面座標。y下+） ---------- */
+function hull(pts) {
+  const p = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [], up = [];
+  for (const q of p) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+  for (let i = p.length - 1; i >= 0; i--) { const q = p[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+function polyPath(pts) { const g = new Path2D(); pts.forEach((q, i) => i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); g.closePath(); return g; }
+/* 太さが変わる手足。両端を丸くした凸形を、円の点列の凸包で作る（巻き方向の食い違いで穴が空かない） */
+function capsule(a, b, r0, r1) {
+  const pts = [];
+  for (let k = 0; k < 16; k++) { const t = k / 16 * Math.PI * 2; pts.push([a[0] + Math.cos(t) * r0, a[1] + Math.sin(t) * r0]); pts.push([b[0] + Math.cos(t) * r1, b[1] + Math.sin(t) * r1]); }
+  return polyPath(hull(pts));
+}
+function circle(c, r) { const g = new Path2D(); g.arc(c[0], c[1], r, 0, Math.PI * 2); return g; }
+function ell(c, rx, ry, rot) { const g = new Path2D(); g.ellipse(c[0], c[1], rx, ry, rot || 0, 0, Math.PI * 2); return g; }
+const add = (a, b, k) => [a[0] + b[0] * (k == null ? 1 : k), a[1] + b[1] * (k == null ? 1 : k)];
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+const len = v => Math.hypot(v[0], v[1]) || 1;
+const unit = v => { const l = len(v); return [v[0] / l, v[1] / l]; };
+const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+const perpL = v => [v[1], -v[0]];   // 進行方向の左手（体の向きが右のとき、胴の上向きに対して「後ろ」）
+
+/* ---------- 衣装（キャラごとの形）。返すのは描く順の部品リスト {g, role, layer} ----------
+   role: 色の役割（ink=墨/影 skin=肌 main=主色 sub=副色 gold=金 eye=目）
+   layer: "main"=体のシルエット / "front"=手前の腕（シルエットの上に重ねて描く） */
+function costume(id, j) {
+  const P = i => [j.x[i], j.y[i]];
+  const pel = P(J.P), neck = P(J.NECK), head = P(J.HEAD), sh = P(J.SH);
+  const tUp = unit(sub(neck, pel)), back = perpL(tUp), fwd = [-back[0], -back[1]], down = [0, 1];
+  const parts = [];
+  const put = (g, role, layer) => parts.push({ g, role, layer: layer || "main" });
+  const legs = (rT, rS, rF, role, footRole) => {
+    for (const [K, A, T] of [[J.KB, J.AB, J.TB], [J.KF, J.AF, J.TF]]) {
+      put(capsule(pel, P(K), rT, rT * 0.85), role); put(capsule(P(K), P(A), rT * 0.8, rS), role);
+      put(capsule(P(A), P(T), rF, rF * 0.8), footRole || role);
+    }
+  };
+  const arm = (E, H, rU, rF, rH, role, handRole, layer) => {
+    put(capsule(sh, P(E), rU, rU * 0.9), role, layer); put(capsule(P(E), P(H), rU * 0.85, rF), role, layer);
+    put(circle(P(H), rH), handRole || role, layer);
+  };
+  if (id === "miko") {
+    const r = 15;
+    // 長い後ろ髪（頭の後ろから背中の中ほどまで、下に向かって細くなる）
+    put(polyPath([add(head, [0, -r * 1.05]), add(head, back, r * 1.15), add(add(neck, back, r * 0.9), down, 18),
+                  add(add(lerp(neck, pel, 0.75), back, r * 0.55), down, 4), add(lerp(neck, pel, 0.5), back, 2), add(head, fwd, r * 0.2)]), "ink");
+    // 袴（腰から足首までを1枚の末広がりの形に）
+    const hk = [add(pel, back, 13), add(pel, fwd, 13), add(P(J.KF), fwd, 9), add(P(J.KB), back, 9),
+                add(P(J.AF), fwd, 13), add(P(J.AF), back, 9), add(P(J.AB), back, 13), add(P(J.AB), fwd, 9)];
+    put(capsule(P(J.AB), P(J.TB), 4, 3), "skin"); put(capsule(P(J.AF), P(J.TF), 4, 3), "skin");
+    put(polyPath(hull(hk)), "sub");
+    // 奥の袖
+    const sleeve = (E, H, layer) => {
+      put(polyPath(hull([add(sh, back, 4), add(sh, fwd, 6), P(E), P(H), add(P(H), down, 24), add(P(E), down, 22), add(lerp(sh, P(E), 0.5), down, 14)])), "main", layer);
+      put(circle(P(H), 4.5), "skin", layer);
+    };
+    sleeve(J.EB, J.HB, "main");
+    // 胴（白衣）と帯
+    put(polyPath(hull([add(pel, back, 12), add(pel, fwd, 11), add(neck, back, 11), add(neck, fwd, 11), add(sh, fwd, 12)])), "main");
+    put(polyPath(hull([add(add(pel, tUp, 6), back, 13), add(add(pel, tUp, 6), fwd, 12), add(add(pel, tUp, 13), back, 12), add(add(pel, tUp, 13), fwd, 12)])), "sub");
+    // 頭（髪を少し大きめに後ろへずらし、顔を前に出す）
+    put(circle(add(head, back, 2.5), r + 1.5), "ink");
+    put(circle(add(head, fwd, 2.5), r - 2), "skin");
+    put(polyPath([add(head, [0, -r - 1]), add(add(head, fwd, r * 0.9), [0, -r * 0.35]), add(add(head, fwd, r * 0.15), [0, -r * 0.2])]), "ink");   // 前髪
+    put(polyPath([add(add(head, back, r * 0.9), [0, -r * 0.6]), add(add(head, back, r * 1.7), [0, -r * 1.1]), add(add(head, back, r * 1.6), [0, -r * 0.1])]), "sub"); // 髪飾り
+    put(ell(add(add(head, fwd, r * 0.55), [0, -1]), 2.2, 1.2), "eye");
+    // 手前の袖と御幣
+    const hf = P(J.HF), fa = unit(sub(hf, P(J.EF)));
+    const tip = add(hf, fa, 44);
+    put(capsule(add(hf, fa, -8), tip, 1.8, 1.6), "gold", "front");
+    put(polyPath([tip, add(add(tip, perpL(fa), 4), fa, -6), add(add(tip, perpL(fa), -9), fa, -10), add(add(tip, perpL(fa), -2), fa, -16), add(add(tip, perpL(fa), -12), fa, -20)]), "main", "front");
+    sleeve(J.EF, J.HF, "front");
+  } else if (id === "komainu") {
+    const r = 14;
+    // 巻いた尻尾（腰の後ろ）
+    const tb = add(add(pel, back, 18), tUp, 10);
+    put(circle(add(tb, [0, -6]), 11), "gold"); put(polyPath([add(pel, back, 6), add(tb, [8, -14]), add(tb, [-14, -22]), add(tb, [-16, 2])]), "gold");
+    legs(9, 7, 7, "main");
+    arm(J.EB, J.HB, 9, 7, 9, "main");
+    // 分厚い胸と胴
+    put(polyPath(hull([add(pel, back, 13), add(pel, fwd, 11), add(neck, back, 15), add(add(neck, fwd, 17), down, 6), add(sh, fwd, 18)])), "main");
+    // たてがみ（頭のまわりの炎のような房）
+    const mane = [];
+    for (let k = 0; k < 14; k++) { const t = k / 14 * Math.PI * 2, rr = k % 2 ? r * 1.25 : r * 2.0; mane.push(add(add(head, back, 4), [Math.cos(t) * rr, Math.sin(t) * rr])); }
+    put(polyPath(mane), "gold");
+    // 角ばった頭と鼻づら
+    put(polyPath(hull([add(head, [-r * 0.9, -r * 0.8]), add(head, [r * 0.6, -r * 0.9]), add(head, [-r * 0.9, r * 0.8]),
+                       add(head, fwd, r * 1.55), add(add(head, fwd, r * 1.5), [0, r * 0.6]), add(head, [r * 0.5, r * 0.9])])), "main");
+    put(polyPath([add(head, [-r * 0.4, -r * 0.7]), add(head, [-r * 0.2, -r * 1.6]), add(head, [r * 0.3, -r * 0.8])]), "main"); // 耳
+    put(ell(add(add(head, fwd, r * 0.55), [0, -r * 0.25]), 3, 1.4), "eye");
+    arm(J.EF, J.HF, 10, 8, 10, "main", "main", "front");
+  } else if (id === "oni404") {
+    const r = 17;
+    // 金棒（奥の手ではなく手前の手に持つので最後に）
+    legs(13, 11, 9, "main", "ink");
+    // 腰布
+    put(polyPath(hull([add(pel, back, 22), add(pel, fwd, 21), add(add(lerp(pel, P(J.KF), 0.75), fwd, 10), down, 0), add(lerp(pel, P(J.KB), 0.75), back, 10)])), "gold");
+    arm(J.EB, J.HB, 14, 12, 12, "main");
+    // 巨大な上半身（肩幅が広く、腰がしまる逆三角形）
+    put(polyPath(hull([add(pel, back, 18), add(pel, fwd, 18), add(add(neck, back, 30), down, 6), add(add(neck, fwd, 30), down, 6), add(neck, back, 16), add(neck, fwd, 16)])), "main");
+    // 頭・ざんばら髪・2本の角
+    const hair = [];
+    for (let k = 0; k < 11; k++) { const t = Math.PI * (0.95 + k / 10 * 1.1), rr = k % 2 ? r * 1.15 : r * 1.65; hair.push(add(add(head, back, 5), [Math.cos(t) * rr, Math.sin(t) * rr])); }
+    hair.push(add(head, [0, r * 0.4]));
+    put(polyPath(hair), "ink");
+    put(circle(head, r), "main");
+    put(polyPath([add(head, [-r * 0.5, -r * 0.8]), add(head, [-r * 0.9, -r * 2.0]), add(head, [-r * 0.05, -r * 0.95])]), "skin");
+    put(polyPath([add(head, [r * 0.25, -r * 0.85]), add(head, [r * 0.55, -r * 2.05]), add(head, [r * 0.85, -r * 0.6])]), "skin");
+    put(polyPath([add(add(head, fwd, r * 0.15), [0, -r * 0.2]), add(add(head, fwd, r * 0.8), [0, -r * 0.35]), add(add(head, fwd, r * 0.75), [0, -r * 0.05])]), "eye");
+    const hf = P(J.HF), fa = unit(sub(hf, P(J.EF)));
+    const clubDir = unit(add(fa, [0, -0.6]));
+    put(capsule(add(hf, clubDir, -10), add(hf, clubDir, 70), 5, 10), "ink", "front");
+    for (let k = 0; k < 4; k++) put(circle(add(add(hf, clubDir, 34 + k * 11), perpL(clubDir), (k % 2 ? 1 : -1) * 6), 2.6), "gold", "front");
+    arm(J.EF, J.HF, 15, 13, 13, "main", "main", "front");
+  } else {   // fox
+    const r = 13;
+    // 3本の大きな尻尾（腰の後ろから扇状に）
+    for (const [ang, L] of [[-35, 62], [-60, 70], [-85, 58]]) {
+      const d = [Math.cos(ang * DEG) * back[0] - Math.sin(ang * DEG) * 0, 0];
+      const dir = unit([back[0] * Math.cos(ang * DEG) + tUp[0] * Math.sin(-ang * DEG), back[1] * Math.cos(ang * DEG) + tUp[1] * Math.sin(-ang * DEG)]);
+      void d;
+      const base = add(pel, back, 4), mid = add(base, dir, L * 0.55), tip = add(base, dir, L);
+      const n = perpL(dir);
+      put(polyPath([base, add(mid, n, 13), add(tip, n, 3), tip, add(tip, n, -4), add(mid, n, -11)]), "gold");
+      put(polyPath([add(tip, dir, 0), add(add(mid, dir, L * 0.25), n, 6), add(add(mid, dir, L * 0.25), n, -6)]), "skin");
+    }
+    legs(6.5, 4.5, 4.5, "ink");
+    arm(J.EB, J.HB, 5.5, 4.5, 5, "main", "skin");
+    // 細身の着物
+    put(polyPath(hull([add(pel, back, 10), add(pel, fwd, 10), add(neck, back, 9), add(neck, fwd, 9), add(lerp(pel, P(J.KF), 0.45), fwd, 11), add(lerp(pel, P(J.KB), 0.45), back, 11)])), "main");
+    put(polyPath(hull([add(add(pel, tUp, 8), back, 11), add(add(pel, tUp, 8), fwd, 11), add(add(pel, tUp, 14), back, 10), add(add(pel, tUp, 14), fwd, 10)])), "sub");
+    // 狐の面（とがった鼻先と2本の耳）
+    put(polyPath([add(head, [-r * 0.85, -r * 0.45]), add(head, [-r * 0.6, -r * 2.0]), add(head, [-r * 0.05, -r * 0.85])]), "gold");
+    put(polyPath([add(head, [r * 0.1, -r * 0.85]), add(head, [r * 0.55, -r * 2.05]), add(head, [r * 0.85, -r * 0.35])]), "gold");
+    put(polyPath(hull([add(head, [-r, -r * 0.5]), add(head, [-r * 0.7, r * 0.8]), add(head, [r * 0.2, r * 0.9]),
+                       add(add(head, fwd, r * 1.7), [0, r * 0.25]), add(head, [r * 0.5, -r * 0.9]), add(head, [-r * 0.4, -r])])), "skin");
+    put(polyPath([add(add(head, fwd, r * 0.15), [0, -r * 0.05]), add(add(head, fwd, r * 0.85), [0, -r * 0.4]), add(add(head, fwd, r * 0.7), [0, r * 0.05])]), "eye");
+    put(polyPath([add(add(head, fwd, r * 0.6), [0, r * 0.2]), add(add(head, fwd, r * 1.5), [0, r * 0.3]), add(add(head, fwd, r * 0.7), [0, r * 0.5])]), "sub");
+    arm(J.EF, J.HF, 6, 5, 5.5, "main", "skin", "front");
+  }
+  return parts;
+}
+
+/* ---------- 2つの画風 ---------- */
+const NEON = { miko: "#ff4a6b", komainu: "#3ff0ff", oni404: "#ffb22e", fox: "#c07bff" };
+const PAPER = { ink: "#211b20", washi: "#efe5d0", shu: "#c8392d", kin: "#d4a640" };
+const CUT = {   // 切り絵: role → 色（キャラごとに2〜3色）
+  miko:    { ink: PAPER.ink, skin: PAPER.washi, main: PAPER.washi, sub: PAPER.shu, gold: PAPER.kin, eye: PAPER.ink },
+  komainu: { ink: PAPER.ink, skin: PAPER.washi, main: PAPER.washi, sub: PAPER.kin, gold: PAPER.kin, eye: PAPER.shu },
+  oni404:  { ink: PAPER.ink, skin: PAPER.washi, main: PAPER.shu,   sub: PAPER.ink, gold: PAPER.kin, eye: PAPER.kin },
+  fox:     { ink: PAPER.ink, skin: PAPER.washi, main: PAPER.ink,   sub: PAPER.shu, gold: PAPER.kin, eye: PAPER.shu }
+};
+function rgba(h, a) { const n = parseInt(h.slice(1), 16); return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")"; }
+
+/* 案A: 部品を全部「光る太い線」で描いてから黒で塗りつぶす → 外側の輪郭だけが光る */
+function drawShadow(ctx, id, parts) {
+  const c = NEON[id] || "#ffffff";
+  ctx.lineJoin = "round";
+  for (const layer of ["main", "front"]) {
+    const ps = parts.filter(p => p.layer === layer && p.role !== "eye");
+    const front = layer === "front";
+    ctx.globalCompositeOperation = "lighter";
+    for (const p of ps) { ctx.strokeStyle = rgba(c, front ? 0.10 : 0.16); ctx.lineWidth = front ? 8 : 14; ctx.stroke(p.g); }
+    for (const p of ps) { ctx.strokeStyle = rgba(c, front ? 0.18 : 0.28); ctx.lineWidth = front ? 4 : 7; ctx.stroke(p.g); }
+    ctx.globalCompositeOperation = "source-over";
+    for (const p of ps) { ctx.strokeStyle = front ? rgba(c, 0.75) : c; ctx.lineWidth = front ? 1.6 : 3; ctx.stroke(p.g); }
+    for (const p of ps) { ctx.fillStyle = "#06070d"; ctx.fill(p.g); }
+  }
+  // 目だけが光る
+  ctx.globalCompositeOperation = "lighter";
+  for (const p of parts) if (p.role === "eye") { ctx.fillStyle = rgba(c, 0.45); ctx.lineWidth = 5; ctx.strokeStyle = rgba(c, 0.3); ctx.stroke(p.g); ctx.fill(p.g); ctx.fillStyle = "#ffffff"; ctx.fill(p.g); }
+  ctx.globalCompositeOperation = "source-over";
+}
+/* 案B: 色ごとの平たい面。紙の厚みを出すため、下に少しずらした影を敷く */
+function drawCut(ctx, id, parts) {
+  const pal = CUT[id];
+  for (const layer of ["main", "front"]) {
+    const ps = parts.filter(p => p.layer === layer);
+    ctx.save(); ctx.translate(2.5, 3.5);
+    for (const p of ps) { ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fill(p.g); }
+    ctx.restore();
+    for (const p of ps) { ctx.fillStyle = pal[p.role] || PAPER.washi; ctx.fill(p.g); }
+    if (layer === "front") for (const p of ps) { ctx.strokeStyle = "rgba(0,0,0,0.35)"; ctx.lineWidth = 1; ctx.stroke(p.g); }
+  }
+}
+
+/* 1体を描く。gx,gy=足元の画面位置、facing=1 右向き / -1 左向き */
+function drawFighter(ctx, style, id, clip, t, gx, gy, facing, scale) {
+  const ch = D.characters[id]; if (!ch) return;
+  const mv = ch.moves && ch.moves[clip];
+  const name = mv ? (mv.clip || clip) : clip, tt = mv ? (mv.startup || 0) : t;
+  const j = solve(ch.look.body, clipPose(ch, name, tt));
+  for (let i = 0; i < 14; i++) j.y[i] = -j.y[i];   // キャラ空間(上+) → 画面(下+)
+  const parts = costume(id, j);
+  ctx.save(); ctx.translate(gx, gy); ctx.scale(facing * scale, scale);
+  // 足元の影
+  ctx.fillStyle = style === "a" ? "rgba(0,0,0,0.6)" : "rgba(0,0,0,0.4)";
+  ctx.beginPath(); ctx.ellipse(0, 2, 44, 7, 0, 0, Math.PI * 2); ctx.fill();
+  if (style === "a") drawShadow(ctx, id, parts); else drawCut(ctx, id, parts);
+  ctx.restore();
+}
+
+/* ---------- 背景 ---------- */
+function stage(ctx, W, H, style, ground) {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  if (style === "a") { g.addColorStop(0, "#0a0b1d"); g.addColorStop(1, "#131032"); }
+  else { g.addColorStop(0, "#0d1024"); g.addColorStop(1, "#1a1530"); }
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  // 遠景の鳥居（背景は暗く控えめにして、キャラを前に出す）
+  const torii = (cx, by, s, a) => {
+    ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = style === "a" ? "#ff3b5c" : "#8a2a2a"; ctx.lineWidth = 5 * s; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(cx - 95 * s, by - 150 * s); ctx.quadraticCurveTo(cx, by - 165 * s, cx + 95 * s, by - 150 * s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx - 75 * s, by - 125 * s); ctx.lineTo(cx + 75 * s, by - 125 * s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx - 55 * s, by - 150 * s); ctx.lineTo(cx - 55 * s, by); ctx.moveTo(cx + 55 * s, by - 150 * s); ctx.lineTo(cx + 55 * s, by); ctx.stroke();
+    ctx.restore();
+  };
+  torii(W / 2, ground - 40, 1.7, style === "a" ? 0.22 : 0.3);
+  torii(W * 0.18, ground - 70, 0.8, 0.12); torii(W * 0.82, ground - 70, 0.8, 0.12);
+  if (style === "b") {   // 月（和紙色の円）
+    ctx.fillStyle = "rgba(239,229,208,0.16)"; ctx.beginPath(); ctx.arc(W * 0.78, H * 0.22, 48, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = style === "a" ? "#05060c" : "#120f1c"; ctx.fillRect(0, ground, W, H - ground);
+  ctx.strokeStyle = style === "a" ? "rgba(255,59,92,0.5)" : "rgba(212,166,64,0.55)"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, ground); ctx.lineTo(W, ground); ctx.stroke();
+}
+function hud(ctx, W, style) {
+  const c1 = style === "a" ? NEON.miko : PAPER.shu, c2 = style === "a" ? NEON.oni404 : PAPER.kin;
+  const bar = (x, w, col, k, right) => {
+    ctx.fillStyle = "rgba(255,255,255,0.08)"; ctx.fillRect(x, 26, w, 14);
+    ctx.fillStyle = col; if (right) ctx.fillRect(x + w * (1 - k), 26, w * k, 14); else ctx.fillRect(x, 26, w * k, 14);
+  };
+  bar(40, 360, c1, 0.82, false); bar(W - 400, 360, c2, 0.64, true);
+  ctx.fillStyle = "#ece6da"; ctx.font = "15px DotGothic16, sans-serif"; ctx.textBaseline = "top";
+  ctx.textAlign = "left"; ctx.fillText("電脳巫女", 40, 46); ctx.textAlign = "right"; ctx.fillText("404鬼", W - 40, 46);
+  ctx.textAlign = "center"; ctx.font = "26px DotGothic16, sans-serif"; ctx.fillText("72", W / 2, 20);
+}
+
+function render() {
+  for (const st of ["a", "b"]) {
+    // 対戦画面（実際のゲームと同じ 960x540、キャラの縮尺も同じ）
+    let cv = document.getElementById(st + "Fight"), ctx = cv.getContext("2d");
+    const W = 960, H = 540, G = 470;
+    stage(ctx, W, H, st, G);
+    drawFighter(ctx, st, "miko", "5H", 0, 380, G, 1, 1);
+    drawFighter(ctx, st, "oni404", "idle", 0, 560, G, -1, 1);
+    hud(ctx, W, st);
+    // 4キャラの並び
+    cv = document.getElementById(st + "Line"); ctx = cv.getContext("2d");
+    stage(ctx, 960, 330, st, 290);
+    const ids = (D.roster || Object.keys(D.characters)).filter(id => D.characters[id]);
+    ids.forEach((id, i) => {
+      drawFighter(ctx, st, id, "idle", 0, 70 + i * 240, 290, 1, 0.92);
+      drawFighter(ctx, st, id, "5H", 0, 170 + i * 240, 290, 1, 0.92);
+      ctx.fillStyle = "#9aa3bd"; ctx.font = "13px DotGothic16, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "top";
+      ctx.fillText(D.characters[id].name || id, 120 + i * 240, 302);
+    });
+  }
+}
+render();
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(render);
+})();
+</script>

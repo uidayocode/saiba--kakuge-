@@ -1,0 +1,108 @@
+<title>電脳神社・参道 ステージ試作</title>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Shippori+Mincho+B1:wght@700&display=swap">
+<style>
+/* layout: 対戦画面と同じ 960x540 の1枚を主役に、その下に状態の切り替えとカメラのつまみ */
+:root {
+  color-scheme: dark;
+  --bg: #05040c;
+  --panel: #0e0b1e;
+  --line: #261d44;
+  --text: #ece6f2;
+  --sub: #9d94b8;
+  --neon: #ff3b5c;
+  --font-jp: "DotGothic16", "Yu Gothic", "Meiryo", sans-serif;
+  --font-title: "Shippori Mincho B1", "Yu Mincho", serif;
+}
+html, body { background: var(--bg); color: var(--text); margin: 0; }
+body { font-family: var(--font-jp); padding-inline: 16px; padding-block: 20px 40px; }
+.wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 14px; }
+.wrap > * { min-width: 0; }
+h1 { font-family: var(--font-title); font-size: 26px; margin: 0; letter-spacing: 0.06em; text-wrap: balance; }
+.lead { color: var(--sub); font-size: 14px; margin: 0; max-width: 70ch; line-height: 1.7; }
+canvas { display: block; width: 100%; max-width: 100%; height: auto; border-radius: 8px; background: #000; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+button { font-family: var(--font-jp); font-size: 14px; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 7px 14px; cursor: pointer; }
+button[aria-pressed="true"] { border-color: var(--neon); color: #ffd0d8; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--neon); outline-offset: 2px; }
+label { color: var(--sub); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+input[type=range] { width: 200px; max-width: 50vw; accent-color: var(--neon); }
+</style>
+
+<div class="wrap">
+  <h1>電脳神社・参道 ステージ試作</h1>
+  <p class="lead">実際の対戦画面と同じ 960×540。キャラは影絵＋ネオンの縁の電脳巫女（P1 赤 / P2 シアン）。下のボタンで、ラウンド開始の点灯・KO・残り時間わずかの演出を確かめられます。</p>
+  <canvas id="cv" width="960" height="540" role="img" aria-label="ステージ背景と2人の電脳巫女"></canvas>
+  <div class="controls">
+    <button type="button" id="bNormal" aria-pressed="true">通常</button>
+    <button type="button" id="bIntro" aria-pressed="false">ラウンド開始</button>
+    <button type="button" id="bKO" aria-pressed="false">KO</button>
+    <button type="button" id="bHurry" aria-pressed="false">残りわずか</button>
+    <label for="camx">カメラ <input type="range" id="camx" min="-220" max="220" value="0"></label>
+    <button type="button" id="bAuto" aria-pressed="true">カメラ自動</button>
+  </div>
+</div>
+
+<script src="data.js" charset="utf-8"></script>
+<script src="miko_visual.js" charset="utf-8"></script>
+<script src="stage.js" charset="utf-8"></script>
+<script>
+(function () {
+"use strict";
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const W = 960, H = 540, GY = 470;
+const ch = window.GAME_DATA && window.GAME_DATA.characters && window.GAME_DATA.characters.miko;
+const stage = StageVisual.create(W, H, GY);
+let mode = "normal", modeT0 = 0, autoCam = true, camX = 0;
+
+function fighters(c, t, cam, a) {
+  if (!ch) return;
+  const f = t * 60;
+  const p1 = MikoVisual.solve(ch.look.body, MikoVisual.clipPose(ch, "idle", f));
+  const atk = ch.moves && ch.moves["5H"], cyc = f % 150;
+  const p2pose = cyc < 100 ? MikoVisual.clipPose(ch, "idle", f + 31) : MikoVisual.clipPose(ch, (atk && atk.clip) || "5H", cyc - 100);
+  const p2 = MikoVisual.solve(ch.look.body, p2pose);
+  MikoVisual.draw(c, p1, { x: 400 - cam.x, y: GY, facing: 1, color: "#ff4a6b", alpha: a });
+  MikoVisual.draw(c, p2, { x: 560 - cam.x, y: GY, facing: -1, color: "#3ff0ff", alpha: a });
+}
+function hud(t, st) {
+  const bar = (x, w, col, k, right) => {
+    ctx.fillStyle = "rgba(255,255,255,0.10)"; ctx.fillRect(x, 24, w, 12);
+    ctx.fillStyle = col; if (right) ctx.fillRect(x + w * (1 - k), 24, w * k, 12); else ctx.fillRect(x, 24, w * k, 12);
+    ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, 24.5, w - 1, 11);
+  };
+  bar(40, 360, "#ff4a6b", 0.78, false); bar(W - 400, 360, "#3ff0ff", 0.56, true);
+  ctx.fillStyle = "#ece6f2"; ctx.font = "14px DotGothic16, sans-serif"; ctx.textBaseline = "top";
+  ctx.textAlign = "left"; ctx.fillText("1P 電脳巫女", 40, 42); ctx.textAlign = "right"; ctx.fillText("電脳巫女 2P", W - 40, 42);
+  ctx.textAlign = "center"; ctx.font = "28px DotGothic16, sans-serif"; ctx.fillStyle = st.hurry ? "#ff6b81" : "#ece6f2"; ctx.fillText(st.hurry ? "9" : "72", W / 2, 16);
+  if (st.ko > 0.3) {
+    ctx.font = "bold 64px 'Shippori Mincho B1', serif"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(255,255,255," + Math.min(1, (st.ko - 0.3) * 2) + ")"; ctx.fillText("浄化完了", W / 2, H * 0.42);
+  }
+}
+
+function frame(t) {
+  const cam = { x: autoCam ? Math.sin(t * 0.35) * 140 : camX };
+  const k = Math.min(1, (t - modeT0) / 1.6);
+  const st = { intro: mode === "intro" ? k : 1, ko: mode === "ko" ? k : 0, hurry: mode === "hurry" ? 1 : 0 };
+  stage.draw(ctx, cam, t, st);
+  stage.drawReflection(ctx, cam, t, c => fighters(c, t, cam, 1));
+  fighters(ctx, t, cam, 1);
+  stage.drawFront(ctx, cam, t, st);
+  hud(t, st);
+}
+let start = performance.now();
+function loop(now) { frame((now - start) / 1000 + 3.2); requestAnimationFrame(loop); }
+frame(3.2);
+requestAnimationFrame(loop);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => frame((performance.now() - start) / 1000 + 3.2));
+
+const btns = { normal: "bNormal", intro: "bIntro", ko: "bKO", hurry: "bHurry" };
+for (const m in btns) document.getElementById(btns[m]).addEventListener("click", () => {
+  mode = m; modeT0 = (performance.now() - start) / 1000 + 3.2;
+  for (const n in btns) document.getElementById(btns[n]).setAttribute("aria-pressed", n === m);
+});
+document.getElementById("camx").addEventListener("input", e => { camX = +e.target.value; autoCam = false; document.getElementById("bAuto").setAttribute("aria-pressed", "false"); });
+document.getElementById("bAuto").addEventListener("click", e => { autoCam = !autoCam; e.currentTarget.setAttribute("aria-pressed", autoCam); });
+})();
+</script>
