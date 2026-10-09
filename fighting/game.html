@@ -273,6 +273,8 @@ if (HASH.p.seed != null && HASH.p.seed !== true) fxRng = new Rng(parseInt(HASH.p
 /* ================================================================
  * S2  Anim: キーフレーム補間 / ClipPlayer / Rig(FK) / 二次揺れ(Chain) / Puppet
  * ================================================================ */
+/* 動きの控えめさ（1 = 元のまま、0 = 揺れ・伸び縮みなし） */
+const CALM = { chainGravity: 0.55, chainDamping: 0.32, chainStiff: 1.8, chainStiffMin: 0.14, chainInertia: 0.4, chainKick: 0.45, squash: 0.45, breath: 0.6 };
 const FEEL_DEF = {
   breath: { amp: 0.012, period: 90 },
   jump: { sx: 0.94, sy: 1.08, frames: 4 },
@@ -288,6 +290,10 @@ function normFeel(f) {
   const o = {};
   for (const k in FEEL_DEF) {
     o[k] = Object.assign({}, FEEL_DEF[k], (f && f[k]) || {});
+    /* 伸び縮み（sx, sy）は 1 に近づける */
+    if (o[k].sx != null) o[k].sx = 1 + (o[k].sx - 1) * CALM.squash;
+    if (o[k].sy != null) o[k].sy = 1 + (o[k].sy - 1) * CALM.squash;
+    if (k === 'breath') o[k].amp *= CALM.breath;
   }
   return o;
 }
@@ -579,8 +585,11 @@ class ChainSim {
     this.lax = 0; this.lay = 0; this.lvx = 0; this.lvy = 0;
     this.ready = false;
     this.bone = BONE_IDX[def.anchor.bone] != null ? BONE_IDX[def.anchor.bone] : 2;
-    this.inertia = Util.isNum(def.inertia) ? def.inertia : 1;
-    this.kickMul = Util.isNum(def.kick) ? def.kick : 1;
+    /* 揺れを控えめに: 減衰を強く・戻る力を強く・揺さぶりを弱く（びよびよ防止） */
+    this.damping = Math.max(Util.isNum(def.damping) ? def.damping : 0.1, CALM.chainDamping);
+    this.stiffness = Math.min(0.6, Math.max(CALM.chainStiffMin, (Util.isNum(def.stiffness) ? def.stiffness : 0.1) * CALM.chainStiff));
+    this.inertia = 1 + ((Util.isNum(def.inertia) ? def.inertia : 1) - 1) * CALM.chainInertia;
+    this.kickMul = (Util.isNum(def.kick) ? def.kick : 1) * CALM.chainKick;
   }
   reset(ax, ay, facing) {
     const d = this.def;
@@ -601,13 +610,13 @@ class ChainSim {
     this.lax = ax; this.lay = ay; this.lvx = vax; this.lvy = vay;
     x[0] = ax; y[0] = ay; ox[0] = ax; oy[0] = ay;
     const rdx = facing * Math.sin(d.rest * DEG), rdy = -Math.cos(d.rest * DEG);
-    const damp = 1 - d.damping, sl = d.segLen, vmax = sl * 0.5;
+    const damp = 1 - this.damping, sl = d.segLen, vmax = sl * 0.35;
     const ik = this.inertia - 1;
     for (let i = 1; i < n; i++) {
       let vx = (x[i] - ox[i]) * damp, vy = (y[i] - oy[i]) * damp;
       const tx = x[i - 1] + rdx * sl, ty = y[i - 1] + rdy * sl;
-      vx += (tx - x[i]) * d.stiffness; vy += (ty - y[i]) * d.stiffness;
-      vy -= d.gravity;
+      vx += (tx - x[i]) * this.stiffness; vy += (ty - y[i]) * this.stiffness;
+      vy -= d.gravity * CALM.chainGravity;
       vx -= accx * ik * 0.5; vy -= accy * ik * 0.5;
       vx += wind * facing * 0.02 * i;
       const sp = Math.sqrt(vx * vx + vy * vy);
@@ -768,7 +777,7 @@ class Puppet {
 }
 
 /* やられ反動の大きさ（衝撃 1〜4 ごと） */
-const RECOIL_EXTRA = [2, 5, 10, 14], RECOIL_TORSO = [6, 12, 22, 30], RECOIL_HEAD = [6, 12, 20, 26], RECOIL_ARM = [6, 14, 28, 40];
+const RECOIL_EXTRA = [1, 3, 7, 10], RECOIL_TORSO = [4, 9, 16, 22], RECOIL_HEAD = [4, 8, 14, 18], RECOIL_ARM = [3, 8, 16, 24];
 
 /* ================================================================
  * S3  validateGameData (4.13)

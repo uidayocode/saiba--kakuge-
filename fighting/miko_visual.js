@@ -213,7 +213,7 @@ function costumeKomainu(j, ch) {
   /* 尾: 炎のように巻き上がる大きな房（揺れ物があればその向き） */
   const tb = add(pel, back, 10);
   let tdir = unit(add(back, tUp, 1.3));
-  if (ch.shortTail && ch.shortTail.length > 1) { const e = ch.shortTail[ch.shortTail.length - 1]; tdir = unit(sub(e, ch.shortTail[0])); }
+  if (ch.shortTail && ch.shortTail.length > 1) { const e = ch.shortTail[ch.shortTail.length - 1]; tdir = unit(add(tdir, unit(sub(e, ch.shortTail[0])), 0.3)); }
   put(plume(tb, tdir, 66, -0.4, 34, 4));
   put(plume(add(tb, tUp, 6), unit(add(tdir, back, 0.7)), 44, -0.55, 22, 3));
   put(plume(add(tb, tUp, -2), unit(add(tdir, tUp, -0.5)), 38, 0.4, 18, 3));
@@ -315,7 +315,7 @@ function costumeFox(j, ch) {
     const DEGR = Math.PI / 180;
     let dir = unit([back[0] * Math.cos(ang * DEGR) + tUp[0] * Math.sin(-ang * DEGR), back[1] * Math.cos(ang * DEGR) + tUp[1] * Math.sin(-ang * DEGR)]);
     const c = ch[tails[k]];
-    if (c && c.length > 1) dir = unit(add(dir, unit(sub(c[c.length - 1], c[0])), 0.8));
+    void c;   /* 尻尾は揺れ物に引っぱられない（体の動きにだけついていく。びよびよ防止） */
     put(plume(base, dir, L, -bend * 0.5, 24, 2));
   });
   /* 脚: 細く長い。ひざ下までの短い袴 */
