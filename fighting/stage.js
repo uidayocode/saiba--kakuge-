@@ -205,13 +205,15 @@ function create(W, H, GY) {
 
   function draw(ctx, cam, t, st) {
     st = st || {};
-    const ko = st.ko || 0, intro = st.intro == null ? 1 : st.intro, hurry = st.hurry || 0;
+    const ko = st.ko || 0, intro = st.intro == null ? 1 : st.intro, hurry = st.hurry || 0, hit = st.hit || 0;
+    /* KO では大鳥居・お札の明かりが落ちる。強打の瞬間は灯籠が揺れて火が強まる */
+    const lit = 1 - 0.75 * ko;
     ctx.drawImage(sky, 0, 0);
     // 星
     for (const s of stars) { const a = 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(t * s.sp + s.ph)); ctx.fillStyle = "rgba(220,220,255," + a + ")"; ctx.fillRect(s.x - (cam && cam.x || 0) * 0.02, s.y, s.r, s.r); }
     // 月（ゆっくり明滅。数秒に一度、横にずれるグリッチ）
     {
-      const mx = W * 0.74 - (cam && cam.x || 0) * 0.04, my = 128, gl = (t % 7.3) < 0.12 ? 6 : 0;
+      const mx = W * 0.74 - (cam && cam.x || 0) * 0.04, my = 128, gl = ((t % 7.3) < 0.12 || hit > 0.6) ? 6 : 0;
       ctx.globalAlpha = 0.85 + 0.15 * Math.sin(t * 1.3);
       ctx.drawImage(moon, mx - moon.width / 2 + gl, my - moon.height / 2);
       if (gl) { ctx.globalAlpha = 0.5; ctx.drawImage(moon, 0, moon.height * 0.45, moon.width, 10, mx - moon.width / 2 - 14, my - moon.height / 2 + moon.height * 0.45, moon.width, 10); }
@@ -228,11 +230,11 @@ function create(W, H, GY) {
     // 霞（奥）
     { const off = ((t * 8 + (cam && cam.x || 0) * 0.5) % W + W) % W; ctx.globalAlpha = 0.9; ctx.drawImage(fog, -off, GY - 150); ctx.drawImage(fog, W * 2 - off, GY - 150); ctx.globalAlpha = 1; }
     // 大鳥居（ラウンド開始の点灯: 0→1 で暗い状態から光る）
-    ctx.globalAlpha = 0.35 + 0.65 * intro; ctx.drawImage(toriiBig, px(cam, 0.6), 0); ctx.globalAlpha = 1;
+    ctx.globalAlpha = (0.35 + 0.65 * intro) * lit; ctx.drawImage(toriiBig, px(cam, 0.6), 0); ctx.globalAlpha = 1;
     {  // 笠木を走る光
       const ox = px(cam, 0.6), k = Math.min(1, intro * 1.4), x1 = kasagi.x0 + (kasagi.x1 - kasagi.x0) * k;
       ctx.globalCompositeOperation = "lighter";
-      ctx.strokeStyle = rgba(NEON_RED, 0.55); ctx.lineWidth = 3;
+      ctx.strokeStyle = rgba(NEON_RED, 0.55 * lit); ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(kasagi.x0 + ox, kasagi.y - 4); ctx.quadraticCurveTo((kasagi.x0 + kasagi.x1) / 2 + ox, kasagi.y + 14, x1 + ox, kasagi.y - 4 + (x1 - kasagi.x0) / (kasagi.x1 - kasagi.x0) * 0); ctx.stroke();
       const run = ((t * 0.35) % 1), rx = kasagi.x0 + (kasagi.x1 - kasagi.x0) * run;   // 笠木の上をゆっくり走る光点
       const gg = ctx.createRadialGradient(rx + ox, kasagi.y + 4, 0, rx + ox, kasagi.y + 4, 40);
@@ -245,7 +247,7 @@ function create(W, H, GY) {
     for (const o of OFUDA) {
       const x = o.x - (cam && cam.x || 0) * o.p * 0.5, y = o.y + Math.sin(t * 0.9 + o.ph) * 6, fl = (Math.sin(t * 13 + o.ph * 5) > 0.92) ? 0.4 : 1;
       ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(t * 0.6 + o.ph) * 0.06);
-      ctx.globalAlpha = 0.55 * fl * (0.4 + 0.6 * intro);
+      ctx.globalAlpha = 0.55 * fl * (0.4 + 0.6 * intro) * lit;
       ctx.fillStyle = "rgba(70,232,255,0.07)"; ctx.fillRect(-13, -32, 26, 64);
       ctx.strokeStyle = rgba(CYAN, 0.6); ctx.lineWidth = 1; ctx.strokeRect(-13, -32, 26, 64);
       ctx.fillStyle = rgba(CYAN, 0.25); ctx.fillRect(-13, -32 + ((t * 30 + o.ph * 20) % 64), 26, 2);   // 走る走査線
@@ -255,11 +257,11 @@ function create(W, H, GY) {
     }
     ctx.globalAlpha = 1;
     // 灯籠と、その火のゆらぎ
-    const lx = px(cam, 0.85);
+    const lx = px(cam, 0.85) + Math.sin(t * 38) * hit * 4;
     ctx.drawImage(lant, lx, 0);
     ctx.globalCompositeOperation = "lighter";
     LANTERNS.forEach((L, i) => {
-      const f = 0.75 + 0.25 * Math.sin(t * 9 + i * 2.1) * Math.sin(t * 3.7 + i), x = L.fire.x + lx, y = L.fire.y;
+      const f = (0.75 + 0.25 * Math.sin(t * 9 + i * 2.1) * Math.sin(t * 3.7 + i)) * (1 + hit * 1.2) * (1 - 0.5 * ko), x = L.fire.x + lx, y = L.fire.y;
       ctx.fillStyle = "rgba(255,196,107," + (0.55 * f) + ")"; ctx.fillRect(x - L.fire.w / 2 + 3, y - L.fire.h / 2 + 3, L.fire.w - 6, L.fire.h - 6);
       const g = ctx.createRadialGradient(x, y, 0, x, y, 70); g.addColorStop(0, "rgba(255,180,90," + (0.28 * f) + ")"); g.addColorStop(1, "rgba(255,180,90,0)");
       ctx.fillStyle = g; ctx.fillRect(x - 70, y - 70, 140, 140);

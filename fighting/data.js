@@ -39,7 +39,7 @@ window.GAME_DATA = {
       blurb: "お札の飛び道具と堅実な立ち回りで戦う、基本のキャラ。",
       ratings: { power: 3, speed: 3, range: 4, defense: 3 },
       stats: {
-        dmgMul: 0.88, hp: 1000, walkF: 3.4, walkB: 2.8, jumpVy: 15, jumpVx: 3.6, gravity: 0.75,
+        dmgMul: 0.91, hp: 1000, walkF: 3.4, walkB: 2.8, jumpVy: 15, jumpVx: 3.6, gravity: 0.75,
         airJumps: 0, prejump: 4, landLag: 3,
         dashF: { frames: 18, speed: 7.0 }, dashB: { frames: 18, speed: 5.5, invuln: 6 },
         gaugeMul: 1.0
@@ -255,9 +255,9 @@ window.GAME_DATA = {
       blurb: "前傾で突っ込む四つ足型。頭突きと対空で相手の動きを押さえる。",
       ratings: { power: 4, speed: 4, range: 2, defense: 3 },
       stats: {
-        dmgMul: 1.17, hp: 1050, walkF: 3.8, walkB: 3.0, jumpVy: 14.5, jumpVx: 4.2, gravity: 0.78,
+        dmgMul: 1.18, hp: 1050, walkF: 3.8, walkB: 3.0, jumpVy: 14.5, jumpVx: 4.2, gravity: 0.78,
         airJumps: 0, prejump: 4, landLag: 3,
-        dashF: { frames: 20, speed: 9.5 }, dashB: { frames: 18, speed: 6.0, invuln: 6 },
+        dashF: { frames: 20, speed: 9.5, run: true }, dashB: { frames: 18, speed: 6.0, invuln: 6 },
         gaugeMul: 1.0
       },
       boxes: {
@@ -468,7 +468,7 @@ window.GAME_DATA = {
       blurb: "巨体と金棒の大振りで一撃が重い。動きは遅いが、404で場を制圧する。",
       ratings: { power: 5, speed: 1, range: 3, defense: 4 },
       stats: {
-        dmgMul: 0.75, hp: 1100, walkF: 2.6, walkB: 2.2, jumpVy: 13.5, jumpVx: 2.8, gravity: 0.78,
+        dmgMul: 0.64, hp: 1100, walkF: 2.6, walkB: 2.2, jumpVy: 13.5, jumpVx: 2.8, gravity: 0.78,
         airJumps: 0, prejump: 5, landLag: 4,
         dashF: { frames: 22, speed: 5.5 }, dashB: { frames: 22, speed: 4.0, invuln: 4 },
         gaugeMul: 0.9
@@ -608,7 +608,7 @@ window.GAME_DATA = {
         super: {length: 74,plant: "feet",blend: 3,keys: [{f: 10,ease: "outQuad",p: {torso: -16,head: -12,uarmF: 178,farmF: 10,uarmB: 175,farmB: 10,rootY: 6}},{f: 18,ease: "outExpo",p: {torso: 44,head: 10,uarmF: 64,farmF: 0,uarmB: 60,farmB: 0,rootX: 14,thighF: 56,shinF: 60,thighB: -30,shinB: 10,rootY: -8}},{f: 38,ease: "linear",p: {torso: 44,head: 10,uarmF: 64,farmF: 0,uarmB: 60,farmB: 0,rootX: 14,thighF: 56,shinF: 60,thighB: -30,shinB: 10,rootY: -8}},{f: 74,ease: "inOutQuad",p: "base"}]},
       },
       moves: {
-        sp3: { kind: "special", name: "鬼の体当たり", stance: "stand", startup: 16, active: 8, recovery: 24,
+        sp3: { kind: "special", name: "鬼の体当たり", stance: "stand", startup: 16, active: 8, recovery: 24, armor: { f0: 6, f1: 14 },
           boxes: [{ f0: 17, f1: 24, x: 30, y: 60, w: 70, h: 90 }],
           hit: { damage: 95, chip: 8, level: "mid", hitstun: 24, blockstun: 16, hitstop: 12, knock: { hit: 22, block: 24 }, effect: "stun", gauge: { hit: 50, block: 25 }, impact: 4 },
           motion: [{ f0: 4, f1: 26, vx: 7 }], invuln: [{ f0: 1, f1: 24, type: "proj" }],
@@ -623,7 +623,7 @@ window.GAME_DATA = {
           hit: { damage: 34, chip: 0, level: "low", hitstun: 22, blockstun: 13, hitstop: 7, knock: { hit: 10, block: 12 }, effect: "stun", gauge: { hit: 25, block: 12 }, impact: 1 },
           cancel: { into: ["5L", "2L", "5H", "sp1", "super"], frames: 14 },
           trail: { from: "prop", color: "accent", width: 9, frames: 6 }, sfx: "swingL" },
-        "5H": { kind: "normal", name: "立ち強（金棒の大振り）", stance: "stand", startup: 15, active: 5, recovery: 24,
+        "5H": { kind: "normal", name: "立ち強（金棒の大振り）", stance: "stand", startup: 15, active: 5, recovery: 24, armor: { f0: 6, f1: 14 },
           boxes: [ { f0: 16, f1: 20, x: 40, y: 80, w: 132, h: 46 } ],
           hit: { damage: 92, chip: 0, level: "mid", hitstun: 32, blockstun: 20, hitstop: 12, knock: { hit: 18, block: 22 }, effect: "stun", gauge: { hit: 45, block: 22 }, impact: 3 },
           cancel: { into: ["sp1", "sp2", "super"], frames: 16 },
@@ -677,7 +677,7 @@ window.GAME_DATA = {
       blurb: "俊敏で軽い。三本の尻尾と分身で、読みにくい攻めを仕掛ける。",
       ratings: { power: 2, speed: 5, range: 3, defense: 1 },
       stats: {
-        dmgMul: 1.22, hp: 900, walkF: 4.2, walkB: 3.6, jumpVy: 16.5, jumpVx: 4.8, gravity: 0.72,
+        dmgMul: 1.28, hp: 900, walkF: 4.2, walkB: 3.6, jumpVy: 16.5, jumpVx: 4.8, gravity: 0.72,
         airJumps: 1, prejump: 3, landLag: 3,
         dashF: { frames: 14, speed: 10.5 }, dashB: { frames: 16, speed: 7.5, invuln: 8 },
         gaugeMul: 1.15
@@ -723,6 +723,7 @@ window.GAME_DATA = {
       },
       basePose: { rootX: 0, rootY: 0, rot: 0, torso: 2, head: -4, uarmF: 30, farmF: 30, uarmB: 14, farmB: 40, thighF: 22, shinF: 26, footF: 4, thighB: -14, shinB: 10, footB: 24 },
       clips: {
+        jS: { base: "jumpFall", length: 28, plant: "root", blend: 2, keys: [{ f: 4, ease: "outQuad", p: { torso: -10, thighF: 50, shinF: 120, thighB: 40, shinB: 110, uarmF: 120, farmF: 40, uarmB: 120, farmB: 40 } }, { f: 6, ease: "outExpo", p: { torso: -20, head: -8, thighF: 38, shinF: 0, footF: -10, thighB: -30, shinB: 90, uarmF: -60, farmF: 20, uarmB: -70, farmB: 20 } }, { f: 26, ease: "linear", p: { torso: -20, thighF: 38, shinF: 0, footF: -10, thighB: -30, shinB: 90 } }, { f: 28, ease: "inOutQuad", p: "base" }] },
         sp3: {base: "crouch",length: 40,plant: "feet",blend: 3,keys: [{f: 6,ease: "outQuad",p: {torso: 30,thighF: 70,shinF: 120}},{f: 10,ease: "outExpo",p: {torso: -24,head: -10,thighF: 88,shinF: 0,footF: -10,thighB: 40,shinB: 110,uarmF: -20,farmF: 30,uarmB: -40,rootY: -24}},{f: 20,ease: "linear",p: {torso: -24,head: -10,thighF: 88,shinF: 0,footF: -10,thighB: 40,shinB: 110,uarmF: -20,farmF: 30,uarmB: -40,rootY: -24}},{f: 40,ease: "inOutQuad",p: "base"}]},
         idle: { length: 54, loop: true, plant: "feet", blend: 6, keys: [
           { f: 0, ease: "inOutQuad", p: "base" },
@@ -820,6 +821,10 @@ window.GAME_DATA = {
           { f: 43, ease: "inOutQuad", p: "base" } ] }
       },
       moves: {
+        jS: { kind: "special", name: "急降下蹴り", stance: "air", startup: 6, active: 18, recovery: 4, landLag: 10,
+          boxes: [{ f0: 7, f1: 24, x: 4, y: -6, w: 52, h: 40 }],
+          hit: { damage: 54, chip: 4, level: "high", hitstun: 18, blockstun: 12, hitstop: 9, knock: { hit: 10, block: 14 }, effect: "stun", gauge: { hit: 40, block: 20 }, impact: 3 },
+          motion: [{ f0: 6, f1: 28, vx: 7.5, vy: -7 }], sfx: "swingH" },
         sp3: { kind: "special", name: "狐の滑り込み", stance: "stand", startup: 10, active: 10, recovery: 20,
           boxes: [{ f0: 11, f1: 20, x: 20, y: 0, w: 80, h: 26 }],
           hit: { damage: 58, chip: 4, level: "low", hitstun: 0, blockstun: 14, hitstop: 9, knock: { hit: 0, block: 18 }, effect: "launch", launch: { vx: 3, vy: 6 }, juggle: 0, gauge: { hit: 45, block: 22 }, impact: 3 },
