@@ -234,15 +234,16 @@ function costumeKomainu(j, ch) {
   put(smooth([add(pel, back, 13), add(add(lerp(pel, neck, 0.5), back, 15), tUp, 2), add(neck, back, 14), add(add(neck, fwd, 16), tUp, 4),
               add(add(sh, fwd, 22), down, 8), add(add(lerp(pel, neck, 0.45), fwd, 16), down, 4), add(pel, fwd, 10)]));
   /* たてがみ: 渦を巻く雲のような房（とがらせない） */
-  /* たてがみ: 頭の後ろ半分を、巻き毛の玉（円）で囲む */
-  const mc = add(add(head, back, 7), [0, 3]);
-  put(circle(mc, r * 1.45));
-  for (let k = 0; k < 9; k++) {
-    const t = Math.PI * (0.45 + k / 8 * 1.3), dirB = [back[0] * Math.cos(t - Math.PI) - 0, 0];
-    void dirB;
-    const ang = Math.atan2(back[1], back[0]) + (k / 8 - 0.5) * Math.PI * 1.5;
-    put(circle(add(mc, [Math.cos(ang) * r * 1.5, Math.sin(ang) * r * 1.5]), r * (k % 2 ? 0.62 : 0.75)));
+  /* たてがみ: 頭の上と後ろから、後ろへなびく数本の長い房（すっきりした形） */
+  const hb = add(head, back, 2), upW = [0, -1];
+  const locks = [   /* 付け根のずらし（上へ, 後ろへ）, 向き（後ろ寄り↔上寄り）, 長さ, 太さ */
+    [12, 0, 0.55, 52, 17], [6, 6, 0.3, 58, 19], [-1, 9, 0.1, 54, 18], [-8, 8, -0.15, 44, 15]
+  ];
+  for (const [u, bk, lift, L, w] of locks) {
+    const d = unit(add(back, upW, lift));
+    put(plume(add(add(hb, upW, u), back, bk), d, L, 0.22, w, 2));
   }
+  put(circle(add(head, back, 3), r * 1.05));
   for (const id of ["maneTuft1", "maneTuft2"]) if (ch[id] && ch[id].length > 1) put(polyPath(strip(ch[id], 12, 3)));
   /* 頭: 四角い額と、前に突き出た鼻づら・下あご */
   put(smooth([add(head, [-r * 0.9, -r * 0.9]), add(head, [r * 0.5, -r * 1.0]), add(add(head, fwd, r * 1.6), [0, -r * 0.2]),
