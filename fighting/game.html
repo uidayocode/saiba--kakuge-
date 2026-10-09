@@ -4653,7 +4653,15 @@ Game.scenes.title = {
       this.pups.forEach(p => previewStep(p));
       return;
     }
-    if (Input.idle > 1800) { Game.staff = false; this.startDemo(); return; }
+    if (Input.idle > 1800) {
+      Game.staff = false;
+      /* 放置: CPU（つよい）同士のデモ対戦。違うキャラを2人選ぶ */
+      const R = Game.roster.slice(), a = R[fxRng.int(R.length)], rest = R.filter(x => x !== a), b = rest.length ? rest[fxRng.int(rest.length)] : a;
+      Game.demo = true; Game.tutorial = false; Game.training = false;
+      Game.sel = [a, b]; Game.pal2 = [false, true]; Game.easy = [true, true];
+      Game.go('versus', {});
+      return;
+    }
     if (Input.keyPressed('F9')) { Game.staff = !Game.staff; Audio.play('menuOk'); Toast.push(Game.staff ? 'スタッフ用メニューを表示' : 'スタッフ用メニューを隠しました'); }
     this.sel = Math.min(menuMove(this.sel, this.items.length, n), this.items.length - 1);
     if (n & B_L) {
@@ -5409,14 +5417,15 @@ Game.scenes.fight = {
     FX.glitchWords = Game.data.texts.glitchWords;
     this.match = new Match({
       rts: [Game.chars[Game.sel[0]], Game.chars[Game.sel[1]]], pal2: Game.pal2.slice(), easy: Game.easy.slice(),
-      rounds: Game.tutorial ? 1 : eff.rounds, time: Game.tutorial ? 0 : eff.time, seed: seed, fx: FX
+      rounds: (Game.tutorial || Game.demo) ? 1 : eff.rounds, time: Game.tutorial ? 0 : (Game.demo ? 60 : eff.time), seed: seed, fx: FX
     });
     this.tut = Game.tutorial ? { i: 0, t: 0, base: null, done: 0 } : null;
     this.hud = { lag: [this.match.fighters[0].hp, this.match.fighters[1].hp], wait: [0, 0], last: [0, 0], round: 1 };
     this.paused = false; this.pauseSel = 0; this.pauseWhy = ''; this.devs = [Devices.slots[0], Devices.slots[1]];
     const lv = Game.cpuLevel || 'dummy';
     this.cpu = this.training ? (lv === 'dummy' ? new CpuPolicy(1, 'dummy') : new CpuPolicy(1, 'cpu', lv)) : null;
-    if (Game.tutorial) this.cpu = { next: () => 0 };   /* チュートリアルの相手は何もしない（コンボが当たるように） */
+    if (Game.tutorial) this.cpu = { next: () => 0 };
+    this.demoCpu = Game.demo ? [new CpuPolicy(0, 'cpu', 'hard'), new CpuPolicy(1, 'cpu', 'hard')] : null;   /* チュートリアルの相手は何もしない（コンボが当たるように） */
     if (this.cpu && lv !== 'dummy') this.match.fighters[1].easy = true;
     this.cutPups = [null, null];
     Audio.resume();
@@ -5476,6 +5485,16 @@ Game.scenes.fight = {
   },
   update() {
     const m = this.match, hud = this.hud;
+    /* デモ対戦: 何か押したらタイトルへ。終わってもタイトルへ（記録は残さない） */
+    if (this.demoCpu) {
+      if (Input.idle === 0 && Game.sceneT > 10) { Game.demo = false; this.match = null; Game.go('title'); return; }
+      m.step([this.demoCpu[0].next(m, 0), this.demoCpu[1].next(m, 1)]);
+      BGM.setHurry(m.timeMax > 0 && m.timer <= 10 && m.phase === 'FIGHTING');
+      if (m.round !== hud.round) { hud.round = m.round; for (let i = 0; i < 2; i++) { hud.lag[i] = m.fighters[i].hp; hud.last[i] = m.fighters[i].hp; } }
+      for (let i = 0; i < 2; i++) { const f = m.fighters[i]; if (f.hp < hud.last[i]) { hud.wait[i] = CFG.HP_BAR_LAG; f.lastHitFrame = m.frame; } hud.last[i] = f.hp; if (hud.wait[i] > 0) hud.wait[i]--; else if (hud.lag[i] > f.hp) hud.lag[i] = Math.max(f.hp, hud.lag[i] - f.maxHp * 0.012); else hud.lag[i] = f.hp; }
+      if (m.ended) { Game.demo = false; this.match = null; Game.go('title'); }
+      return;
+    }
     if (this.paused) { this.updatePause(); return; }
     if (Game.blurPause) { Game.blurPause = false; this.openPause('blur'); return; }
     const st = (Input.edge[0] | Input.edge[1]) & B_START;
@@ -5551,7 +5570,11 @@ Game.scenes.fight = {
     if (!this.paused) drawText(ctx, 'Esc: ポーズ / 技一覧', 480, 503, { size: 11, align: 'center', color: '#8fa3c8', alpha: 0.75 });
     drawFightBanners(ctx, m, this);
     if (this.tut && !this.paused) this.tutRender(ctx);
-    if (Input.idle > 1800 && !this.paused) {
+    if (this.demoCpu) {
+      const a = 0.55 + 0.45 * Math.sin(Game.t * 3);
+      drawText(ctx, 'DEMO', 480, 120, { size: 30, font: 'en', align: 'center', color: '#ffffff', glow: '#ff3b5c', alpha: a });
+      drawText(ctx, 'ボタンを押すと遊べます', 480, 150, { size: 16, align: 'center', color: '#ffe94d', alpha: a });
+    } else if (Input.idle > 1800 && !this.paused) {
       drawText(ctx, '10秒後にタイトルへ戻ります', 480, 150, { size: 20, align: 'center', color: '#ffb347', alpha: 0.6 + 0.4 * Math.sin(Game.t * 8) });
     }
     if (Debug.on) Debug.hud(ctx, m);
