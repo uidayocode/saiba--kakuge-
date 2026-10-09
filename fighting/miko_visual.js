@@ -356,11 +356,14 @@ function draw(ctx, joints, o) {
   ctx.lineJoin = "round";
   for (const layer of ["main", "front"]) {
     const ps = parts.filter(p => p.layer === layer && !p.eye), front = layer === "front";
+    if (!ps.length) continue;
+    /* 縁取りは全部品を1つの形にまとめて、まとめて描く（部品ごとに描くより大幅に軽い） */
+    const all = new Path2D(); for (const p of ps) all.addPath(p.g);
     ctx.globalCompositeOperation = "lighter";
-    for (const p of ps) { ctx.strokeStyle = rgba(c, front ? 0.10 : 0.16); ctx.lineWidth = front ? 8 : 14; ctx.stroke(p.g); }
-    for (const p of ps) { ctx.strokeStyle = rgba(c, front ? 0.18 : 0.30); ctx.lineWidth = front ? 4 : 7; ctx.stroke(p.g); }
+    ctx.strokeStyle = rgba(c, front ? 0.10 : 0.16); ctx.lineWidth = front ? 8 : 14; ctx.stroke(all);
+    ctx.strokeStyle = rgba(c, front ? 0.18 : 0.30); ctx.lineWidth = front ? 4 : 7; ctx.stroke(all);
     ctx.globalCompositeOperation = "source-over";
-    for (const p of ps) { ctx.strokeStyle = front ? rgba(c, 0.8) : c; ctx.lineWidth = front ? 1.6 : 3; ctx.stroke(p.g); }
+    ctx.strokeStyle = front ? rgba(c, 0.8) : c; ctx.lineWidth = front ? 1.6 : 3; ctx.stroke(all);
     const fill = flash > 0 ? "rgb(" + Math.round(6 + 240 * flash) + "," + Math.round(7 + 240 * flash) + "," + Math.round(13 + 240 * flash) + ")" : "#06070d";
     for (const p of ps) { ctx.fillStyle = fill; ctx.fill(p.g); }
   }

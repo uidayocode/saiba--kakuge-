@@ -22,6 +22,18 @@ const SIL = "#0c0920";             // 背景の建物のシルエット（キャ
 function rgba(h, a) { const n = parseInt(h.slice(1), 16); return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")"; }
 function rand(seed) { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 function layer(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; }
+/* 透明な所を切り落とした画像と、その位置を返す（描く画素を減らして軽くする） */
+function trim(c) {
+  const g = c.getContext("2d"), d = g.getImageData(0, 0, c.width, c.height).data;
+  let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
+  for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3] > 2) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < 0) return { c: layer(1, 1), x: 0, y: 0 };
+  x0 = Math.max(0, x0 - 2); y0 = Math.max(0, y0 - 2); x1 = Math.min(c.width - 1, x1 + 2); y1 = Math.min(c.height - 1, y1 + 2);
+  const o = layer(x1 - x0 + 1, y1 - y0 + 1); o.getContext("2d").drawImage(c, -x0, -y0);
+  return { c: o, x: x0, y: y0 };
+}
+/* trim した画像を、元の画像と同じ位置に描く */
+function blit(ctx, T, x, y) { ctx.drawImage(T.c, x + T.x, y + T.y); }
 
 /* 影絵の建物: 塗り → 外側の光の縁（作るときに一度だけ描くので shadowBlur を使ってよい） */
 function silhouette(g, path, rim, rimA, rimW, fill) {
@@ -211,6 +223,10 @@ function create(W, H, GY, themeId) {
     L.fire = { x: x, y: b - 86 * s, w: 18 * s, h: 18 * s };
   }
 
+  /* 光の玉（灯籠の火の周り）。作るときに1回だけ描く */
+  const GLOW = layer(140, 140);
+  { const gg = GLOW.getContext("2d"), g = gg.createRadialGradient(70, 70, 0, 70, 70, 70); g.addColorStop(0, "rgba(255,180,90,1)"); g.addColorStop(1, "rgba(255,180,90,0)"); gg.fillStyle = g; gg.fillRect(0, 0, 140, 140); }
+
   /* ---- 浮かぶお札のホログラム ---- */
   const OFUDA = [{ x: 70, y: 150, ch: "祓", p: 0.62, ph: 0.0 }, { x: 128, y: 220, ch: "結", p: 0.5, ph: 1.7 },
                  { x: W - 74, y: 160, ch: "奉", p: 0.62, ph: 2.9 }, { x: W - 132, y: 232, ch: "納", p: 0.5, ph: 4.1 }];
@@ -226,6 +242,7 @@ function create(W, H, GY, themeId) {
   for (let i = 0; i < 42; i++) MOTES.push({ x: R() * (W + 200), y0: R() * H, v: 14 + R() * 26, sway: 8 + R() * 22, f: 0.3 + R() * 0.8, ph: R() * 6.28,
                                             petal: R() < 0.65, s: 1.5 + R() * 2.2, p: 0.8 + R() * 0.5 });
 
+  const T_far = trim(far), T_hall = trim(hall), T_tf = trim(toriiFar), T_big = trim(toriiBig), T_lant = trim(lant);
   function px(cam, p) { return -PAD - (cam && cam.x || 0) * p; }
 
   function draw(ctx, cam, t, st) {
@@ -246,16 +263,16 @@ function create(W, H, GY, themeId) {
       ctx.strokeStyle = rgba(NEON_PINK, 0.22); ctx.lineWidth = 1; ctx.setLineDash([4, 10]); ctx.lineDashOffset = -t * 12;
       ctx.beginPath(); ctx.arc(mx, my, MR + 16, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
     }
-    ctx.drawImage(far, px(cam, 0.12), 0);
+    blit(ctx, T_far, px(cam, 0.12), 0);
     for (const b of blinks) { if (Math.sin(t * 2.2 + b.ph) > 0.6) { ctx.fillStyle = "rgba(255,60,90,0.9)"; ctx.fillRect(b.x + px(cam, 0.12) - 1, b.y - 1, 3, 3); } }
     // 地平線の霞（キャラの黒いシルエットが沈まないよう、立ち位置の高さを少し明るく）
     { const g = ctx.createLinearGradient(0, GY - 170, 0, GY); g.addColorStop(0, "rgba(" + TH.hor + ",0)"); g.addColorStop(1, "rgba(" + TH.hor + ",0.16)"); ctx.fillStyle = g; ctx.fillRect(0, GY - 170, W, 170); }
-    ctx.drawImage(hall, px(cam, 0.28), 0);
-    ctx.drawImage(toriiFar, px(cam, 0.42), 0);
+    blit(ctx, T_hall, px(cam, 0.28), 0);
+    blit(ctx, T_tf, px(cam, 0.42), 0);
     // 霞（奥）
     { const off = ((t * 8 + (cam && cam.x || 0) * 0.5) % W + W) % W; ctx.globalAlpha = 0.9; ctx.drawImage(fog, -off, GY - 150); ctx.drawImage(fog, W * 2 - off, GY - 150); ctx.globalAlpha = 1; }
     // 大鳥居（ラウンド開始の点灯: 0→1 で暗い状態から光る）
-    ctx.globalAlpha = (0.35 + 0.65 * intro) * lit; ctx.drawImage(toriiBig, px(cam, 0.6), 0); ctx.globalAlpha = 1;
+    ctx.globalAlpha = (0.35 + 0.65 * intro) * lit; blit(ctx, T_big, px(cam, 0.6), 0); ctx.globalAlpha = 1;
     {  // 笠木を走る光
       const ox = px(cam, 0.6), k = Math.min(1, intro * 1.4), x1 = kasagi.x0 + (kasagi.x1 - kasagi.x0) * k;
       ctx.globalCompositeOperation = "lighter";
@@ -283,13 +300,12 @@ function create(W, H, GY, themeId) {
     ctx.globalAlpha = 1;
     // 灯籠と、その火のゆらぎ
     const lx = px(cam, 0.85) + Math.sin(t * 38) * hit * 4;
-    ctx.drawImage(lant, lx, 0);
+    blit(ctx, T_lant, lx, 0);
     ctx.globalCompositeOperation = "lighter";
     LANTERNS.forEach((L, i) => {
       const f = (0.75 + 0.25 * Math.sin(t * 9 + i * 2.1) * Math.sin(t * 3.7 + i)) * (1 + hit * 1.2) * (1 - 0.5 * ko), x = L.fire.x + lx, y = L.fire.y;
       ctx.fillStyle = "rgba(255,196,107," + (0.55 * f) + ")"; ctx.fillRect(x - L.fire.w / 2 + 3, y - L.fire.h / 2 + 3, L.fire.w - 6, L.fire.h - 6);
-      const g = ctx.createRadialGradient(x, y, 0, x, y, 70); g.addColorStop(0, "rgba(255,180,90," + (0.28 * f) + ")"); g.addColorStop(1, "rgba(255,180,90,0)");
-      ctx.fillStyle = g; ctx.fillRect(x - 70, y - 70, 140, 140);
+      ctx.globalAlpha = Math.max(0, Math.min(1, 0.28 * f)); ctx.drawImage(GLOW, x - 70, y - 70); ctx.globalAlpha = 1;
     });
     ctx.globalCompositeOperation = "source-over";
     // 参道（濡れた石畳）
@@ -313,25 +329,31 @@ function create(W, H, GY, themeId) {
   }
 
   /* 地面に映す: 地面の帯の中で上下反転し、細い横帯ごとに少しずらして水面の揺れを出す */
+  /* 映り込み: 地面のすぐ上 h 行ぶんを小さな画像に1回だけ描き、
+   * それを横帯ごとに上下反転して少しずつずらして貼る（前は帯ごとに全体を描き直していて重かった） */
+  const REF_H = H - GY, refC = layer(W, REF_H), refG = refC.getContext("2d");
   function reflect(ctx, t, drawSrc, alpha) {
-    const h = H - GY, band = 4;
+    const h = REF_H, band = 4;
+    refG.setTransform(1, 0, 0, 1, 0, 0); refG.globalAlpha = 1; refG.globalCompositeOperation = "source-over";
+    refG.clearRect(0, 0, W, h);
+    refG.save(); refG.translate(0, -(GY - h)); drawSrc(refG); refG.restore();
     for (let y = 0; y < h; y += band) {
-      const fade = 1 - y / h;
+      const fade = 1 - y / h, a = alpha * fade * fade;
+      if (a < 0.01) continue;
+      const bh = Math.min(band, h - y), xo = Math.sin(y * 0.35 + t * 2.4) * (0.6 + y * 0.03);
       ctx.save();
-      ctx.beginPath(); ctx.rect(0, GY + y, W, band); ctx.clip();
-      ctx.translate(Math.sin(y * 0.35 + t * 2.4) * (0.6 + y * 0.03), GY * 2);
-      ctx.scale(1, -1);
-      ctx.globalAlpha = alpha * fade * fade;
-      drawSrc(ctx);
+      ctx.globalAlpha = a;
+      ctx.translate(xo, GY + y + bh); ctx.scale(1, -1);
+      ctx.drawImage(refC, 0, h - y - bh, W, bh, 0, 0, W, bh);
       ctx.restore();
     }
   }
   function reflectLayers(ctx, cam, t, intro) {
-    reflect(ctx, t, c => { c.drawImage(toriiBig, px(cam, 0.6), 0); c.drawImage(lant, px(cam, 0.85), 0); }, 0.28 * (0.4 + 0.6 * intro));
+    reflect(ctx, t, c => { blit(c, T_big, px(cam, 0.6), 0); blit(c, T_lant, px(cam, 0.85), 0); }, 0.28 * (0.4 + 0.6 * intro));
     reflect(ctx, t, c => {
       c.globalCompositeOperation = "lighter";
       const lx = px(cam, 0.85);
-      LANTERNS.forEach((L) => { const g = c.createRadialGradient(L.fire.x + lx, L.fire.y, 0, L.fire.x + lx, L.fire.y, 50); g.addColorStop(0, "rgba(255,180,90,0.6)"); g.addColorStop(1, "rgba(255,180,90,0)"); c.fillStyle = g; c.fillRect(L.fire.x + lx - 50, L.fire.y - 50, 100, 100); });
+      c.globalAlpha = 0.6; LANTERNS.forEach((L) => { c.drawImage(GLOW, L.fire.x + lx - 50, L.fire.y - 50, 100, 100); }); c.globalAlpha = 1;
     }, 0.5);
   }
   function drawReflection(ctx, cam, t, drawFn) { reflect(ctx, t, drawFn, 0.32); }

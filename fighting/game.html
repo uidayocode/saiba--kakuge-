@@ -214,7 +214,7 @@ const Store = {
 
 const Settings = {
   data: null,
-  defaults() { return { volume: 7, shake: true, glitch: true, scanline: true, rounds: 2, time: 99, easy: { p1: true, p2: true }, lock: false, stage: 'random' }; },
+  defaults() { return { volume: 7, shake: true, glitch: true, scanline: true, rounds: 2, time: 99, easy: { p1: true, p2: true }, lock: false, stage: 'random', quality: 'auto' }; },
   load() {
     const d = this.defaults();
     const s = Store.get('settings', null);
@@ -229,6 +229,7 @@ const Settings = {
       if (s.easy && typeof s.easy.p2 === 'boolean') d.easy.p2 = s.easy.p2;
       if (typeof s.lock === 'boolean') d.lock = s.lock;
       if (typeof s.stage === 'string') d.stage = s.stage;
+      if (['auto', 'high', 'normal', 'low'].indexOf(s.quality) >= 0) d.quality = s.quality;
     }
     this.data = d;
     return d;
@@ -3438,15 +3439,35 @@ const Display = {
     this.resize();
     window.addEventListener('resize', () => { clearTimeout(this.rt); this.rt = setTimeout(() => this.resize(), 100); });
   },
+  /* 描く解像度の上限（基準 960x540 の何倍まで）。大きい画面でも内部はこれ以下で描き、ブラウザが拡大して表示する */
+  QUALITY: { high: 2.0, normal: 1.25, low: 0.9 },
+  cap: 1.25, autoLevel: 'normal',
+  capFor() {
+    const q = (Settings.data && Settings.data.quality) || 'auto';
+    return this.QUALITY[q === 'auto' ? this.autoLevel : q] || 1.25;
+  },
   resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.dpr = dpr; this.iw = window.innerWidth || 960; this.ih = window.innerHeight || 540;
     const c = this.canvas;
     c.style.width = this.iw + 'px'; c.style.height = this.ih + 'px';
-    c.width = Math.max(1, Math.round(this.iw * dpr)); c.height = Math.max(1, Math.round(this.ih * dpr));
     const s = Math.min(this.iw / CFG.W, this.ih / CFG.H);
-    this.k = s * dpr;
+    this.cap = this.capFor();
+    const r = Math.min(1, this.cap / Math.max(1e-6, s * dpr));   /* 縮める割合 */
+    c.width = Math.max(1, Math.round(this.iw * dpr * r)); c.height = Math.max(1, Math.round(this.ih * dpr * r));
+    this.k = s * dpr * r;
     this.ox = (c.width - CFG.W * this.k) / 2; this.oy = (c.height - CFG.H * this.k) / 2;
+  },
+  /* 自動: 対戦中に 2 秒ごとの平均フレーム時間を見て、遅ければ画質を下げる（上げるのは 1 段まで） */
+  autoT: 0, autoN: 0, autoSum: 0,
+  autoTick(dt) {
+    if (((Settings.data && Settings.data.quality) || 'auto') !== 'auto' || Game.name !== 'fight') { this.autoN = 0; this.autoSum = 0; return; }
+    this.autoSum += dt; this.autoN++;
+    if (this.autoSum < 2) return;
+    const avg = this.autoSum / this.autoN; this.autoSum = 0; this.autoN = 0;
+    const order = ['low', 'normal', 'high'], i = order.indexOf(this.autoLevel);
+    if (avg > 1 / 45 && i > 0) { this.autoLevel = order[i - 1]; this.resize(); }
+    else if (avg < 1 / 75 && i < 1) { this.autoLevel = order[i + 1]; this.resize(); }
   },
   begin() {
     const g = this.ctx;
@@ -4976,6 +4997,7 @@ Game.scenes.settings = {
     const s = Settings.data, onoff = b => (b ? 'ON' : 'OFF');
     return [
       { label: '音量', val: () => s.volume + ' / 10' },
+      { label: '画質（重いときは 軽量）', val: () => ({ auto: '自動（いま ' + ({ high: '高', normal: '標準', low: '軽量' })[Display.autoLevel] + '）', high: '高', normal: '標準', low: '軽量' })[s.quality] },
       { label: '画面揺れ', val: () => onoff(s.shake) },
       { label: 'グリッチ演出', val: () => onoff(s.glitch) },
       { label: '走査線', val: () => onoff(s.scanline) },
@@ -4994,15 +5016,16 @@ Game.scenes.settings = {
   change(dir) {
     const s = Settings.data, i = this.sel;
     if (i === 0) { s.volume = Util.clamp(s.volume + dir, 0, 10); Audio.applyVol(); }
-    else if (i === 1) s.shake = !s.shake;
-    else if (i === 2) s.glitch = !s.glitch;
-    else if (i === 3) s.scanline = !s.scanline;
-    else if (i === 4) s.rounds = ((s.rounds - 1 + dir + 3) % 3) + 1;
-    else if (i === 5) { const o = [60, 99, 0]; s.time = o[(o.indexOf(s.time) + dir + 3) % 3]; }
-    else if (i === 6) s.easy.p1 = !s.easy.p1;
-    else if (i === 7) s.easy.p2 = !s.easy.p2;
-    else if (i === 8) { const o = ['random'].concat(window.StageVisual ? StageVisual.THEMES.map(x => x.id) : []); s.stage = o[(o.indexOf(s.stage) + dir + o.length) % o.length]; }
-    else if (i === 9) s.lock = !s.lock;
+    else if (i === 1) { const o = ['auto', 'high', 'normal', 'low']; s.quality = o[(o.indexOf(s.quality) + dir + 4) % 4]; Display.resize(); }
+    else if (i === 2) s.shake = !s.shake;
+    else if (i === 3) s.glitch = !s.glitch;
+    else if (i === 4) s.scanline = !s.scanline;
+    else if (i === 5) s.rounds = ((s.rounds - 1 + dir + 3) % 3) + 1;
+    else if (i === 6) { const o = [60, 99, 0]; s.time = o[(o.indexOf(s.time) + dir + 3) % 3]; }
+    else if (i === 7) s.easy.p1 = !s.easy.p1;
+    else if (i === 8) s.easy.p2 = !s.easy.p2;
+    else if (i === 9) { const o = ['random'].concat(window.StageVisual ? StageVisual.THEMES.map(x => x.id) : []); s.stage = o[(o.indexOf(s.stage) + dir + o.length) % o.length]; }
+    else if (i === 10) s.lock = !s.lock;
     else return;
     Settings.save();
     Audio.play(i === 0 ? 'hitL' : 'menuMove');
@@ -5013,10 +5036,10 @@ Game.scenes.settings = {
     if (n & B_LEFT) this.change(-1);
     if (n & B_RIGHT) this.change(1);
     if (n & B_L) {
-      if (this.sel === 10) { s0().time = 60; s0().rounds = 1; Settings.save(); Audio.play('menuOk'); Toast.push('60秒・1本勝負にしました'); }
-      else if (this.sel === 11) { Records.reset(); Audio.play('menuOk'); Toast.push('本日の記録を消しました'); }
-      else if (this.sel === 12) { Settings.reset(); Audio.applyVol(); Audio.play('menuOk'); Toast.push('設定を初期化しました'); }
-      else if (this.sel === 13) { Audio.play('menuCancel'); Game.go('title'); }
+      if (this.sel === 11) { s0().time = 60; s0().rounds = 1; Settings.save(); Audio.play('menuOk'); Toast.push('60秒・1本勝負にしました'); }
+      else if (this.sel === 12) { Records.reset(); Audio.play('menuOk'); Toast.push('本日の記録を消しました'); }
+      else if (this.sel === 13) { Settings.reset(); Audio.applyVol(); Display.resize(); Audio.play('menuOk'); Toast.push('設定を初期化しました'); }
+      else if (this.sel === 14) { Audio.play('menuCancel'); Game.go('title'); }
       else this.change(1);
     }
     if (n & B_H) { Audio.play('menuCancel'); Game.go('title'); }
@@ -5027,11 +5050,11 @@ Game.scenes.settings = {
     panel(ctx, 190, 84, 580, 392, '#19f3ff');
     const rows = this.rows();
     for (let i = 0; i < rows.length; i++) {
-      const y = 104 + i * 27.5, on = i === this.sel;
-      if (on) { ctx.fillStyle = 'rgba(25,243,255,0.14)'; fillRR(ctx, 204, y - 13, 552, 26, 4); ctx.fill(); }
+      const y = 100 + i * 25.6, on = i === this.sel;
+      if (on) { ctx.fillStyle = 'rgba(25,243,255,0.14)'; fillRR(ctx, 204, y - 12, 552, 24, 4); ctx.fill(); }
       drawText(ctx, rows[i].label, 228, y, { size: 17, color: on ? '#ffffff' : '#8fa3c8', base: 'middle' });
       const v = rows[i].val();
-      if (v) drawText(ctx, (on && i < 10 ? '◀  ' : '') + v + (on && i < 10 ? '  ▶' : ''), 730, y, { size: 18, align: 'right', color: on ? '#19f3ff' : '#e6f1ff', base: 'middle' });
+      if (v) drawText(ctx, (on && i < 11 ? '◀  ' : '') + v + (on && i < 11 ? '  ▶' : ''), 730, y, { size: 18, align: 'right', color: on ? '#19f3ff' : '#e6f1ff', base: 'middle' });
     }
     drawText(ctx, '左右で変更 / 即時保存 / お客さんモード中は、タイトルで F9 を押すと設定が出ます', 480, 506, { size: 14, align: 'center', color: '#8fa3c8' });
     drawConn(ctx);
@@ -7167,6 +7190,7 @@ const Main = {
     const realDt = Math.min(Math.max((now - this.last) / 1000, 0), CFG.MAX_DT);
     this.last = now;
     Game.t += realDt;
+    try { Display.autoTick(realDt); } catch (e) { /* 無視 */ }
     let steps = 0;
     if (Game.mode === 'game') {
       try { Devices.poll(); } catch (e) { reportErr(e, 'gamepad'); }
@@ -7309,7 +7333,7 @@ function boot() {
   Game.pal2 = [false, true];
   const eff = Settings.eff();
   Game.easy = [eff.easy.p1, eff.easy.p2];
-  window.__denno = { Game: Game, Input: Input, Devices: Devices, FX: FX, Debug: Debug, SelfTest: SelfTest, Gallery: Gallery, Settings: Settings, validateGameData: validateGameData, CFG: CFG, Match: Match, NullFX: NullFX, CpuPolicy: CpuPolicy, BGM: BGM };
+  window.__denno = { Game: Game, Input: Input, Devices: Devices, FX: FX, Debug: Debug, SelfTest: SelfTest, Gallery: Gallery, Settings: Settings, validateGameData: validateGameData, CFG: CFG, Match: Match, NullFX: NullFX, CpuPolicy: CpuPolicy, BGM: BGM, get SV() { return SV; }, Display: Display };
   Main.applyMode();
   Main.startLoops();
 }
