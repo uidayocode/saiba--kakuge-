@@ -93,6 +93,8 @@
 
 - 軽量化（その後）: 画質「低」「最軽量」では背景を 2 フレームに 1 回だけ描き直す（キャラは毎回。カメラが大きく動いたときは描き直す）。F4 で fps・画質・1フレームの処理時間（`Main.busy`）を画面左上に出せる。ヘッドレスでは最近の音まわりの追加による重さの差はほぼ見られなかった（測定のばらつきの範囲）。
 
+- 配布: `python3 tools/build_single.py` で全部を 1 ファイルにまとめた `dist/denno-houno.html`（約1MB）を作る。友達にはこれを送ればダブルクリックで遊べる（オンライン対戦も可）。**ゲームを直したら毎回作り直してコミットする。** `index.html` は GitHub Pages 用の入口（game.html へ飛ぶ）。Pages を有効にすると `https://uidayocode.github.io/saiba--kakuge-/` で遊べる（設定はユーザーが GitHub の Settings → Pages で行う）。
+
 ## 確認のしかた（ヘッドレスの Chromium で回せる）
 
 - `game.html#selftest&matches=64&maxSec=150&seed=N` … 全キャラの組み合わせで CPU 同士の自動対戦。`document.title` が `SELFTEST PASS` なら合格。
