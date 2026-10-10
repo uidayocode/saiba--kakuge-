@@ -2215,7 +2215,7 @@ class Fighter {
           this.y = 0; this.vy = 0; this.vx = 0; this.dx = 0;
           this.setState('DOWN', 'down', 3); this.otgUsed = false;
           this.pup.landT = 0;
-          this.fx.sfx('down', this.x); this.fx.dust(this.x, 0, -this.facing, 8);
+          this.fx.sfx('down', this.x); this.fx.dust(this.x, 0, -this.facing, 8); this.fx.knockdown(this.x, this);
           this.endCombo();
         }
         break;
@@ -3272,10 +3272,10 @@ const FX = {
   t: 0, parts: [], rings: [], texts: [], glitchWords: ['SEGFAULT', 'NULL', '404'],
   shakeAmp: 0, shakeDur: 0, shakeT: 0, flashA: 0, flashColor: '#ffffff', flashDecay: 4,
   punch: 0, punchT: 0, skyFlash: 0, cutin: null, debug: false, purify: [], koBanner: null,
-  pulse: 0, scale: 1, hitFlash: 0,
+  pulse: 0, scale: 1, hitFlash: 0, impacts: [], impactDim: 0,
   reset() {
     this.hitFlash = 0;
-    this.parts.length = 0; this.rings.length = 0; this.texts.length = 0; this.purify.length = 0;
+    this.parts.length = 0; this.rings.length = 0; this.texts.length = 0; this.purify.length = 0; this.impacts.length = 0; this.impactDim = 0;
     this.shakeAmp = 0; this.flashA = 0; this.punch = 0; this.skyFlash = 0; this.cutin = null; this.koBanner = null;
   },
   sfx(name, x) {
@@ -3292,6 +3292,12 @@ const FX = {
   addRing(x, y, r0, r1, life, color, w, kind) {
     this.rings.push({ x: x, y: y, r0: r0, r1: r1, life: life, max: life, color: color, w: w || 3, kind: kind || 'ring', rot: fxRng.range(0, 6.28) });
     if (this.rings.length > 40) this.rings.shift();
+  },
+  /* 衝撃の瞬間: 当たった所に大きな白い星形、背景を一瞬だけ暗くしてキャラを浮かせる */
+  addImpact(x, y, color, size, dim) {
+    this.impacts.push({ x: x, y: y, color: color, size: size, life: 9, max: 9, rot: fxRng.range(0, 6.28) });
+    if (this.impacts.length > 6) this.impacts.shift();
+    this.impactDim = Math.max(this.impactDim, dim);
   },
   addText(text, x, y, color, size, life, vy, font) {
     this.texts.push({ text: text, x: x, y: y, vy: vy || 0.6, life: life || 40, max: life || 40, color: color || '#ffffff', size: size || 14, font: font || 'en' });
@@ -3336,6 +3342,7 @@ const FX = {
     this.addRing(i.x, i.y, 6, 30 + imp * 18, 10 + imp * 2, col, 2 + imp * 0.6);
     this.shake([2, 4, 7, 12][imp - 1], [6, 8, 12, 24][imp - 1]);
     if (imp >= 3) { this.punch = 0.03; this.punchT = 0; this.hitFlash = 1; }
+    if (imp >= 3) this.addImpact(i.x, i.y, col, imp >= 4 ? 1.35 : 1, imp >= 4 ? 0.55 : 0.38);
     if (imp >= 4) this.flash(0.35, '#ffffff', 3);
     Audio.play(['hitL', 'hitM', 'hitH', 'hitX'][imp - 1], { pan: Util.clamp((i.x - 640) / 640, -1, 1) * 0.4 });
     if (Settings.data.glitch) {
@@ -3362,9 +3369,17 @@ const FX = {
     const c = att.pup.glow();
     this.addRing(x, y, 10, 90, 16, '#ffe94d', 4, 'ring');
     this.addText('COUNTER', x, y + 46, '#ffe94d', 22, 40, 0.7, 'en');
+    this.addImpact(x, y, '#ffe94d', 1.15, 0.4);
     this.flash(0.18, '#ffe94d', 5);
     Audio.play('counter', { pan: 0 });
     void c;
+  },
+  /* ダウン: 床に広がる衝撃の輪と土ぼこり */
+  knockdown(x, f) {
+    this.addRing(x, 0, 10, 110, 16, f.pup.glow(), 3, 'floor');
+    this.addRing(x, 0, 6, 60, 10, '#ffffff', 2, 'floor');
+    for (let k = 0; k < 10; k++) { const d = k % 2 ? 1 : -1; this.addPart(x + d * fxRng.range(0, 20), 2, d * fxRng.range(1.5, 4.5), fxRng.range(0.5, 2.2), fxRng.range(16, 28), fxRng.range(2, 3.5), k % 3 ? '#8fa3c8' : f.pup.glow(), 3, -0.06); }
+    this.shake(3.5, 9);
   },
   armor(x, y, def) {
     this.addRing(x, y, 10, 60, 14, '#ffa13c', 4, 'hex');
@@ -3463,6 +3478,8 @@ const FX = {
     if (this.punch > 0) { this.punchT += dt * 60; if (this.punchT >= 6) this.punch = 0; }
     if (this.skyFlash > 0) this.skyFlash = Math.max(0, this.skyFlash - dt * 1.8);
     if (this.hitFlash > 0) this.hitFlash = Math.max(0, this.hitFlash - dt * 7);
+    for (let i = this.impacts.length - 1; i >= 0; i--) { this.impacts[i].life -= dtF; if (this.impacts[i].life <= 0) this.impacts.splice(i, 1); }
+    if (this.impactDim > 0) this.impactDim = Math.max(0, this.impactDim - dt * 8);
     if (this.cutin) { this.cutin.t += dt * 60; }
     if (this.koBanner) this.koBanner.t += dt * 60;
     /* 浄化: 敗者の体を 0/1 の粒に分解して上昇させる */
@@ -3518,12 +3535,24 @@ const FX = {
       const r = R[i], k = 1 - r.life / r.max, rad = r.r0 + (r.r1 - r.r0) * Ease.outCubic(k);
       ctx.globalAlpha = (1 - k) * 0.9; ctx.strokeStyle = r.color; ctx.lineWidth = r.w * (1 - k * 0.6);
       ctx.beginPath();
-      if (r.kind === 'hex') {
+      if (r.kind === 'floor') ctx.ellipse(r.x, -r.y, rad, rad * 0.18, 0, 0, 6.283);
+      else if (r.kind === 'hex') {
         for (let q = 0; q < 6; q++) { const a = r.rot + q * Math.PI / 3; const px = r.x + Math.cos(a) * rad, py = -r.y + Math.sin(a) * rad; if (q === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
         ctx.closePath();
       } else ctx.arc(r.x, -r.y, rad, 0, 6.283);
       ctx.stroke();
     }
+    /* 衝撃の星（8本のとげ。最初の2フレームは白く大きく、すぐ縮んで消える） */
+    for (let i = 0; i < this.impacts.length; i++) {
+      const s = this.impacts[i], k = 1 - s.life / s.max, R = (40 + 60 * Ease.outCubic(Math.min(1, k * 2.5))) * s.size * (1 - k * 0.4), r0 = R * 0.22;
+      ctx.globalAlpha = 1 - k * k;
+      ctx.beginPath();
+      for (let q = 0; q < 16; q++) { const a = s.rot + q * Math.PI / 8, rr = q % 2 ? r0 : R * (q % 4 ? 0.7 : 1); const px = s.x + Math.cos(a) * rr, py = -s.y + Math.sin(a) * rr; if (q) ctx.lineTo(px, py); else ctx.moveTo(px, py); }
+      ctx.closePath();
+      ctx.fillStyle = k < 0.25 ? '#ffffff' : s.color; ctx.fill();
+      ctx.strokeStyle = s.color; ctx.lineWidth = 3; ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
     ctx.restore();
     const T = this.texts;
     for (let i = 0; i < T.length; i++) {
@@ -5527,6 +5556,25 @@ const _V = { x: 640, zoom: 1, y: 0 }, _SHK = { x: 0, y: 0 };
 /* ワールド（背景・キャラ・エフェクト）を描く。HUD は含まない。 */
 /* 計測用: 描画の一部を止める（__denno.PerfOff.stage = true など。ふだんは空） */
 const PerfOff = {};
+/* 集中線: 大祓が当たっている間と KO の直後、画面の外から中心へ向かう細い線 */
+function drawSpeedLines(ctx, m, cam) {
+  let f = null, a = 0;
+  for (let i = 0; i < 2; i++) {
+    const g = m.fighters[i];
+    if (g.state === 'ATTACK' && g.mv && g.mv.m.kind === 'super' && g.mv.n > g.mv.m.startup && (g.mv.hitCount > 0 || g.mv.thrown)) { f = g; a = 1; }
+  }
+  if (!f && m.phase === 'KO' && m.koWinner >= 0) { f = m.fighters[1 - m.koWinner]; a = Util.clamp(1 - m.phaseT / 50, 0, 1); }
+  if (!f || a <= 0) return;
+  const cx = 480 + (f.x - cam.x) * cam.zoom, cy = 460 + cam.y - (f.y + 80) * cam.zoom;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = 'rgba(255,255,255,' + (0.22 * a).toFixed(3) + ')'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let k = 0; k < 44; k++) {
+    const ang = fxRng.range(0, 6.283), r1 = 700, r0 = fxRng.range(230, 360);
+    ctx.moveTo(cx + Math.cos(ang) * r1, cy + Math.sin(ang) * r1); ctx.lineTo(cx + Math.cos(ang) * r0, cy + Math.sin(ang) * r0);
+  }
+  ctx.stroke(); ctx.restore();
+}
 function renderFightWorld(ctx, m, alpha, o) {
   o = o || {};
   m.cam.view(alpha, _V);
@@ -5547,6 +5595,8 @@ function renderFightWorld(ctx, m, alpha, o) {
   ss.reflect = PerfOff.reflect ? null : makeReflection(m, alpha, cam.x);
   if (!PerfOff.stage) drawStage(ctx, cam, t, ss);
   if (m.freeze > 0) { ctx.fillStyle = 'rgba(0,0,10,0.74)'; ctx.fillRect(-20, -20, CFG.W + 40, CFG.H + 40); }
+  else if (FX.impactDim > 0) { ctx.fillStyle = 'rgba(0,0,8,' + FX.impactDim.toFixed(3) + ')'; ctx.fillRect(-20, -20, CFG.W + 40, CFG.H + 40); }
+  drawSpeedLines(ctx, m, cam);
   ctx.save();
   ctx.translate(480, 460 + cam.y); ctx.scale(z, z); ctx.translate(-cam.x, 0);
   for (let i = 0; i < 2; i++) drawShadow(ctx, F[i].pup, alpha);
@@ -5899,8 +5949,10 @@ function drawHUD(ctx, m, hud, t) {
     if (hits >= 2) {
       const bx = i === 0 ? 40 : 920, pop = 1 + Math.max(0, 1 - (D.combo.hits >= 2 ? (m.frame - (D.lastHitFrame || 0)) : 99) / 6) * 0.25;
       ctx.save(); ctx.translate(bx, 160); ctx.scale(pop, pop);
-      drawText(ctx, hits + ' HIT', 0, 0, { size: 44, font: 'en', color: '#ffffff', align: a, glow: col, alpha: fade, stroke: 'rgba(0,0,0,0.5)', strokeW: 4 });
-      drawText(ctx, dmg + ' DAMAGE', 0, 26, { size: 15, font: 'en', color: col, align: a, alpha: fade });
+      /* 5ヒットで金色、8ヒットで赤く大きく */
+      const tier = hits >= 8 ? 2 : (hits >= 5 ? 1 : 0), hc = ['#ffffff', '#ffd24a', '#ff4a6b'][tier], gl = [col, '#ffd24a', '#ff3b5c'][tier];
+      drawText(ctx, hits + ' HIT', 0, 0, { size: [44, 50, 56][tier], font: 'en', color: hc, align: a, glow: gl, alpha: fade, stroke: 'rgba(0,0,0,0.5)', strokeW: 4 });
+      drawText(ctx, (tier === 2 ? 'EXCELLENT!  ' : tier === 1 ? 'GREAT!  ' : '') + dmg + ' DAMAGE', 0, 30, { size: 15, font: 'en', color: tier ? hc : col, align: a, alpha: fade });
       ctx.restore();
     }
   }
