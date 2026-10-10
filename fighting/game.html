@@ -1976,6 +1976,8 @@ class Fighter {
     this.usedInCombo[id] = (this.usedInCombo[id] || 0) + 1;
     this.usedMoves[id] = (this.usedMoves[id] || 0) + 1;
     if (id === 'jS') this.airSUsed = true;
+    /* 後ろ投げ: 投げを出した瞬間（か直前）に ← を押していたか */
+    if (id === 'throw') this.mv.backThrow = this.buf.back() || this.buf.horiz(1) * this.facing < 0 || this.buf.horiz(2) * this.facing < 0;
     this.noAct = false;
     this.stepMove();
   }
@@ -2335,7 +2337,9 @@ class Fighter {
     const t = g.def, tg = g.target;
     g.g++;
     if (tg.state === 'THROWN' && g.g <= t.grabFrames) {
-      const hp = holdAt(t.hold, g.g);
+      const h0 = holdAt(t.hold, g.g);
+      /* 後ろ投げは、持ち上げながら前→頭の上→背中側へ回す（holdAt はデータそのものを返すことがあるので写してから変える） */
+      const hp = g.back ? { x: h0.x * (1 - 2 * Ease.inOutQuad(Util.clamp(g.g / t.grabFrames, 0, 1))), y: h0.y, rot: h0.rot } : h0;
       // 壁際の投げ: 掴まれた側が壁の外に出るなら、投げた側を内側へずらす
       let tx = this.x + this.facing * hp.x;
       const over = tx - Util.clamp(tx, CFG.WALL_MIN, CFG.WALL_MAX);
@@ -2717,7 +2721,8 @@ class Combat {
     t.mv.thrown = true;
     A.mv = null; A.vx = 0;
     A.setState('GRAB', def.attackerClip, 1, true);
-    A.grab = { def: def, target: D, g: 0 };
+    /* 後ろ投げ: 通常投げを ← を押しながら出すと、相手を頭の上を越えて背中側へ投げる（位置を入れ替えて画面端へ追い込める） */
+    A.grab = { def: def, target: D, g: 0, back: !!t.mv.backThrow };
     A.usedInCombo = {};
     A.usedMoves.throwHit = (A.usedMoves.throwHit || 0) + 1;
     D.mv = null; D.vx = 0; D.kb.i = 10; D.thrownBy = A;
@@ -2763,7 +2768,7 @@ class Combat {
     const ko = D.hp <= 0;
     if (ko) D.ko = true;
     D.setState('AIR_HURT', 'hurtAir', 1, true);
-    D.vx = def.launch.vx * A.facing; D.vy = def.launch.vy; if (D.y <= 0) D.y = 0.01;
+    D.vx = def.launch.vx * (A.grab && A.grab.back ? -A.facing : A.facing); D.vy = def.launch.vy; if (D.y <= 0) D.y = 0.01;
     D.juggle = CFG.JUGGLE_DEFAULT; D.kb.i = 10;
     const hs = ko ? CFG.KO_HITSTOP : def.hitstop;
     A.hitstop = Math.max(A.hitstop, hs); A.hitstopTotal = A.hitstop;
@@ -3475,8 +3480,8 @@ const FX = {
     match.fighters.forEach(f => { f.pup.purify = -1; f.pup.alpha = 1; f.pup.purifyRq = false; });
   },
   advantage(x, y, adv, guard) {
-    if (!this.debug) return;
-    this.addText((adv > 0 ? '+' : '') + adv, x, y, adv >= 0 ? '#7cff6b' : '#ff6b8b', 16, 50, 0.4, 'mono');
+    if (!this.debug && !this.showAdv) return;
+    this.addText((guard ? 'ガード ' : 'ヒット ') + (adv > 0 ? '+' : '') + adv, x, y + 20, adv >= 0 ? '#7cff6b' : '#ff6b8b', 16, 60, 0.4, 'jp');
   },
   /* ---- 実時間で進行 ---- */
   update(dt, scale) {
@@ -4874,7 +4879,7 @@ function moveListRows(ch, id) {
     [nm('5H'), '強', '同じ', normalDesc(M['5H'], '強い一撃')],
     [nm('2H'), '↓ + 強', '同じ', normalDesc(M['2H'], '足払い')],
     ['ジャンプ弱 / 強', 'ジャンプ中に 弱 / 強', '同じ', '飛び込みに'],
-    [nm('throw'), '弱+強 同時 / 投げ', '同じ', '密着で。ガードを崩せる'],
+    [nm('throw'), '弱+強 同時 / 投げ', '同じ', '密着で。←を押しながらだと後ろへ投げる'],
     [nm('sp1'), '↓↘→ + 必殺', '必殺', D.sp1],
     [nm('sp2'), '↓↙← + 必殺', '→ + 必殺', D.sp2],
     [nm('sp3'), '→↓↘ + 必殺', '← + 必殺', D.sp3],
@@ -5159,10 +5164,10 @@ Game.scenes.cpuSelect = {
   render(ctx) {
     Backdrop.draw(ctx, 0.6);
     drawText(ctx, 'CPU の強さ', 480, 70, { size: 32, align: 'center', color: '#ffffff', glow: '#19f3ff' });
-    const labels = this.keys.map(k => k === 'dummy' ? '練習台（ガードするだけ）' : CPU_LEVELS[k].label);
+    const labels = this.keys.map(k => k === 'dummy' ? '練習台（コンボ練習）' : CPU_LEVELS[k].label);
     drawMenuList(ctx, labels, this.sel, 480, 170, 56, { size: 24, w: 200 });
     const k = this.keys[this.sel];
-    const desc = k === 'dummy' ? '攻撃してこない。技やコンボの練習に' : CPU_LEVELS[k].desc;
+    const desc = k === 'dummy' ? '攻撃してこない。体力とゲージは回復、有利フレームが出る。動き方はポーズで変えられる' : CPU_LEVELS[k].desc;
     panel(ctx, 200, 392, 560, 46, '#19f3ff', 0.8);
     drawText(ctx, desc, 480, 416, { size: 16, align: 'center', base: 'middle', color: '#e6f1ff' });
     drawText(ctx, '↑↓ で選ぶ   Enter か 弱 で決定   Esc で戻る', 480, 470, { size: 13, align: 'center', color: '#ffe94d' });
@@ -6046,8 +6051,9 @@ Game.scenes.fight = {
     FX.glitchWords = Game.data.texts.glitchWords;
     this.match = new Match({
       rts: [Game.chars[Game.sel[0]], Game.chars[Game.sel[1]]], pal2: Game.pal2.slice(), easy: Game.easy.slice(),
-      rounds: Game.tutorial ? 1 : eff.rounds, time: Game.tutorial ? 0 : eff.time, seed: seed, fx: FX
+      rounds: Game.tutorial ? 1 : eff.rounds, time: (Game.tutorial || this.practice()) ? 0 : eff.time, seed: seed, fx: FX
     });
+    FX.showAdv = this.practice();
     this.tut = Game.tutorial ? { i: 0, t: 0, base: null, done: 0 } : null;
     this.hud = { lag: [this.match.fighters[0].hp, this.match.fighters[1].hp], wait: [0, 0], last: [0, 0], round: 1 };
     this.paused = false; this.pauseSel = 0; this.pauseWhy = ''; this.devs = [Devices.slots[0], Devices.slots[1]];
@@ -6057,6 +6063,20 @@ Game.scenes.fight = {
     if (this.cpu && lv !== 'dummy') this.match.fighters[1].easy = true;
     this.cutPups = [null, null];
     Audio.resume();
+  },
+  /* 練習台（コンボ練習）での対戦か */
+  practice() { return !!this.training && (Game.cpuLevel || 'dummy') === 'dummy' && !Game.tutorial; },
+  DUMMY_MODES: ['stand', 'guard', 'crouch', 'random'],
+  DUMMY_LABEL: { stand: '棒立ち', guard: '立ちガード', crouch: 'しゃがみガード', random: 'ランダムガード' },
+  /* 練習: コンボが終わって落ち着いたら体力を戻す。大祓ゲージは常に満タン */
+  practiceUpdate(m) {
+    if (m.phase !== 'FIGHTING') return;
+    const F = m.fighters, FREE = { IDLE: 1, CROUCH: 1, WALK_F: 1, WALK_B: 1 };
+    F[0].gauge = CFG.GAUGE_MAX;
+    for (let i = 0; i < 2; i++) {
+      const f = F[i];
+      if (f.hp < f.maxHp && FREE[f.state] && f.combo.hits === 0 && F[1 - i].state !== 'ATTACK') { f.hp = f.maxHp; this.hud.lag[i] = f.maxHp; }
+    }
   },
   TUT: [
     { say: '→ を押しっぱなしで、前に歩こう', key: 'right', ok: (A, D, s) => s.walk >= 25 },
@@ -6104,7 +6124,12 @@ Game.scenes.fight = {
   /* ポーズ中もメニュー操作のため update は回す（シミュレーションは進めない） */
   timeScale() { return (this.paused || !this.match) ? 1 : this.match.timeScale(); },
   fxScale() { return (this.paused || !this.match) ? 0 : (this.match.phase === 'KO' ? 0.5 : 1); },
-  pauseItems() { return this.pauseWhy === 'disconnect' ? ['キーボードで継続', 'タイトルへ'] : ((Settings.data.lock && !Game.staff) ? ['再開', '技一覧', 'キャラ選択へ', 'タイトルへ'] : ['再開', '技一覧', '入力設定', 'キャラ選択へ', 'タイトルへ']); },
+  pauseItems() {
+    if (this.pauseWhy === 'disconnect') return ['キーボードで継続', 'タイトルへ'];
+    const a = (Settings.data.lock && !Game.staff) ? ['再開', '技一覧', 'キャラ選択へ', 'タイトルへ'] : ['再開', '技一覧', '入力設定', 'キャラ選択へ', 'タイトルへ'];
+    if (this.practice()) a.splice(1, 0, '練習台の動き: ' + this.DUMMY_LABEL[Game.dummyMode || 'stand']);
+    return a;
+  },
   openPause(why) {
     if (this.paused) return;
     this.paused = true; this.pauseSel = 0; this.pauseWhy = why || 'menu'; this.showMoves = false;
@@ -6126,6 +6151,7 @@ Game.scenes.fight = {
     m.step(masks);
     BGM.setHurry(m.timeMax > 0 && m.timer <= 10 && m.phase === 'FIGHTING');
     if (this.tut) this.tutUpdate(m);
+    if (this.practice()) this.practiceUpdate(m);
     /* HUD の遅延バー */
     if (m.round !== hud.round) { hud.round = m.round; for (let i = 0; i < 2; i++) { hud.lag[i] = m.fighters[i].hp; hud.last[i] = m.fighters[i].hp; } }
     for (let i = 0; i < 2; i++) {
@@ -6166,6 +6192,7 @@ Game.scenes.fight = {
       const it = items[this.pauseSel];
       Audio.play('menuOk');
       if (it === '再開') { this.paused = false; Input.lockFor(10); }
+      else if (it.indexOf('練習台の動き') === 0) { const M = this.DUMMY_MODES; Game.dummyMode = M[(M.indexOf(Game.dummyMode || 'stand') + 1) % M.length]; }
       else if (it === '技一覧') this.showMoves = true;
       else if (it === 'キーボードで継続') {
         Devices.setSlot(this.discIdx, this.discIdx === 0 ? 'kb1' : 'kb2');
@@ -6809,7 +6836,12 @@ class CpuPolicy {
       case '5L': return [B_L, 0]; case '5H': return [B_H, 0];
       case '2L': return [B_DOWN | B_L, B_DOWN]; case '2H': return [B_DOWN | B_H, B_DOWN];
       case 'sp1': return [B_S, 0]; case 'sp2': return [F | B_S, F]; case 'sp3': return [this.backBit(me) | B_S, this.backBit(me)];
-      case 'super': return [B_DOWN | B_S, B_DOWN]; case 'throw': return [B_T, 0];
+      case 'super': return [B_DOWN | B_S, B_DOWN];
+      case 'throw': {
+        /* 自分の背中側が壁に近いときは後ろ投げで入れ替えて、相手を画面端へ */
+        const backWall = me.facing > 0 ? me.x - CFG.WALL_MIN : CFG.WALL_MAX - me.x;
+        return backWall < 220 ? [B_T | this.backBit(me), this.backBit(me)] : [B_T, 0];
+      }
     }
     return [0, 0];
   }
@@ -6975,8 +7007,11 @@ class CpuPolicy {
     if (!m.controlsOn()) { this.q.length = 0; return 0; }
     const rng = m.rng;
     if (this.mode === 'dummy') {
-      /* 立ち/しゃがみ/ガード固定 */
-      const B = this.backBit(me);
+      /* 練習台の動き（ポーズで切り替え）: 棒立ち / 立ちガード / しゃがみガード / ランダムガード */
+      const B = this.backBit(me), mode = Game.dummyMode || 'stand';
+      if (mode === 'stand') return 0;
+      if (mode === 'crouch') return B | B_DOWN;
+      if (mode === 'guard') return B;
       let mask = 0;
       if (opp.state === 'ATTACK' || this.projNear(m, me)) mask = B | ((Math.floor(m.frame / 240) % 2) ? B_DOWN : 0);
       else if (Math.abs(opp.x - me.x) < 120) mask = B;
