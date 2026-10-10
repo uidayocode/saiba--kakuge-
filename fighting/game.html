@@ -3403,7 +3403,7 @@ const Audio = {
     } catch (e) { /* 音で落とさない */ }
   },
   /* 録音に重ねるサブ低音: [開始Hz, 終了Hz, 長さs, 音量] */
-  DRUM_LAYER: { roundStart: [['don', 0.9], ['rin', 0.3, 0.05]], fight: [['don', 0.9], ['crash', 0.4]], ko: [['don', 1.0], ['don', 0.9, 0.25]], timeup: [['don', 0.8]], win: [['rin', 0.3]], gaugeFull: [['ka', 0.4]] },
+  DRUM_LAYER: { challenger: [['crash', 0.5], ['don', 1.0], ['don', 0.9, 0.28]], roundStart: [['don', 0.9], ['rin', 0.3, 0.05]], fight: [['don', 0.9], ['crash', 0.4]], ko: [['don', 1.0], ['don', 0.9, 0.25]], timeup: [['don', 0.8]], win: [['rin', 0.3]], gaugeFull: [['ka', 0.4]] },
   SUB: { hitH: [120, 45, 0.18, 0.22], hitX: [90, 30, 0.45, 0.3], throwImpact: [110, 40, 0.25, 0.25], down: [90, 40, 0.14, 0.15], guardBreak: [120, 50, 0.35, 0.25] },
   SFX: {
     swingL: (a, p) => a.noise({ filterType: 'bandpass', fq0: 2400, fq1: 1200, dur: 0.07, gain: 0.08, pan: p }),
@@ -3449,6 +3449,8 @@ const Audio = {
     menuOk: (a, p) => a.tone({ type: 'triangle', f0: 880, f1: 1320, dur: 0.08, gain: 0.09, pan: p }),
     menuCancel: (a, p) => a.tone({ type: 'triangle', f0: 660, f1: 440, dur: 0.06, gain: 0.09, pan: p }),
     counter: (a, p) => { a.tone({ type: 'square', f0: 1320, f1: 1760, dur: 0.08, gain: 0.07, pan: p }); a.tone({ type: 'sine', f0: 2640, f1: 2640, dur: 0.18, gain: 0.05, delay: 0.05, pan: p }); },
+    /* 乱入の警報 */
+    challenger: (a, p) => { for (let i = 0; i < 4; i++) a.tone({ type: 'square', f0: i % 2 ? 880 : 660, f1: i % 2 ? 880 : 660, dur: 0.12, gain: 0.07, delay: i * 0.14, pan: p }); a.bell(1320, 0.6, 0.06, p, 0.56); },
     error: (a, p) => a.tone({ type: 'square', f0: 140, f1: 140, dur: 0.08, gain: 0.08, pan: p }),
     padOn: (a, p) => a.tone({ type: 'sine', f0: 660, f1: 990, dur: 0.1, gain: 0.1, pan: p }),
     padOff: (a, p) => a.tone({ type: 'sine', f0: 660, f1: 330, dur: 0.15, gain: 0.1, pan: p })
@@ -5445,6 +5447,14 @@ Game.scenes.charSelect = {
     this.cd = -1; this.t = 0;
     Game.tutorial = false;
     this.training = !!Game.training || !!HASH.p.training;
+    /* 乱入: P1 は今のキャラで決定済み。P2 だけ選ぶ */
+    this.challenger = !!(args && args.challenger);
+    if (this.challenger) {
+      this.training = false;
+      const a = this.p[0], b = this.p[1];
+      a.cur = Math.max(0, r.indexOf(Game.sel[0])); a.decided = true; a.picked = Game.sel[0];
+      a.pal = Game.pal2[0] ? 1 : 0; a.easy = Game.easy[0]; b.pal = 1 - a.pal;
+    }
     this.refreshPreview(0); this.refreshPreview(1);
     FX.reset();
   },
@@ -5537,7 +5547,7 @@ Game.scenes.charSelect = {
   },
   render(ctx) {
     Backdrop.draw(ctx, 0.6);
-    drawText(ctx, this.training ? '1人で遊ぶ  キャラクター選択' : 'キャラクター選択', 480, 44, { size: 28, align: 'center', color: '#ffffff', glow: '#19f3ff' });
+    drawText(ctx, this.challenger ? '乱入！  P2 キャラクター選択' : (this.training ? '1人で遊ぶ  キャラクター選択' : 'キャラクター選択'), 480, 44, { size: 28, align: 'center', color: '#ffffff', glow: '#19f3ff' });
     /* 左右の大きな人形を先に描き、カードを手前に重ねる（カードが隠れないように） */
     for (let i = 0; i < 2; i++) {
       const p = this.p[i], col = i === 0 ? UI_COL.p1 : UI_COL.p2, cx = i === 0 ? 105 : 855;
@@ -5676,6 +5686,26 @@ const VS_LINES = {
   'mirror':         ['偽物め', 'それはこちらの台詞']
 };
 function vsLines(a, b) { return VS_LINES[a === b ? 'mirror' : a + '>' + b] || null; }
+/* 勝利セリフ（負かした相手ごと）。無ければキャラ共通の quotes.win */
+const WIN_LINES = {
+  'miko>komainu': '門番さん、今日は通らせてもらいますね',   'miko>oni404': '404、見つけました。祓い済みです',
+  'miko>fox': 'ループ、break しておきました',            'miko>tengu': '鼻のアンテナ、圏外にしておきました',
+  'miko>maneki': 'お会計は、ご利益でお願いします',        'komainu>miko': '巫女殿、修行が足りぬ。また来い',
+  'komainu>oni404': '鬼は外。境内は守った',               'komainu>fox': '尻尾、確かにつかんだぞ',
+  'komainu>tengu': '空からでも、牙は届く',                'komainu>maneki': '客引きは門の外でやれ',
+  'oni404>miko': 'その祓い、リンク切れだ',                'oni404>komainu': '犬っころ、ページごと消えろ',
+  'oni404>fox': 'ちょこまか、終了',                       'oni404>tengu': '風より、鬼のほうが重い',
+  'oni404>maneki': '福など、招かせん',                    'fox>miko': '巫女さん、また遊ぼうね。無限に',
+  'fox>komainu': 'お堅いのも、たまにはいいね',            'fox>oni404': '鬼さん、こっちだったよ',
+  'fox>tengu': '化かし合いは、狐の勝ち',                  'fox>maneki': '小判、いただいていくね',
+  'tengu>miko': '風の音、少しは聞こえたか',               'tengu>komainu': '門番、上も見張っておけ',
+  'tengu>oni404': '重いものほど、よく飛ぶ',               'tengu>fox': '木の葉ごと、吹き飛ばしてやった',
+  'tengu>maneki': '招かれても降りぬと言ったろう',         'maneki>miko': 'ご注文、確かに承りました',
+  'maneki>komainu': '門番さまも、ようこそいらっしゃいませ', 'maneki>oni404': '大きなお客様、お帰りはあちらです',
+  'maneki>fox': 'ツケは、ここで払っていただきました',     'maneki>tengu': 'ほら、降りていらっしゃいました',
+  'mirror': '本物は、ひとりで十分'
+};
+function winLine(w, l) { return WIN_LINES[w === l ? 'mirror' : w + '>' + l] || null; }
 
 Game.scenes.versus = {
   idleLimit: 0,
@@ -6210,10 +6240,13 @@ Game.scenes.fight = {
     const seed = HASH.p.seed != null && HASH.p.seed !== true ? (parseInt(HASH.p.seed, 10) || 1) : ((Date.now() & 0xffff) + 1);
     FX.reset();
     FX.glitchWords = Game.data.texts.glitchWords;
-    this.match = new Match({
+    /* 同じ引数・同じ入力でもう一度シミュレートすると同じ試合になる（KO のリプレイに使う） */
+    this.mArgs = {
       rts: [Game.chars[Game.sel[0]], Game.chars[Game.sel[1]]], pal2: Game.pal2.slice(), easy: Game.easy.slice(),
-      rounds: Game.tutorial ? 1 : eff.rounds, time: (Game.tutorial || this.practice()) ? 0 : eff.time, seed: seed, fx: FX
-    });
+      rounds: Game.tutorial ? 1 : eff.rounds, time: (Game.tutorial || this.practice()) ? 0 : eff.time, seed: seed
+    };
+    this.match = new Match(Object.assign({ fx: FX }, this.mArgs));
+    this.rec = []; this.koStep = -1; this.koRound = 0; this.lastPhase = ''; this.replay = null; this.challenger = null;
     FX.showAdv = this.practice(); this.chal = null;
     this.tut = Game.tutorial ? { i: 0, t: 0, base: null, done: 0 } : null;
     this.hud = { lag: [this.match.fighters[0].hp, this.match.fighters[1].hp], wait: [0, 0], last: [0, 0], round: 1 };
@@ -6221,7 +6254,8 @@ Game.scenes.fight = {
     const lv = Game.cpuLevel || 'dummy';
     this.cpu = this.training ? (lv === 'dummy' ? new CpuPolicy(1, 'dummy') : new CpuPolicy(1, 'cpu', lv)) : null;
     if (Game.tutorial) this.cpu = { next: () => 0 };   /* チュートリアルの相手は何もしない（コンボが当たるように） */
-    if (this.cpu && lv !== 'dummy') this.match.fighters[1].easy = true;
+    this.p2Easy = !!(this.cpu && lv !== 'dummy');
+    if (this.p2Easy) this.match.fighters[1].easy = true;
     this.cutPups = [null, null];
     Audio.resume();
   },
@@ -6324,8 +6358,70 @@ Game.scenes.fight = {
     return this.cutPups[slot];
   },
   /* ポーズ中もメニュー操作のため update は回す（シミュレーションは進めない） */
-  timeScale() { return (this.paused || !this.match) ? 1 : this.match.timeScale(); },
-  fxScale() { return (this.paused || !this.match) ? 0 : (this.match.phase === 'KO' ? 0.5 : 1); },
+  timeScale() { if (this.replay) return this.REPLAY.speed; return (this.paused || !this.match || this.challenger) ? 1 : this.match.timeScale(); },
+  fxScale() { if (this.replay) return this.REPLAY.speed; return (this.paused || !this.match || this.challenger) ? 0 : (this.match.phase === 'KO' ? 0.5 : 1); },
+  /* ---- 乱入: CPU 戦の最中に P2 がスタートを押すと、2人対戦に切り替わる ---- */
+  canChallenge() {
+    const m = this.match;
+    return !!(m && this.cpu && this.p2Easy && !Game.tutorial && !this.practice() && !m.ended && m.phase !== 'KO');
+  },
+  startChallenger() {
+    this.challenger = { t: 0 };
+    Audio.play('challenger');
+    Input.lockFor(30);
+  },
+  challengerUpdate() {
+    const C = this.challenger;
+    if (++C.t < 150) return;
+    /* P1 のキャラはそのまま。P2 だけ選ぶ */
+    Game.training = false; Game.cpuStreak = 0;
+    this.match = null; this.challenger = null;
+    Game.go('charSelect', { challenger: true });
+  },
+  drawChallenger(ctx) {
+    const t = this.challenger.t, col = UI_COL.p2;
+    const k = Ease.outCubic(Util.clamp(t / 14, 0, 1));
+    ctx.save();
+    ctx.fillStyle = 'rgba(3,4,12,' + (0.55 * k) + ')'; ctx.fillRect(0, 0, CFG.W, CFG.H);
+    const h = 120 * k;
+    ctx.fillStyle = 'rgba(8,10,24,0.92)'; ctx.fillRect(0, 270 - h / 2, CFG.W, h);
+    ctx.fillStyle = rgba(col, 0.9); ctx.fillRect(0, 270 - h / 2, CFG.W, 3); ctx.fillRect(0, 270 + h / 2 - 3, CFG.W, 3);
+    ctx.restore();
+    if (t < 8) { ctx.fillStyle = 'rgba(255,255,255,' + (1 - t / 8) * 0.8 + ')'; ctx.fillRect(0, 0, CFG.W, CFG.H); }
+    if (t > 10) {
+      const blink = t < 110 ? (Math.floor(t / 6) % 2 === 0 ? 1 : 0.55) : 1;
+      const x = 480 + Math.max(0, 40 - (t - 10) * 4) * 12;
+      drawText(ctx, 'HERE COMES A NEW CHALLENGER', x, 252, { size: 30, font: 'en', align: 'center', base: 'middle', color: '#ffffff', glow: col, alpha: blink });
+      drawText(ctx, '新たな挑戦者！', 960 - x, 296, { size: 26, align: 'center', base: 'middle', color: col, glow: col });
+    }
+  },
+  /* ---- KO のリプレイ: 最後の一撃を、記録した入力から再シミュレートしてスローで見せる ---- */
+  REPLAY: { pre: 100, post: 70, speed: 0.45 },
+  startReplay() {
+    try {
+      const m2 = new Match(Object.assign({ fx: NullFX }, this.mArgs));
+      if (this.p2Easy) m2.fighters[1].easy = true;
+      const start = Math.max(0, this.koStep - this.REPLAY.pre), end = Math.min(this.rec.length, this.koStep + this.REPLAY.post);
+      for (let i = 0; i < start; i++) m2.step(this.rec[i]);
+      FX.reset(); m2.fx = FX;
+      this.replay = { m: m2, i: start, end: end, t: 0 };
+      return true;
+    } catch (e) { console.error(e); this.replay = null; return false; }
+  },
+  replayUpdate() {
+    const R = this.replay; R.t++;
+    const skip = ((Input.edge[0] | Input.edge[1]) & (B_L | B_H | B_START)) || Input.keyPressed('Enter') || Input.keyPressed('Escape');
+    if ((skip && R.t > 12) || R.i >= R.end) { this.replay = null; FX.reset(); Game.go('result'); return; }
+    R.m.step(this.rec[R.i++]);
+  },
+  drawReplay(ctx) {
+    const R = this.replay, bar = 46;
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, CFG.W, bar); ctx.fillRect(0, CFG.H - bar, CFG.W, bar);
+    if (Math.floor(R.t / 20) % 2 === 0) { ctx.fillStyle = '#ff3b5c'; ctx.beginPath(); ctx.arc(34, bar / 2, 7, 0, Math.PI * 2); ctx.fill(); }
+    drawText(ctx, 'REPLAY', 50, bar / 2, { size: 20, font: 'en', base: 'middle', color: '#ffffff' });
+    drawText(ctx, '決着の一撃', 160, bar / 2, { size: 14, base: 'middle', color: '#8fa3c8' });
+    drawText(ctx, '決定で スキップ', CFG.W - 24, CFG.H - bar / 2, { size: 12, align: 'right', base: 'middle', color: '#8fa3c8' });
+  },
   pauseItems() {
     if (this.pauseWhy === 'disconnect') return ['キーボードで継続', 'タイトルへ'];
     const a = (Settings.data.lock && !Game.staff) ? ['再開', '技一覧', 'キャラ選択へ', 'タイトルへ'] : ['再開', '技一覧', '入力設定', 'キャラ選択へ', 'タイトルへ'];
@@ -6339,10 +6435,14 @@ Game.scenes.fight = {
     Audio.play('menuOk');
   },
   update() {
+    if (this.replay) { this.replayUpdate(); return; }
+    if (this.challenger) { this.challengerUpdate(); return; }
     const m = this.match, hud = this.hud;
     if (this.paused) { this.updatePause(); return; }
     if (Game.blurPause) { Game.blurPause = false; this.openPause('blur'); return; }
-    const st = (Input.edge[0] | Input.edge[1]) & B_START;
+    const join = this.canChallenge();
+    if (join && (Input.edge[1] & B_START)) { this.startChallenger(); return; }
+    const st = (Input.edge[0] | (join ? 0 : Input.edge[1])) & B_START;
     if (st || Input.keyPressed('Enter') || Input.keyPressed('Escape') || Input.keyPressed('NumpadEnter')) { this.openPause('menu'); return; }
     for (let i = 0; i < 2; i++) {
       const d = this.devs[i];
@@ -6350,7 +6450,10 @@ Game.scenes.fight = {
     }
     const masks = [Input.raw[0] & ~B_START, Input.raw[1] & ~B_START];
     if (this.cpu) masks[1] = this.cpu.next(m, 1);
+    this.rec.push([masks[0], masks[1]]);
     m.step(masks);
+    if (m.phase === 'KO' && this.lastPhase !== 'KO') { this.koStep = this.rec.length; this.koRound = m.round; }
+    this.lastPhase = m.phase;
     BGM.setHurry(m.timeMax > 0 && m.timer <= 10 && m.phase === 'FIGHTING');
     if (this.tut) this.tutUpdate(m);
     if (this.practice()) this.practiceUpdate(m);
@@ -6367,7 +6470,10 @@ Game.scenes.fight = {
     for (let i = 0; i < 2; i++) { const d = m.fighters[1 - i]; if (d.combo.hits >= 2) d.lastHitFrame = d.lastHitFrame || 0; }
     if (m.ended) {
       Game.result = Object.assign({}, m.result, { ids: Game.sel.slice(), pal2: Game.pal2.slice() });
+      /* KO で決着したら、最後の一撃をリプレイしてからリザルトへ */
+      const ko = this.koStep >= 0 && this.koRound === m.round && m.result && m.result.winner >= 0;
       this.match = null;
+      if (ko && !Game.tutorial && !this.practice() && this.startReplay()) return;
       Game.go('result');
       return;
     }
@@ -6409,6 +6515,13 @@ Game.scenes.fight = {
   },
   exit() { },
   render(ctx, alpha) {
+    if (this.replay) {
+      renderFightWorld(ctx, this.replay.m, alpha, {});
+      drawFightBanners(ctx, this.replay.m, this);
+      if (FX.flashA > 0) { ctx.fillStyle = rgba(FX.flashColor, Math.min(1, FX.flashA)); ctx.fillRect(0, 0, CFG.W, CFG.H); }
+      this.drawReplay(ctx);
+      return;
+    }
     const m = this.match;
     if (!m) return;
     const dbg = Debug.on ? (c, mm) => Debug.world(c, mm) : null;
@@ -6416,7 +6529,10 @@ Game.scenes.fight = {
     drawCutin(ctx, m, this);
     if (!PerfOff.hud) drawHUD(ctx, m, this.hud, Game.t);
     if (this.practice()) this.drawChallenge(ctx, m);
-    if (!this.paused) drawText(ctx, 'Esc: ポーズ / 技一覧', 480, 503, { size: 11, align: 'center', color: '#8fa3c8', alpha: 0.75 });
+    if (!this.paused && !this.challenger) {
+      drawText(ctx, 'Esc: ポーズ / 技一覧', 480, 503, { size: 11, align: 'center', color: '#8fa3c8', alpha: 0.75 });
+      if (this.canChallenge()) drawText(ctx, 'P2: ' + keyName(1, 'start') + ' で乱入！', 940, 503, { size: 12, align: 'right', color: UI_COL.p2, alpha: 0.6 + 0.3 * Math.sin(Game.t * 3) });
+    }
     drawFightBanners(ctx, m, this);
     if (this.tut && !this.paused) this.tutRender(ctx);
     if (Input.idle > 1800 && !this.paused) {
@@ -6424,6 +6540,7 @@ Game.scenes.fight = {
     }
     if (Debug.on) Debug.hud(ctx, m);
     if (FX.flashA > 0) { ctx.fillStyle = rgba(FX.flashColor, Math.min(1, FX.flashA)); ctx.fillRect(0, 0, CFG.W, CFG.H); }
+    if (this.challenger) this.drawChallenger(ctx);
     if (this.paused) this.renderPause(ctx);
   },
   renderPause(ctx) {
@@ -6468,7 +6585,8 @@ Game.scenes.result = {
       this.pw = makePreview(ids[this.win], r.pal2[this.win]); previewPlay(this.pw, 'win', 4);
       this.pl = makePreview(ids[1 - this.win], r.pal2[1 - this.win]); previewPlay(this.pl, 'lose', 4);
       const q = Game.chars[ids[this.win]].ch.quotes.win;
-      this.quote = q[fxRng.int(q.length)];
+      const wl = winLine(ids[this.win], ids[1 - this.win]);
+      this.quote = wl && fxRng.int(10) < 7 ? wl : q[fxRng.int(q.length)];
       const ranks = Game.data.fortunes.ranks;
       this.rank = ranks[ranks.length - 1];
       for (let i = 0; i < ranks.length; i++) if (r.winPoints >= ranks[i].minPoints) { this.rank = ranks[i]; break; }

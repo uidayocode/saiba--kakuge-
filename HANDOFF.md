@@ -77,6 +77,10 @@
 - CPU 戦の相手は自分と違うキャラをランダムに選ぶ（`Game.pickCpuOpp`）。勝つと結果画面の「次の相手」で別のキャラへ、負けたら同じ相手と再戦。
 - 軽量化（2回目）: 背景は低めの解像度の画像に描いてから拡大して貼る（`Display.BG`）。床の映り込みは建物・灯籠・キャラを1回にまとめ、キャラの映り込みは2回に1回だけ描き直す。手前の霞・周辺減光は作り置き。軽量の画質ではキャラの外側の光を1本に（`MikoVisual.draw` の `lite`）。自動の画質は 52fps を割ると下がり、「最軽量」(`min`) まで下がる。計測用に `__denno.PerfOff`（stage / reflect / fighters / front / hud / fx を止める）。
 
+- 乱入: CPU 戦の最中に P2 がスタートを押すと「HERE COMES A NEW CHALLENGER」→ P1 のキャラは決定済みのまま P2 だけキャラ選択（`charSelect` の `args.challenger`）→ 2人対戦。練習台・チュートリアルでは出ない。
+- KO リプレイ: 対戦シーンは毎フレームの入力（CPU 分も）を `rec` に記録する。KO で決着したら、同じ引数（`mArgs`、seed 込み）で Match を作り直して入力を流し直し、KO の 100 フレーム前から 70 フレーム後までを 0.45 倍速で見せる（決定でスキップ）。Match は決定的（同じ seed・同じ入力で同じ試合になる。dettest で確認）なので、対戦シーンから Match の中身を直接書き換える処理を足すとリプレイがずれる点に注意。
+- 勝利セリフ: `WIN_LINES`（勝者>敗者）を 7 割、残りはキャラ共通の quotes.win。
+
 ## 確認のしかた（ヘッドレスの Chromium で回せる）
 
 - `game.html#selftest&matches=64&maxSec=150&seed=N` … 全キャラの組み合わせで CPU 同士の自動対戦。`document.title` が `SELFTEST PASS` なら合格。
