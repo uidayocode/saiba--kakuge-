@@ -51,6 +51,8 @@ const CFG = {
   /* ヒットストップ: 当たったときは衝撃の強さ（impact 1〜4）で伸ばす、ガードされたときは短く */
   HITSTOP_HIT: [1.0, 1.15, 1.4, 1.55], HITSTOP_BLOCK: 0.75, HITSTOP_COUNTER: 6, HITSTOP_DOWN: 3, HITSTOP_MAX: 24, AIR_TECH_AFTER: 20, AIR_TECH_INV: 12, GAUGE_GAIN: 1.4, GAUGE_COMEBACK: 2.0, PROJ_GUARD_GAUGE: 25,
   DOWN_FRAMES: 28, WAKEUP_FRAMES: 18, WAKEUP_QUICK: 14, QUICK_WINDOW: 6, WAKE_DELAY: 22, ROLL_FRAMES: 20, ROLL_SPEED: 6, WAKE_THROW_INV: 6,
+  /* 攻撃中の手足のやられ判定: 判定の長さの何割まで / 戻りの何フレームまで */
+  LIMB_HURT_REACH: 0.65, LIMB_HURT_RECOVERY: 12,
   JUGGLE_DEFAULT: 3, THROW_HITSTOP: 12, THROW_TECH: 10, THROW_TECH_PUSH: 40, THROW_TECH_STUN: 12,
   GUARD_GRACE: 3, CROSSUP_EPS: 12, BTN_BUFFER: 9, CHORD_WINDOW: 3, DTAP_WINDOW: 16,
   CMD_WINDOW: 20, CMD_WINDOW_SUPER: 36, THROW_INV_AFTER_STUN: 3,
@@ -1854,6 +1856,16 @@ class Fighter {
     if (!list) list = this.isAir() ? b.air : (this.isCrouchy() ? b.crouch : b.stand);
     const out = [];
     for (let i = 0; i < list.length; i++) out.push(this.boxWorld(list[i]));
+    /* 伸ばした手足・武器にもやられ判定を付ける（攻撃が出てから〜戻りの途中）。
+     * 長い技の先端が無敵だと、空振りに差し込めず近づけない。判定の先 3 割強は残すので、先端同士なら技の側が勝つ */
+    if (this.state === 'ATTACK' && this.mv && this.mv.m.kind !== 'super' && this.mv.m.boxes) {
+      const m = this.mv.m, n = this.mv.n, from = m.startup + 1, to = m.startup + m.active + Math.min(m.recovery, CFG.LIMB_HURT_RECOVERY);
+      if (n >= from && n <= to) for (let i = 0; i < m.boxes.length; i++) {
+        const hb = m.boxes[i];
+        if (hb.x < 0) continue;
+        out.push(this.boxWorld({ x: hb.x, y: hb.y + hb.h * 0.15, w: hb.w * CFG.LIMB_HURT_REACH, h: hb.h * 0.7 }));
+      }
+    }
     return out;
   }
   boxWorld(b) {
