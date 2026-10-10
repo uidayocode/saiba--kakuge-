@@ -45,7 +45,9 @@ const CFG = {
   WORLD_W: 1280, GROUND_Y: 460, START_X: [500, 780],
   WALL_MIN: 40, WALL_MAX: 1240, MAX_DIST: 880, CAM_MARGIN: 30,
   CAM_FOLLOW_X: 0.18, CAM_FOLLOW_Z: 0.10,
-  GAUGE_MAX: 1000, SUPER_COST: 1000, JG_WINDOW: 5, JG_STUN_CUT: 5, JG_GAUGE: 40, OTG_SCALE: 0.6, GC_COST: 500, PUSHBLOCK_DIST: 90, COUNTER_DMG: 1.25, COUNTER_STUN: 6, AIR_TECH_AFTER: 20, AIR_TECH_INV: 12, GAUGE_GAIN: 1.4, GAUGE_COMEBACK: 2.0, PROJ_GUARD_GAUGE: 25,
+  GAUGE_MAX: 1000, SUPER_COST: 1000, JG_WINDOW: 5, JG_STUN_CUT: 5, JG_GAUGE: 40, OTG_SCALE: 0.6, GC_COST: 500, PUSHBLOCK_DIST: 90,
+  /* ガードの耐久（スマブラのシールド風）: ガードボタンを押している間とガードするたびに減り、離すと回復。0 でガードブレイク */
+  SHIELD_MAX: 100, SHIELD_DRAIN: 0.28, SHIELD_REGEN: 0.22, SHIELD_HIT: 0.22, SHIELD_HIT_MIN: 4, BREAK_STUN: 80, BREAK_REFILL: 45, COUNTER_DMG: 1.25, COUNTER_STUN: 6, AIR_TECH_AFTER: 20, AIR_TECH_INV: 12, GAUGE_GAIN: 1.4, GAUGE_COMEBACK: 2.0, PROJ_GUARD_GAUGE: 25,
   DOWN_FRAMES: 28, WAKEUP_FRAMES: 18, WAKEUP_QUICK: 14, QUICK_WINDOW: 6, WAKE_DELAY: 22, ROLL_FRAMES: 20, ROLL_SPEED: 6, WAKE_THROW_INV: 6,
   JUGGLE_DEFAULT: 3, THROW_HITSTOP: 12, THROW_TECH: 7, THROW_TECH_PUSH: 40, THROW_TECH_STUN: 12,
   GUARD_GRACE: 3, CROSSUP_EPS: 12, BTN_BUFFER: 6, CHORD_WINDOW: 3, DTAP_WINDOW: 12,
@@ -835,7 +837,7 @@ function validateGameData(D) {
     if (rk.length && rk[rk.length - 1].minPoints !== 0) E('fortunes.ranks', '最後の minPoints は 0 にしてください');
   } else if (D.fortunes != null) E('fortunes.ranks', '配列が必要');
   /* roster */
-  if (!Array.isArray(D.roster) || D.roster.length < 1 || D.roster.length > 4) E('roster', '1〜4件の配列が必要');
+  if (!Array.isArray(D.roster) || D.roster.length < 1 || D.roster.length > 8) E('roster', '1〜8件の配列が必要');
   else {
     D.roster.forEach(id => { if (!D.characters || !D.characters[id]) E('roster', '"' + id + '" が characters にありません'); });
     if (D.roster.length < 4) Wn('roster', D.roster.length + '件のみ（最終は4件）');
@@ -1790,6 +1792,7 @@ class Fighter {
     this.state = 'IDLE'; this.stateT = 0; this.mv = null;
     this.hitstop = 0; this.hitstopTotal = 0; this.hitstopHit = false;
     this.stunLeft = 0; this.blockCrouch = false; this.hitCrouch = false;
+    this.shield = CFG.SHIELD_MAX; this.shieldHeld = false; this.breakPending = false;
     this.kb = { total: 0, dir: 1, i: 10 }; this.kbSrc = null;
     this.combo = { techs: 0, hits: 0, dmg: 0, serial: -1 }; this.comboShow = { hits: 0, dmg: 0, t: 0 };
     this.usedInCombo = {}; this.juggle = 0; this.ko = false;
@@ -1928,7 +1931,7 @@ class Fighter {
       if (r && r !== 'super' && ok(r)) { b.use('S'); return r; }
     }
     /* キャラ固有: 空中で必殺ボタン（jS がある場合。狐の急降下蹴り） */
-    if (air && b.has('S') && this.ch.moves.jS && ok('jS')) { b.use('S'); return 'jS'; }
+    if (air && b.has('S') && this.ch.moves.jS && ok('jS') && !(this.ch.moves.jS.airOnce && this.airSUsed)) { b.use('S'); return 'jS'; }
     const dn = b.down();
     if (b.has('H')) { const id = air ? 'jH' : (dn ? '2H' : '5H'); if (ok(id)) { b.use('H'); return id; } }
     if (b.has('L')) { const id = air ? 'jL' : (dn ? '2L' : '5L'); if (ok(id)) { b.use('L'); return id; } }
@@ -1958,6 +1961,7 @@ class Fighter {
     this.match.front = this.slot;
     this.usedInCombo[id] = (this.usedInCombo[id] || 0) + 1;
     this.usedMoves[id] = (this.usedMoves[id] || 0) + 1;
+    if (id === 'jS') this.airSUsed = true;
     this.noAct = false;
     this.stepMove();
   }
@@ -1982,8 +1986,10 @@ class Fighter {
     /* spawn / teleport */
     if (m.spawn) for (let i = 0; i < m.spawn.length; i++) if (m.spawn[i].at === n) this.match.projs.spawn(this, m.spawn[i]);
     if (m.teleport && m.teleport.at === n) this.doTeleport(m.teleport);
-    /* 空中物理 */
-    if (this.y > 0.001 || this.vy > 0) {
+    /* 空中物理（hover の間は空中で止まる） */
+    const hov = m.hover && n >= m.hover.f0 && n <= m.hover.f1;
+    if (hov) { this.vy = 0; if (mvx === null) this.vx = 0; }
+    else if (this.y > 0.001 || this.vy > 0) {
       this.vy -= st.gravity; this.y += this.vy;
       if (this.y <= 0 && this.vy <= 0) {
         this.y = 0; this.vy = 0; this.vx = 0;
@@ -2055,6 +2061,7 @@ class Fighter {
   takeOff() {
     const st = this.st, h = this.buf.horiz(0);
     this.vy = st.jumpVy; this.vx = h * st.jumpVx; this.y = 0.01;
+    this.airSUsed = false;
     this.airJumpsLeft = st.airJumps; this.noAct = false; this.airLag = null;
     this.setState('AIR', 'jumpUp');
     this.pup.jumpT = 0; this.pup.pre = 0;
@@ -2086,6 +2093,15 @@ class Fighter {
     return true;
   }
 
+  /* ガードブレイク: しばらく無防備（のけぞりと同じ扱い。相手の攻撃は全部当たる） */
+  guardBreak() {
+    this.mv = null; this.vx = 0;
+    this.setState('HITSTUN', 'hurtHigh', 1, true);
+    this.hitCrouch = false; this.stunLeft = CFG.BREAK_STUN;
+    this.kb = { total: 0, dir: 1, i: 10 };
+    this.shield = CFG.BREAK_REFILL;
+    this.fx.guardBreak(this.x, this.y + 90, this);
+  }
   /* ---------- 毎ステップの更新（ヒットストップ中は呼ばれない） ---------- */
   update(opp) {
     this.stateT++;
@@ -2095,6 +2111,14 @@ class Fighter {
     this.dx = 0; this.kbPart = 0;
     const b = this.buf, st = this.st;
     let free = false;
+    if (this.breakPending) { this.breakPending = false; this.guardBreak(); return; }
+    /* ガードの耐久: ボタンで構えている間は減り、構えていない間は回復 */
+    const ready = this.state === 'IDLE' || this.state === 'CROUCH' || this.state === 'BLOCKSTUN' || this.state === 'WALK_F' || this.state === 'WALK_B';
+    this.shieldHeld = ready && (b.cur & B_G) !== 0 && this.y <= 0.001;
+    if (this.shieldHeld) {
+      this.shield -= CFG.SHIELD_DRAIN;
+      if (this.shield <= 0) { this.guardBreak(); return; }
+    } else if (this.state !== 'BLOCKSTUN') this.shield = Math.min(CFG.SHIELD_MAX, this.shield + CFG.SHIELD_REGEN);
 
     switch (this.state) {
       case 'IDLE': case 'WALK_F': case 'WALK_B': case 'CROUCH':
@@ -2381,6 +2405,7 @@ class Projectiles {
         if (d.ay) p.vy += d.ay;
         p.x += p.vx; p.y += p.vy;
         if (d.ground) p.y = 0;
+        else if (p.y < -20) p.alive = false;
       }
       p.life--;
       if (p.hitTimer > 0) p.hitTimer--;
@@ -2414,6 +2439,7 @@ class Combat {
   resolve() {
     const m = this.m, F = m.fighters;
     const strikes = [], throws = [];
+    for (let i = 0; i < 2; i++) this.reflect(F[i]);
     for (let i = 0; i < 2; i++) {
       const A = F[i], D = F[1 - i];
       if (A.state === 'ATTACK' && A.mv) this.collectMove(A, D, strikes, throws);
@@ -2474,6 +2500,26 @@ class Combat {
         strikes.push({ att: O, def: D, hit: p.def.hit, src: 'proj', px: c[0], py: c[1], ax: p.x, serial: p.serial, proj: p, mv: null, n: 0 });
         return;
       }
+    }
+  }
+  /* 弾返し（技の reflect: {f0,f1,box}）。その間に触れた相手の弾を、向きを変えて自分の弾にする */
+  reflect(A) {
+    const mv = A.mv;
+    if (A.state !== 'ATTACK' || !mv || !mv.m.reflect) return;
+    const r = mv.m.reflect;
+    if (mv.n < r.f0 || mv.n > r.f1) return;
+    const rb = A.boxWorld(r.box), L = this.m.projs.list;
+    for (let i = 0; i < L.length; i++) {
+      const p = L[i];
+      if (!p.alive || p.owner === A || !p.def.box) continue;
+      const pb = this.m.projs.boxWorld(p);
+      if (!rectOv(rb, pb)) continue;
+      const c = rectCenter(rb, pb);
+      this.m.fx.clash(c[0], c[1]);
+      if (p.def.follow) { p.alive = false; continue; }
+      p.owner = A; p.dir = A.facing; p.vx = Math.abs(p.vx || p.def.vx) * 1.15 * A.facing;
+      p.hitsLeft = p.def.hits; p.hitTimer = 0; p.life = Math.max(p.life, 50); p.serial = ++this.m.serial;
+      mv.reflected = (mv.reflected || 0) + 1;
     }
   }
   /* ガード判定（2.9） */
@@ -2553,6 +2599,9 @@ class Combat {
       const cg = D.buf.down();
       D.setState('BLOCKSTUN', cg ? 'guardCrouch' : 'guardStand', 1, true); D.pushUsed = false;
       D.blockCrouch = cg; D.stunLeft = just ? Math.max(2, hit.blockstun - CFG.JG_STUN_CUT) : hit.blockstun;
+      /* ガードの耐久を削る（ジャストガードは削られない）。0 になったらガードブレイク */
+      if (!just) D.shield -= Math.max(CFG.SHIELD_HIT_MIN, hit.damage * CFG.SHIELD_HIT);
+      if (D.shield <= 0) D.breakPending = true;
       if (just) { this.addGauge(D, CFG.JG_GAUGE); fx.justGuard(s.px, s.py, D); }
       D.kb = { total: hit.knock.block, dir: dir, i: 0 }; D.kbSrc = isProj ? null : A;
       D.pup.onHit(Math.max(1, hit.impact - 1), dir);
@@ -3314,6 +3363,15 @@ const FX = {
     this.addText('ARMOR', x, y + 36, '#ffa13c', 16, 30, 0.6, 'en');
     this.shake(3, 6);
   },
+  guardBreak(x, y, def) {
+    const col = LookAdapter.edge(def.rt.ch, def.pup.pal);
+    this.addRing(x, y, 10, 120, 20, col, 6, 'hex');
+    this.addRing(x, y, 6, 80, 14, '#ffffff', 3, 'hex');
+    this.addText('ガードブレイク！', x, y + 60, '#ffe94d', 22, 50, 0.8, 'jp');
+    this.flash(0.25, '#ffe94d', 8);
+    this.shake(6, 12);
+    Audio.play('counter', { pan: 0 });
+  },
   justGuard(x, y, def) {
     this.addRing(x, y, 6, 70, 12, '#ffffff', 4, 'hex');
     this.addText('JUST', x, y + 40, '#ffffff', 20, 34, 0.7, 'en');
@@ -3816,7 +3874,8 @@ function drawMikoVisual(ctx, pup, j, o) {
   }
   MikoVisual.draw(ctx, j, {
     x: 0, y: 0, facing: o.face, scale: 1, color: LookAdapter.edge(pup.rt.ch, pup.pal), id: pup.rt.id,
-    flash: o.ghost ? 0 : pup.flash, alpha: ctx.globalAlpha * (o.ghost ? o.ghostA : 1), chains: chains
+    flash: o.ghost ? 0 : pup.flash, alpha: ctx.globalAlpha * (o.ghost ? o.ghostA : 1), chains: chains,
+    clip: pup.cp.name, clipT: pup.cp.t
   });
 }
 
@@ -4703,13 +4762,19 @@ const SPECIAL_DESC = {
   miko:    { sp1: 'お札の飛び道具', sp2: '出始め無敵の対空', sp3: '飛び道具をすり抜けて踏み込む', super: '大祓ゲージ満タンで使える' },
   komainu: { sp1: '前へ突っ込む体当たり', sp2: '出始め無敵の対空', sp3: '弾を飛び越えて上から襲う（立ちガード）', super: '大祓ゲージ満タンで使える' },
   oni404:  { sp1: '地を這う遅い弾（下段）', sp2: 'ガードできない掴み', sp3: '弾を受け流して突っ込む', super: '一撃が重い。大祓ゲージ満タンで' },
-  fox:     { sp1: '分身が前に飛ぶ（2ヒット）', sp2: '相手の後ろへ瞬間移動', sp3: '弾の下を滑る下段', super: '大祓ゲージ満タンで使える' }
+  fox:     { sp1: '分身が前に飛ぶ（2ヒット）', sp2: '相手の後ろへ瞬間移動', sp3: '弾の下を滑る下段', super: '大祓ゲージ満タンで使える' },
+  tengu:   { sp1: '風の刃を飛ばす', sp2: '出始め無敵の対空', sp3: '弾を飛び越えて上から襲う（立ちガード）', super: '進む竜巻（6ヒット）' },
+  maneki:  { sp1: '遠くの相手を引き寄せる。当たったら 強 でつながる', sp2: 'ガードできない掴み', sp3: '弾を受け流して突っ込む', super: 'ガードできない大投げ。密着で' },
+  karakasa:{ sp1: '放物線で落ちる雨粒', sp2: '傘を開いて弾を打ち返す', sp3: '高く跳ねて上から（立ちガード）', super: '回る傘で前へ（9ヒット）' }
 };
 /* キャラだけの仕組み（技一覧の最後の行） */
 const UNIQUE_ROW = {
   komainu: ['走り / 走り強', '→→ のあと → 押しっぱなし / 走りながら 強', '同じ', '走り続けられる。強で阿吽突進'],
   oni404:  ['アーマー', '（立ち強・鬼の体当たり）', '同じ', '振りかぶっている間、1発だけ怯まない'],
-  fox:     ['急降下蹴り', 'ジャンプ中に 必殺', '同じ', '斜め下へ蹴る。立ちガードのみ']
+  fox:     ['急降下蹴り', 'ジャンプ中に 必殺', '同じ', '斜め下へ蹴る。立ちガードのみ'],
+  tengu:   ['空風（空中静止）', 'ジャンプ中に 必殺', '同じ', '空中で止まり、斜め下へ風を撃つ。1回のジャンプに1回'],
+  maneki:  ['手招きコンボ', '手招きが当たったら 強', '同じ', '引き寄せて、そのまま連続技に'],
+  karakasa:['2段ジャンプ / 弾返し', '空中で ↑ / ↓↙← + 必殺', '同じ / → + 必殺', '返した弾は自分の弾になる']
 };
 function normalDesc(m, base) {
   const h = m.hit || {}, t = [];
@@ -4726,7 +4791,7 @@ function moveListRows(ch, id) {
   return [
     ['移動 / ジャンプ', '←→ / ↑', '同じ', '↗↖ で前後にジャンプ'],
     ['ダッシュ / バックステップ', '→→ / ←←', '同じ', 'すばやく近づく・離れる'],
-    ['ガード', '← (相手と反対) / ガードボタン', '同じ', '下段は ↓ を足してしゃがみガード'],
+    ['ガード', '← (相手と反対) / ガードボタン', '同じ', '下段は ↓ を足す。使いすぎるとガードブレイク'],
     [nm('5L'), '弱', '同じ', normalDesc(M['5L'], '速い。弱→強→必殺とつながる')],
     [nm('2L'), '↓ + 弱', '同じ', normalDesc(M['2L'], '速い下段')],
     [nm('5H'), '強', '同じ', normalDesc(M['5H'], '強い一撃')],
@@ -4768,6 +4833,26 @@ const COMBO_ROWS = {
     ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '9ヒット']
   ]
 };
+COMBO_ROWS.tengu = [
+  ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。風で締める'],
+  ['下段から', '↓弱 → 弱 → 強 → 必殺', '4ヒット'],
+  ['打ち上げ', '↓強 → →+必殺', '2ヒット。突風昇りで追い打ち'],
+  ['空中から', 'ジャンプ → 必殺 → 着地 → 弱', '空風で止まって撃ち下ろす'],
+  ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '竜巻が何度も当たる']
+];
+COMBO_ROWS.maneki = [
+  ['基本コンボ', '弱 → 弱 → 強 → ←+必殺', '4ヒット。小判タックルで締める'],
+  ['手招き', '必殺 → 強 → ←+必殺', '引き寄せて3ヒット'],
+  ['下段から', '↓弱 → 弱 → 強 → ←+必殺', '4ヒット'],
+  ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
+  ['大祓', '密着で ↓+必殺 (ゲージ満タン)', 'ガードできない大投げ']
+];
+COMBO_ROWS.karakasa = [
+  ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。雨粒で締める'],
+  ['下段から', '↓弱 → 弱 → 強 → 必殺', '4ヒット'],
+  ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
+  ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '9ヒット']
+];
 const SYSTEM_ROWS = [
   ['守り', 'ガード中に →+強 = ガードキャンセル（ゲージ半分） / 弱+強 = 押し返し'],
   ['ジャスト', '攻撃が当たる直前に ←（またはガードボタン）を入れる = ガード硬直が短く、ゲージが増える'],
@@ -5126,6 +5211,7 @@ Game.scenes.charSelect = {
     this.refreshPreview(0); this.refreshPreview(1);
     FX.reset();
   },
+  perRow() { const n = this.cards.length; return n > 5 ? Math.ceil(n / 2) : n; },
   hoverId(i) {
     const p = this.p[i], c = this.cards[p.cur];
     if (p.decided && p.picked) return p.picked;
@@ -5160,6 +5246,13 @@ Game.scenes.charSelect = {
       if (!p.decided) {
         if (pu & B_LEFT) { if (R > 1) { p.cur = (p.cur + this.cards.length - 1) % this.cards.length; Audio.play('menuMove'); } else this.togglePal(i); }
         if (pu & B_RIGHT) { if (R > 1) { p.cur = (p.cur + 1) % this.cards.length; Audio.play('menuMove'); } else this.togglePal(i); }
+        /* 2段のときは ↑↓ で段を移る */
+        const per = this.perRow();
+        if ((pu & (B_UP | B_DOWN)) && per < this.cards.length) {
+          const nx = p.cur + ((pu & B_DOWN) ? per : -per);
+          if (nx >= 0 && nx < this.cards.length) { p.cur = nx; Audio.play('menuMove'); }
+          else if (nx >= this.cards.length && p.cur < per) { p.cur = this.cards.length - 1; Audio.play('menuMove'); }
+        }
         if (ed & B_T) this.togglePal(i);
         if (ed & B_L) {
           p.decided = true;
@@ -5214,28 +5307,31 @@ Game.scenes.charSelect = {
       if (p.pup) { ctx.save(); ctx.globalAlpha = 0.9; drawPreview(ctx, p.pup, cx, 335, 0.95, 1, i === 0 ? 1 : -1); ctx.restore(); }
       else drawText(ctx, '?', cx, 270, { size: 90, font: 'en', align: 'center', color: '#e6f1ff', glow: col, alpha: 0.6 });
     }
-    const n = this.cards.length, cw = Math.min(120, 520 / n), gap = 8;
+    const n = this.cards.length, per = this.perRow(), rows = Math.ceil(n / per), gap = 8;
+    const cw = Math.min(120, (rows > 1 ? 480 : 520) / per), h = rows > 1 ? 80 : 160, small = rows > 1;
     const fit = (str, max, w) => Math.max(8, Math.min(max, (w - 10) / Math.max(1, str.length)));
     {
-      const tw = n * cw + (n - 1) * gap, bx = 480 - tw / 2 - 18;
+      const tw = per * cw + (per - 1) * gap, bx = 480 - tw / 2 - 18;
       ctx.save(); ctx.fillStyle = 'rgba(4,5,16,0.72)'; fillRR(ctx, bx, 62, tw + 36, 236, 10); ctx.fill();
       ctx.strokeStyle = 'rgba(143,163,200,0.25)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
     }
-    const total = n * cw + (n - 1) * gap, x0 = 480 - total / 2;
+    const total = per * cw + (per - 1) * gap, x0 = 480 - total / 2;
     for (let c = 0; c < n; c++) {
-      const x = x0 + c * (cw + gap), y = 78, h = 160, id = this.cards[c];
+      const x = x0 + (c % per) * (cw + gap), y = small ? 70 + Math.floor(c / per) * (h + gap) : 78, id = this.cards[c];
       panel(ctx, x, y, cw, h, '#8fa3c8', 0.7);
       if (id === '?') {
-        drawText(ctx, '?', x + cw / 2, y + 90, { size: 56, font: 'en', align: 'center', color: '#e6f1ff', glow: '#19f3ff' });
-        drawText(ctx, 'RANDOM', x + cw / 2, y + 140, { size: 12, font: 'en', align: 'center', color: '#8fa3c8' });
+        drawText(ctx, '?', x + cw / 2, y + (small ? 46 : 90), { size: small ? 38 : 56, font: 'en', align: 'center', color: '#e6f1ff', glow: '#19f3ff' });
+        drawText(ctx, 'RANDOM', x + cw / 2, y + (small ? 70 : 140), { size: 12, font: 'en', align: 'center', color: '#8fa3c8' });
       } else {
         const rt = Game.chars[id];
-        drawText(ctx, rt.ch.name, x + cw / 2, y + 100, { size: fit(rt.ch.name, 20, cw), align: 'center', color: '#e6f1ff' });
-        drawText(ctx, rt.ch.nameEn, x + cw / 2, y + 126, { size: Math.min(9, fit(rt.ch.nameEn, 9, cw * 1.7)), font: 'en', align: 'center', color: '#8fa3c8' });
-        drawText(ctx, rt.ch.title, x + cw / 2, y + 144, { size: fit(rt.ch.title, 12, cw), align: 'center', color: '#8fa3c8' });
+        drawText(ctx, rt.ch.name, x + cw / 2, y + (small ? 36 : 100), { size: fit(rt.ch.name, small ? 17 : 20, cw), align: 'center', color: '#e6f1ff' });
+        drawText(ctx, rt.ch.nameEn, x + cw / 2, y + (small ? 54 : 126), { size: Math.min(9, fit(rt.ch.nameEn, 9, cw * 1.7)), font: 'en', align: 'center', color: '#8fa3c8' });
+        drawText(ctx, rt.ch.title, x + cw / 2, y + (small ? 70 : 144), { size: fit(rt.ch.title, small ? 11 : 12, cw), align: 'center', color: '#8fa3c8' });
         /* 代表の色見本 */
-        ctx.fillStyle = LookAdapter.edge(rt.ch, 'palette'); ctx.fillRect(x + cw / 2 - 18, y + 34, 16, 16);
-        ctx.fillStyle = LookAdapter.edge(rt.ch, 'paletteP2'); ctx.fillRect(x + cw / 2 + 2, y + 34, 16, 16);
+        if (!small) {
+          ctx.fillStyle = LookAdapter.edge(rt.ch, 'palette'); ctx.fillRect(x + cw / 2 - 18, y + 34, 16, 16);
+          ctx.fillStyle = LookAdapter.edge(rt.ch, 'paletteP2'); ctx.fillRect(x + cw / 2 + 2, y + 34, 16, 16);
+        }
       }
       /* カーソル */
       for (let i = 0; i < 2; i++) {
@@ -5322,6 +5418,36 @@ const VS_LINES = {
   'fox>miko':       ['巫女さん、遊んでいこう？', '業務中です'],
   'fox>komainu':    ['お堅いねえ、狛犬くん', '黙れ。参る'],
   'fox>oni404':     ['鬼さんこちら、手の鳴るほうへ', '……404'],
+  'miko>tengu':     ['天狗さん、鼻が通信の邪魔です', '我が鼻は高性能アンテナだ'],
+  'miko>maneki':    ['招き猫さん、千客万来ですね', 'いらっしゃいませ。お一人様ですか'],
+  'miko>karakasa':  ['傘の付喪神…お祓い対象です', 'まだ使えるのに！'],
+  'komainu>tengu':  ['空から見下ろすな、天狗', '地を這う犬に用はない'],
+  'komainu>maneki': ['猫か。門の前で何をしている', '客引きでございます'],
+  'komainu>karakasa': ['傘が跳ねるな。止まれ', 'ぴょん！ 止まらないよ'],
+  'oni404>tengu':   ['降りてこい、天狗', '風に乗れぬ者は哀れよ'],
+  'oni404>maneki':  ['猫、そこをどけ', 'お客様、乱暴はお断りです'],
+  'oni404>karakasa':['傘ごとへし折る', '骨は折らないでえ！'],
+  'fox>tengu':      ['天狗さん、化かし合いしよ？', '我を化かすか、狐'],
+  'fox>maneki':     ['猫ちゃん、小判ちょうだい', '本日の小判は売り切れです'],
+  'fox>karakasa':   ['一本足でよく立てるね', '狐さんこそ尻尾重くない？'],
+  'tengu>miko':     ['巫女よ、風の音を聞け', 'ノイズにしか聞こえません'],
+  'tengu>komainu':  ['門番、空はがら空きだぞ', '吽！ 跳んで食らいつく'],
+  'tengu>oni404':   ['重いな、鬼。風で飛ばしてやる', '404…飛ばない'],
+  'tengu>fox':      ['狐、木の葉で化けても無駄だ', 'じゃあ風ごと化かそうか'],
+  'tengu>maneki':   ['猫よ、手招きは届かんぞ', 'お呼びすれば、皆さま来られます'],
+  'tengu>karakasa': ['傘よ、風に勝てると思うな', '風の日こそ、傘の出番！'],
+  'maneki>miko':    ['本日のおすすめは、投げでございます', '注文してません'],
+  'maneki>komainu': ['狛犬さま、福を招きに参りました', '門を通るなら礼をせよ'],
+  'maneki>oni404':  ['大きなお客様、いらっしゃいませ', '…客ではない'],
+  'maneki>fox':     ['狐さま、お代はいただきます', 'ツケにしといて'],
+  'maneki>tengu':   ['天狗さま、こちらへどうぞ', '招かれても降りぬ'],
+  'maneki>karakasa':['傘のお忘れ物ですか', 'わたし本人です！'],
+  'karakasa>miko':  ['巫女さん、雨宿りしてく？', '晴れてます'],
+  'karakasa>komainu': ['わんちゃん、遊ぼ！', '犬ではない。狛犬だ'],
+  'karakasa>oni404':['鬼さん、雨降ってるよ', '404…傘…ない'],
+  'karakasa>fox':   ['狐の嫁入り、傘いる？', 'ありがと、でも勝つのは私'],
+  'karakasa>tengu': ['天狗さんの風、打ち返しちゃう', 'ほう、やってみせよ'],
+  'karakasa>maneki':['招き猫さん、招いて〜', 'お客様、傘はこちらにお預けください'],
   'mirror':         ['偽物め', 'それはこちらの台詞']
 };
 function vsLines(a, b) { return VS_LINES[a === b ? 'mirror' : a + '>' + b] || null; }
@@ -5458,9 +5584,12 @@ function drawStrike(ctx, f) {
 
 /* ガード中: 体の前に六角形の結界を出す（しゃがみガードなら低く）。色はそのプレイヤーの縁 */
 function drawGuardShield(ctx, f) {
-  if (f.state !== 'BLOCKSTUN') return;
-  const col = LookAdapter.edge(f.rt.ch, f.pup.pal), k = Util.clamp(1 - f.stateT / Math.max(8, f.stunLeft + f.stateT), 0, 1);
-  const low = !!f.blockCrouch, cx = f.x + f.facing * 34, cy = -(f.y + (low ? 45 : 85)), R = low ? 44 : 62;
+  if (f.state !== 'BLOCKSTUN' && !f.shieldHeld) return;
+  const col = LookAdapter.edge(f.rt.ch, f.pup.pal);
+  const k = f.state === 'BLOCKSTUN' ? Util.clamp(1 - f.stateT / Math.max(8, f.stunLeft + f.stateT), 0, 1) : 0.8;
+  /* 耐久が減るほど結界が小さくなり、残りわずかで点滅する */
+  const sr = Util.clamp(f.shield / CFG.SHIELD_MAX, 0, 1), blink = sr < 0.3 && (Math.floor(FX.t * 12) & 1) ? 0.45 : 1;
+  const low = f.state === 'BLOCKSTUN' ? !!f.blockCrouch : f.buf.down(), cx = f.x + f.facing * 34, cy = -(f.y + (low ? 45 : 85)), R = (low ? 44 : 62) * (0.5 + 0.5 * sr);
   ctx.save();
   ctx.translate(cx, cy); ctx.scale(0.45, 1);
   ctx.globalCompositeOperation = 'lighter';
@@ -5468,8 +5597,8 @@ function drawGuardShield(ctx, f) {
     ctx.beginPath();
     for (let a = 0; a < 6; a++) { const t = a / 6 * Math.PI * 2 + Math.PI / 6; ctx[a ? 'lineTo' : 'moveTo'](Math.cos(t) * R * (1 - ring * 0.35), Math.sin(t) * R * (1 - ring * 0.35)); }
     ctx.closePath();
-    ctx.strokeStyle = col; ctx.globalAlpha = (ring ? 0.35 : 0.8) * (0.4 + 0.6 * k); ctx.lineWidth = ring ? 2 : 4; ctx.stroke();
-    if (!ring) { ctx.fillStyle = col; ctx.globalAlpha = 0.12 * (0.4 + 0.6 * k); ctx.fill(); }
+    ctx.strokeStyle = sr < 0.3 ? '#ffe94d' : col; ctx.globalAlpha = (ring ? 0.35 : 0.8) * (0.4 + 0.6 * k) * blink; ctx.lineWidth = ring ? 2 : 4; ctx.stroke();
+    if (!ring) { ctx.fillStyle = col; ctx.globalAlpha = 0.12 * (0.4 + 0.6 * k) * blink; ctx.fill(); }
   }
   ctx.restore();
 }
@@ -6439,7 +6568,12 @@ const CPU_CHAR = {
   miko:    { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '2H', 'sp2'], ['2L', '5L', '5H', 'sp1'], ['5H', 'sp2']], punish: ['5H', 'sp2'] },
   komainu: { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2H', 'sp2'], ['2L', '5L', '5H', 'sp1'], ['5H', 'sp2']], punish: ['5H', 'sp1'] },
   oni404:  { aa: '5H', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['5H', 'sp1']], punish: ['5H', 'sp1'], closeGrab: 'sp2' },
-  fox:     { aa: '5H', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['5H', 'sp1']], punish: ['5L', '5H', 'sp1'] }
+  fox:     { aa: '5H', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['5H', 'sp1']], punish: ['5L', '5H', 'sp1'] },
+  tengu:   { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'sp2'], ['5H', 'sp1']], punish: ['5H', 'sp2'] },
+  /* 招き猫: 遠くでは歩いて近づき、中くらいの距離で手招き → 強 → 小判タックル */
+  maneki:  { aa: '5H', zone: null, mid: ['sp1', '5H', 'sp3'], routes: [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['5H', 'sp3']], punish: ['5H', 'sp3'], closeGrab: 'sp2' },
+  /* 唐傘: 飛んでくる弾は開傘返しで打ち返す */
+  karakasa:{ aa: '5H', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'sp1'], ['5H', 'sp1']], punish: ['5L', '5H', 'sp1'], reflect: 'sp2' }
 };
 class CpuPolicy {
   /* mode: 'test' = ランダムに全技を踏む / 'dummy' = 立ち・ガード固定の練習相手 / 'cpu' = 対戦用（level: easy|normal|hard） */
@@ -6586,6 +6720,11 @@ class CpuPolicy {
     if (ip && free && ip.p.serial !== this.projSeen) {
       this.projSeen = ip.p.serial;
       const r = rng.next();
+      /* 弾返しがあるキャラ: 弾が届く直前まで待ってから傘を開く */
+      if (C.reflect && r < L.projPass + L.projGuard * 0.5) {
+        const sp = Math.max(2, Math.abs(ip.p.vx) || 6), wait = Math.max(0, Math.round((ip.d - 90) / sp) - 4);
+        this.q = this.rep(0, wait, []).concat(this.pressFor(C.reflect, me)); return this.q.shift();
+      }
       if (r < L.projPass && dist < 420) { this.q = this.pressFor('sp3', me); return this.q.shift(); }
       if (r < L.projPass + L.projJump && ip.d > 110) { this.q = []; this.rep(B_UP | F, 3, this.q); this.rep(F, 14, this.q); this.q.push(F | B_H); this.rep(F, 24, this.q); return this.q.shift(); }
       if (r < L.projPass + L.projJump + L.projGuard) { this.q = this.rep(Bk, Math.min(40, Math.round(ip.d / 6) + 12), []); return this.q.shift(); }
@@ -6617,7 +6756,7 @@ class CpuPolicy {
     const routes = C.routes.slice(0, L.routeN).map(r => r.slice(0, L.routeLen));
     if (dist > 360) {
       const r = rng.next();
-      if (r < L.fireball) this.q = this.pressFor(C.zone, me);
+      if (r < L.fireball && C.zone) this.q = this.pressFor(C.zone, me);
       else if (r < L.fireball + L.jumpIn) { this.q = []; this.rep(B_UP | F, 3, this.q); this.rep(F, 12, this.q); this.q.push(F | (me.ch.moves.jS && rng.chance(0.6) ? B_S : B_H)); this.rep(F, 30, this.q); }
       else if (r < L.fireball + L.jumpIn + L.dash) {
         this.q = [F, 0, F];
@@ -6627,7 +6766,8 @@ class CpuPolicy {
       else this.q = this.rep(F, 14 + rng.int(14), []);
     } else if (dist > 150) {
       const r = rng.next();
-      if (r < L.fireball * 0.6) this.q = this.pressFor(C.zone, me);
+      if (C.mid && dist < 250 && r < 0.35) { this.startCombo(C.mid, rng); return this.stepCombo(me, rng); }
+      if (r < L.fireball * 0.6 && C.zone) this.q = this.pressFor(C.zone, me);
       else if (r < 0.65) this.q = this.rep(F, 8 + rng.int(10), []);
       else if (r < 0.8) this.q = this.pressFor(rng.chance(0.5) ? '2H' : '5H', me);
       else this.q = this.rep(Bk, 8 + rng.int(8), []);

@@ -342,14 +342,128 @@ function costumeFox(j, ch) {
   arm(J.EF, J.HF, "front", ch.sleeve);
   return parts;
 }
-const COSTUMES = { miko: costumeMiko, komainu: costumeKomainu, oni404: costumeOni, fox: costumeFox };
-function costume(j, ch, id) { return (COSTUMES[id] || costumeMiko)(j, ch); }
+/* 天狗: 大きな翼、長い鼻、頭の兜巾、一本歯の下駄、羽うちわ */
+function costumeTengu(j, ch) {
+  ch = ch || {};
+  const { P, pel, neck, head, sh, tUp, back, fwd, down, parts, put } = bodyFrame(j);
+  const r = 14;
+  /* 翼: 肩の後ろから扇のように開く羽根（先がとがる） */
+  const wb = add(add(sh, back, 8), tUp, -4);
+  const feathers = [[-48, 72, 30], [-16, 90, 32], [16, 80, 30], [44, 58, 24]];
+  for (const [ang, L, w] of feathers) {
+    const a = ang * Math.PI / 180;
+    const d = unit([back[0] * Math.cos(a) + tUp[0] * Math.sin(a), back[1] * Math.cos(a) + tUp[1] * Math.sin(a)]);
+    put(plume(wb, d, L, -0.12, w, 1));
+  }
+  /* 脚と、一本歯の下駄 */
+  const leg = (K, A, T) => {
+    put(capsule(pel, P(K), 8, 7)); put(capsule(P(K), P(A), 6.5, 5)); put(capsule(P(A), P(T), 4.5, 3.5));
+    const ft = lerp(P(A), P(T), 0.5);
+    put(polyPath([add(ft, [-13, 2]), add(ft, [13, 2]), add(ft, [12, 7]), add(ft, [-12, 7])]));
+    put(polyPath([add(ft, [-3, 6]), add(ft, [3, 6]), add(ft, [3, 17]), add(ft, [-3, 17])]));
+  };
+  leg(J.KB, J.AB, J.TB); leg(J.KF, J.AF, J.TF);
+  /* 袴（ひざ上まで） */
+  put(polyPath(hull([add(pel, back, 13), add(pel, fwd, 13), add(lerp(pel, P(J.KF), 0.9), fwd, 12), add(lerp(pel, P(J.KB), 0.9), back, 12),
+                     add(lerp(pel, P(J.KF), 0.9), back, 6), add(lerp(pel, P(J.KB), 0.9), fwd, 6)])));
+  const arm = (E, H, layer) => {
+    put(capsule(sh, P(E), 6.5, 5.5), layer); put(capsule(P(E), P(H), 5.5, 4.5), layer); put(circle(P(H), 4.5), layer);
+    put(polyPath(hull([add(sh, back, 4), add(sh, fwd, 6), P(E), add(P(E), down, 16), add(lerp(sh, P(E), 0.5), down, 12)])), layer);
+  };
+  arm(J.EB, J.HB);
+  /* 胴（山伏の衣）と、胸の丸い房（結袈裟） */
+  put(smooth([add(pel, back, 12), add(lerp(pel, neck, 0.5), back, 12), add(neck, back, 11), add(neck, fwd, 10), add(add(lerp(pel, neck, 0.5), fwd, 13), tUp, 2), add(pel, fwd, 12)]));
+  put(circle(add(lerp(pel, neck, 0.7), fwd, 12), 5.5));
+  /* 頭: ざんばら髪、長い鼻、兜巾 */
+  const hair = [];
+  for (let k = 0; k < 9; k++) { const t = Math.PI * (0.9 + k / 8 * 1.0), rr = k % 2 ? r * 1.1 : r * 1.45; hair.push(add(add(head, back, 4), [Math.cos(t) * rr, Math.sin(t) * rr])); }
+  hair.push(add(head, [0, r * 0.5]));
+  put(polyPath(hair));
+  put(circle(head, r));
+  put(polyPath([add(add(head, fwd, r * 0.6), [0, -r * 0.25]), add(add(head, fwd, r * 2.7), [0, -r * 0.05]), add(add(head, fwd, r * 0.7), [0, r * 0.25])]));
+  put(polyPath([add(head, [-r * 0.45, -r * 0.8]), add(head, [r * 0.35, -r * 0.85]), add(head, [r * 0.2, -r * 1.45]), add(head, [-r * 0.3, -r * 1.4])]));
+  put(polyPath([add(add(head, fwd, r * 0.1), [0, -r * 0.35]), add(add(head, fwd, r * 0.75), [0, -r * 0.5]), add(add(head, fwd, r * 0.6), [0, -r * 0.15])]), "main", true);
+  /* 羽うちわ（手前の手）: 柄と、大きな葉の形 */
+  const hf = P(J.HF), fa = unit(sub(hf, P(J.EF))), fd = unit(add(fa, [0, -0.5]));
+  put(capsule(hf, add(hf, fd, 16), 2, 2), "front");
+  put(plume(add(hf, fd, 12), fd, 40, 0, 32, 3), "front");
+  arm(J.EF, J.HF, "front");
+  return parts;
+}
+/* 招き猫: まんまるの体と頭、三角の耳、上げた手、首の鈴、小判、短い尻尾 */
+function costumeManeki(j, ch) {
+  ch = ch || {};
+  const { P, pel, neck, head, sh, tUp, back, fwd, down, parts, put } = bodyFrame(j);
+  const r = 21;
+  put(plume(add(pel, back, 22), unit(add(back, tUp, 0.8)), 30, -0.9, 14, 4));
+  const leg = (K, A, T) => { put(capsule(pel, P(K), 13, 12)); put(capsule(P(K), P(A), 12, 10)); put(ell(lerp(P(A), P(T), 0.5), 13, 8)); };
+  leg(J.KB, J.AB, J.TB); leg(J.KF, J.AF, J.TF);
+  const arm = (E, H, layer, coin) => {
+    put(capsule(sh, P(E), 11, 10), layer); put(capsule(P(E), P(H), 10, 9.5), layer);
+    const d = unit(sub(P(H), P(E))); put(circle(add(P(H), d, 3), 12), layer);
+    if (coin) put(ell(add(add(P(H), d, 6), down, 10), 9, 14), layer);
+  };
+  arm(J.EB, J.HB, "main", true);
+  /* まんまるの胴 */
+  const mid = lerp(pel, neck, 0.45);
+  put(smooth([add(add(mid, back, 34), tUp, -6), add(add(mid, back, 26), tUp, 24), add(neck, back, 16), add(neck, fwd, 18),
+              add(add(mid, fwd, 30), tUp, 22), add(add(mid, fwd, 36), tUp, -6), add(add(pel, fwd, 24), down, 4), add(add(pel, back, 26), down, 4)]));
+  put(circle(add(add(neck, fwd, 18), down, 2), 7));     /* 鈴 */
+  /* 頭と耳 */
+  put(ell(head, r * 1.12, r * 0.95));
+  put(polyPath([add(head, [-r * 0.95, -r * 0.35]), add(head, [-r * 0.75, -r * 1.35]), add(head, [-r * 0.15, -r * 0.8])]));
+  put(polyPath([add(head, [r * 0.15, -r * 0.8]), add(head, [r * 0.75, -r * 1.35]), add(head, [r * 0.95, -r * 0.35])]));
+  /* にっこり閉じた目（弧） */
+  { const c = add(add(head, fwd, r * 0.45), [0, -r * 0.12]), g = new Path2D(); g.moveTo(c[0] - 5, c[1] + 1); g.quadraticCurveTo(c[0], c[1] - 5, c[0] + 5, c[1] + 1); g.quadraticCurveTo(c[0], c[1] - 2, c[0] - 5, c[1] + 1); g.closePath(); put(g, "main", true); }
+  arm(J.EF, J.HF, "front", false);
+  return parts;
+}
+/* 唐傘: 閉じた傘の胴（一つ目・長い舌）、一本足と下駄。開傘返し・大祓では傘が開く */
+function costumeKarakasa(j, ch, o) {
+  ch = ch || {}; o = o || {};
+  const { P, pel, neck, head, sh, tUp, back, fwd, down, parts, put } = bodyFrame(j);
+  /* 開き具合（0=閉じ 1=全開） */
+  let open = 0;
+  if (o.clip === "sp2") { const t = o.clipT || 0; open = t < 2 ? 0 : t < 6 ? (t - 2) / 4 : t < 24 ? 1 : Math.max(0, 1 - (t - 24) / 8); }
+  else if (o.clip === "super") { const t = o.clipT || 0; open = t < 4 ? 0 : t < 9 ? (t - 4) / 5 : t < 50 ? 1 : Math.max(0, 1 - (t - 50) / 10); }
+  /* 一本足: 両足の真ん中に1本（跳ねて見える）と、一本歯の下駄 */
+  const kn = lerp(P(J.KF), P(J.KB), 0.5), an = lerp(P(J.AF), P(J.AB), 0.5), to = lerp(P(J.TF), P(J.TB), 0.5);
+  put(capsule(pel, kn, 7, 6)); put(capsule(kn, an, 6, 5)); put(capsule(an, to, 4.5, 3.5));
+  const ft = lerp(an, to, 0.5);
+  put(polyPath([add(ft, [-13, 2]), add(ft, [13, 2]), add(ft, [12, 7]), add(ft, [-12, 7])]));
+  put(polyPath([add(ft, [-3, 6]), add(ft, [3, 6]), add(ft, [3, 15]), add(ft, [-3, 15])]));
+  /* 細い腕（傘の骨） */
+  const arm = (E, H, layer) => { put(capsule(sh, P(E), 4, 3.5), layer); put(capsule(P(E), P(H), 3.5, 3), layer); put(circle(P(H), 4), layer); };
+  arm(J.EB, J.HB);
+  /* 傘: 閉じているときは縦長のとがった袋、開くと頭の上で大きな笠になる */
+  const tip = add(head, tUp, 34), bot = add(pel, tUp, 4);
+  const closed = [tip, add(add(head, back, 20), tUp, -2), add(lerp(head, bot, 0.6), back, 26), add(bot, back, 18), add(bot, fwd, 18), add(lerp(head, bot, 0.6), fwd, 26), add(add(head, fwd, 20), tUp, -2)];
+  if (open < 0.05) put(smooth(closed));
+  else {
+    const W = 30 + 46 * open, top = add(head, tUp, 26 + 6 * open), rim = add(head, tUp, -6 + 4 * open);
+    const pts = [top];
+    for (let k = 0; k <= 6; k++) { const u = k / 6, x = -W + 2 * W * u, sag = (k % 2 ? 4 : 0) * open; pts.push(add(add(rim, back, -x), tUp, -sag - Math.abs(x) * 0.12)); }
+    put(smooth(pts));
+    put(polyPath([add(rim, back, 4), add(rim, fwd, 4), add(bot, fwd, 3), add(bot, back, 3)]));   /* 柄 */
+    put(smooth([add(head, back, 16), add(add(head, tUp, -4), fwd, 16), add(lerp(head, bot, 0.6), fwd, 20), add(bot, fwd, 14), add(bot, back, 14), add(lerp(head, bot, 0.6), back, 20)]));
+  }
+  /* 一つ目と長い舌 */
+  put(ell(add(add(head, fwd, 10), [0, -2]), 5, 4), "main", true);
+  /* 舌: ふだんは垂れ下がり、弱攻撃のときは前へ長く伸びる */
+  const m0 = add(lerp(head, bot, 0.3), fwd, 27);
+  const lick = o.clip === "5L" ? Math.max(0, Math.min(1, ((o.clipT || 0) - 2) / 2, (10 - (o.clipT || 0)) / 3)) : 0;
+  put(plume(m0, unit(add(fwd, down, 0.9 * (1 - lick) + 0.05)), 30 + 44 * lick, 0.25 * (1 - lick), 10, 4));
+  arm(J.EF, J.HF, "front");
+  return parts;
+}
+const COSTUMES = { miko: costumeMiko, komainu: costumeKomainu, oni404: costumeOni, fox: costumeFox, tengu: costumeTengu, maneki: costumeManeki, karakasa: costumeKarakasa };
+function costume(j, ch, id, o) { return (COSTUMES[id] || costumeMiko)(j, ch, o); }
 
 function rgba(h, a) { const n = parseInt(h.slice(1), 16); return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")"; }
 
 /* 影絵: 全部品を「光る太い線」で描いてから黒で塗る → 外側の輪郭だけが光る。手前の腕は細い縁で別に重ねる */
 function draw(ctx, joints, o) {
-  const c = o.color || "#ff4a6b", parts = costume(joints, o.chains, o.id || "miko"), flash = o.flash || 0;
+  const c = o.color || "#ff4a6b", parts = costume(joints, o.chains, o.id || "miko", o), flash = o.flash || 0;
   ctx.save();
   ctx.translate(o.x, o.y); ctx.scale((o.facing || 1) * (o.scale || 1), o.scale || 1);
   ctx.globalAlpha = o.alpha == null ? 1 : o.alpha;
