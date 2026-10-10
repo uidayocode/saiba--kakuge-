@@ -81,6 +81,8 @@
 - KO リプレイ: 対戦シーンは毎フレームの入力（CPU 分も）を `rec` に記録する。KO で決着したら、同じ引数（`mArgs`、seed 込み）で Match を作り直して入力を流し直し、KO の 100 フレーム前から 70 フレーム後までを 0.45 倍速で見せる（決定でスキップ）。Match は決定的（同じ seed・同じ入力で同じ試合になる。dettest で確認）なので、対戦シーンから Match の中身を直接書き換える処理を足すとリプレイがずれる点に注意。
 - 勝利セリフ: `WIN_LINES`（勝者>敗者）を 7 割、残りはキャラ共通の quotes.win。
 
+- ジャストガード: ガードボタンを離した直後（`JG_WINDOW`=5F 以内）に当たるとジャスト（上下段どちらも防ぐ・削りなし・硬直短縮・ゲージ増）。押しっぱなしは通常ガード。← ガードの人は従来どおり直前に ← を入れ始めたとき（`InputBuffer.justRelease` / `gRelease`）。
+
 ## 確認のしかた（ヘッドレスの Chromium で回せる）
 
 - `game.html#selftest&matches=64&maxSec=150&seed=N` … 全キャラの組み合わせで CPU 同士の自動対戦。`document.title` が `SELFTEST PASS` なら合格。
