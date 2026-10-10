@@ -79,10 +79,10 @@ const PALETTE_KEYS = ['skin', 'hair', 'primary', 'secondary', 'accent', 'glow', 
 const COLOR_KEYS = ['head', 'neck', 'torso', 'uArm', 'fArm', 'hand', 'thigh', 'shin', 'foot'];
 
 /* 論理ボタンのビット */
-const B_UP = 1, B_DOWN = 2, B_LEFT = 4, B_RIGHT = 8, B_L = 16, B_H = 32, B_S = 64, B_T = 128, B_START = 256;
-const ACTIONS = ['up', 'down', 'left', 'right', 'L', 'H', 'S', 'T', 'start'];
-const ACT_BIT = { up: B_UP, down: B_DOWN, left: B_LEFT, right: B_RIGHT, L: B_L, H: B_H, S: B_S, T: B_T, start: B_START };
-const ACT_LABEL = { up: '↑ 上', down: '↓ 下', left: '← 左', right: '→ 右', L: '弱', H: '強', S: '必殺', T: '投げ', start: 'スタート' };
+const B_UP = 1, B_DOWN = 2, B_LEFT = 4, B_RIGHT = 8, B_L = 16, B_H = 32, B_S = 64, B_T = 128, B_START = 256, B_G = 512;
+const ACTIONS = ['up', 'down', 'left', 'right', 'L', 'H', 'S', 'T', 'G', 'start'];
+const ACT_BIT = { up: B_UP, down: B_DOWN, left: B_LEFT, right: B_RIGHT, L: B_L, H: B_H, S: B_S, T: B_T, G: B_G, start: B_START };
+const ACT_LABEL = { up: '↑ 上', down: '↓ 下', left: '← 左', right: '→ 右', L: '弱', H: '強', S: '必殺', T: '投げ', G: 'ガード', start: 'スタート' };
 
 const Util = {
   clamp: (v, a, b) => (v < a ? a : (v > b ? b : v)),
@@ -1162,9 +1162,9 @@ const Toast = {
 };
 
 const KB_DEFAULT = {
-  kb1: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', L: 'KeyF', H: 'KeyG', S: 'KeyH', T: 'KeyR', start: 'KeyQ' },
-  kb2: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', L: 'KeyK', H: 'KeyL', S: 'Semicolon', T: 'KeyO', start: 'KeyP' },
-  kb3: { up: 'Numpad8', down: 'Numpad5', left: 'Numpad4', right: 'Numpad6', L: 'Numpad1', H: 'Numpad2', S: 'Numpad3', T: 'Numpad0', start: 'NumpadEnter' }
+  kb1: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', L: 'KeyF', H: 'KeyG', S: 'KeyH', T: 'KeyR', G: null, start: 'KeyQ' },
+  kb2: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', L: 'KeyK', H: 'KeyL', S: 'Semicolon', T: 'KeyO', G: null, start: 'KeyP' },
+  kb3: { up: 'Numpad8', down: 'Numpad5', left: 'Numpad4', right: 'Numpad6', L: 'Numpad1', H: 'Numpad2', S: 'Numpad3', T: 'Numpad0', G: null, start: 'NumpadEnter' }
 };
 function codeLabel(code) {
   if (!code) return '未割当';
@@ -1243,13 +1243,14 @@ function keyHalf(key) { const m = /:(L|R)$/.exec(key || ''); return m ? m[1] : '
 function defaultPadProfile(gp, half) {
   const id = (gp && gp.id) || '';
   const std = !!gp && gp.mapping === 'standard';
-  const prof = { binds: { up: [], down: [], left: [], right: [], L: [], H: [], S: [], T: [], start: [] }, stick: { enabled: true, rot: 0, deadzone: 0.45, axX: 0, axY: 1 } };
+  const prof = { binds: { up: [], down: [], left: [], right: [], L: [], H: [], S: [], T: [], G: [], start: [] }, stick: { enabled: true, rot: 0, deadzone: 0.45, axX: 0, axY: 1 } };
   const btn = i => ({ t: 'b', i: i });
   const face = () => { prof.binds.L = [btn(0)]; prof.binds.H = [btn(1)]; prof.binds.S = [btn(2)]; prof.binds.T = [btn(3)]; };
   const four = (l, h, s, t) => { prof.binds.L = [btn(l)]; prof.binds.H = [btn(h)]; prof.binds.S = [btn(s)]; prof.binds.T = [btn(t)]; };
   /* 横持ち: 自分から見て 右=弱 / 手前=強 / 奥=必殺 / 左=投げ（標準配置の番号は縦持ちの位置） */
-  if (half === 'L') { prof.stick.rot = 270; four(13, 14, 15, 12); prof.binds.start = [btn(8)]; }
-  else if (half === 'R') { prof.stick.rot = 90; prof.stick.axX = 2; prof.stick.axY = 3; four(0, 2, 1, 3); prof.binds.start = [btn(9)]; }
+  /* SL=投げ（追加） / SR=ガード。Chrome の番号は 左の SL/SR = 18/19、右の SL/SR = 20/21 */
+  if (half === 'L') { prof.stick.rot = 270; four(13, 14, 15, 12); prof.binds.T.push(btn(18)); prof.binds.G = [btn(19)]; prof.binds.start = [btn(8)]; }
+  else if (half === 'R') { prof.stick.rot = 90; prof.stick.axX = 2; prof.stick.axY = 3; four(0, 2, 1, 3); prof.binds.T.push(btn(20)); prof.binds.G = [btn(21)]; prof.binds.start = [btn(9)]; }
   else if (/Joy-Con\s*\(L\)/i.test(id)) { prof.stick.rot = 270; face(); prof.binds.start = [btn(8)]; }
   else if (/Joy-Con\s*\(R\)/i.test(id)) { prof.stick.rot = 90; face(); prof.binds.start = [btn(9)]; }
   else if (std) {
@@ -1274,6 +1275,8 @@ function sanitizeProfile(p, gp, half) {
       else if (b.t === 'h' && Util.isInt(b.i) && b.i >= 0 && Util.isNum(b.v)) out.binds[a].push({ t: 'h', i: b.i, v: b.v, tol: Util.isNum(b.tol) ? b.tol : 0.2 });
     });
   });
+  /* ガードボタン追加前に保存された設定: SL の投げも足す */
+  if (!Array.isArray(p.binds.G)) d.binds.T.forEach(b => { if (!out.binds.T.some(o => sameBind(o, b))) out.binds.T.push(b); });
   const s = p.stick;
   if (s && typeof s === 'object') {
     if (typeof s.enabled === 'boolean') out.stick.enabled = s.enabled;
@@ -1625,7 +1628,7 @@ const Input = {
 const BTN_BITS = [['L', B_L], ['H', B_H], ['S', B_S], ['T', B_T]];
 class InputBuf {
   constructor() {
-    this.abs = new Uint16Array(64); this.num = new Uint8Array(64); this.fac = new Int8Array(64);
+    this.abs = new Uint16Array(64); this.gd = new Uint8Array(64); this.num = new Uint8Array(64); this.fac = new Int8Array(64);
     this.frame = -1;
     this.age = { L: -1, H: -1, S: -1, T: -1 };
     this.pf = { L: -999, H: -999, S: -999, T: -999 };
@@ -1647,7 +1650,9 @@ class InputBuf {
     else if (v > 0) n = fw > 0 ? 9 : (fw < 0 ? 7 : 8);
     else n = fw > 0 ? 6 : (fw < 0 ? 4 : 5);
     this.abs[i] = mask; this.num[i] = n; this.fac[i] = facing;
+    this.gd[i] = (mask & B_G) ? 1 : 0;
     const edge = mask & ~this.prevMask;
+    if (edge & B_G) this.backEdge = this.frame;
     for (let k = 0; k < 4; k++) {
       const nm = BTN_BITS[k][0], bit = BTN_BITS[k][1];
       if (edge & bit) { this.age[nm] = 0; this.pf[nm] = this.frame; }
@@ -1671,6 +1676,12 @@ class InputBuf {
     if (fr < 0 || this.frame - fr >= 64) return 0;
     const m = this.abs[fr & 63];
     return ((m & B_RIGHT) ? 1 : 0) - ((m & B_LEFT) ? 1 : 0);
+  }
+  /* ガードボタン（k フレーム前） */
+  guardBtn(k) {
+    const fr = this.frame - (k || 0);
+    if (fr < 0 || this.frame - fr >= 64) return false;
+    return this.gd[fr & 63] === 1;
   }
   fwd() { return this.horiz(0) * this.facing > 0; }
   back() { return this.horiz(0) * this.facing < 0; }
@@ -2223,7 +2234,7 @@ class Fighter {
       if (this.state !== 'CROUCH') this.setState('CROUCH', 'crouch');
       this.vx = 0; return;
     }
-    const h = b.horiz(0) * this.facing;
+    const h = (b.cur & B_G) ? 0 : b.horiz(0) * this.facing;
     if (h > 0) {
       if (this.state !== 'WALK_F') this.setState('WALK_F', 'walkF');
       this.vx = st.walkF * this.facing;
@@ -2472,13 +2483,14 @@ class Combat {
     const away = D.x > s.ax ? 1 : (D.x < s.ax ? -1 : -D.facing);
     let anyDir = false;
     if (s.src === 'move' && s.att.y > 0.001 && Math.abs(D.x - s.ax) <= CFG.CROSSUP_EPS) anyDir = true;
-    let held = false;
+    let held = false, btn = false;
     for (let k = 0; k < CFG.GUARD_GRACE; k++) {
       const h = b.horiz(k);
+      if (b.guardBtn(k)) { held = true; btn = true; break; }
       if (anyDir ? h !== 0 : h === away) { held = true; break; }
     }
     if (!held) return false;
-    if (!anyDir && b.horiz(0) === -away) return false;
+    if (!btn && !anyDir && b.horiz(0) === -away) return false;
     const crouch = b.down();
     if (lvl === 'low' && !crouch) return false;
     if (lvl === 'high' && crouch) return false;
@@ -4714,7 +4726,7 @@ function moveListRows(ch, id) {
   return [
     ['移動 / ジャンプ', '←→ / ↑', '同じ', '↗↖ で前後にジャンプ'],
     ['ダッシュ / バックステップ', '→→ / ←←', '同じ', 'すばやく近づく・離れる'],
-    ['ガード', '← (相手と反対)', '同じ', '下段は ↙ でしゃがんでガード'],
+    ['ガード', '← (相手と反対) / ガードボタン', '同じ', '下段は ↓ を足してしゃがみガード'],
     [nm('5L'), '弱', '同じ', normalDesc(M['5L'], '速い。弱→強→必殺とつながる')],
     [nm('2L'), '↓ + 弱', '同じ', normalDesc(M['2L'], '速い下段')],
     [nm('5H'), '強', '同じ', normalDesc(M['5H'], '強い一撃')],
@@ -4758,7 +4770,7 @@ const COMBO_ROWS = {
 };
 const SYSTEM_ROWS = [
   ['守り', 'ガード中に →+強 = ガードキャンセル（ゲージ半分） / 弱+強 = 押し返し'],
-  ['ジャスト', '攻撃が当たる直前に ← を入れる = ガード硬直が短く、ゲージが増える'],
+  ['ジャスト', '攻撃が当たる直前に ←（またはガードボタン）を入れる = ガード硬直が短く、ゲージが増える'],
   ['追い打ち', '倒れた相手に ↓弱 が1回だけ当たる'],
   ['受け身', '浮かされて落ちてくるときにボタン = 空中で立て直す'],
   ['カウンター', '相手の技の出始めに当てると、威力とのけぞりが増える'],
@@ -6284,8 +6296,8 @@ Game.scenes.inputConfig = {
     panel(ctx, 16, 48, 456, 462, '#19f3ff', 0.82);
     const slotChoices = Devices.slotChoices();
     for (let i = 0; i < rows.length; i++) {
-      const r = rows[i], y = 70 + i * 23, on = i === this.sel;
-      if (on) { ctx.fillStyle = 'rgba(25,243,255,0.16)'; fillRR(ctx, 24, y - 11, 440, 22, 4); ctx.fill(); }
+      const r = rows[i], y = 70 + i * 22, on = i === this.sel;
+      if (on) { ctx.fillStyle = 'rgba(25,243,255,0.16)'; fillRR(ctx, 24, y - 10, 440, 21, 4); ctx.fill(); }
       let label = '', val = '', col = on ? '#ffffff' : '#a9b8d8';
       if (r.t === 'slot') { label = 'P' + (r.i + 1) + ' デバイス'; val = Devices.slotLabel(r.i); col = on ? '#ffffff' : (r.i === 0 ? UI_COL.p1 : UI_COL.p2); }
       else if (r.t === 'target') { label = '設定対象'; val = 'P' + (this.target + 1) + (dev ? '  ' + dev.name : ''); }
@@ -6299,7 +6311,7 @@ Game.scenes.inputConfig = {
       else label = '戻る';
       drawText(ctx, label, 34, y, { size: 14, color: col, base: 'middle' });
       if (val) drawText(ctx, val, 456, y, { size: 13, color: on ? '#19f3ff' : '#e6f1ff', align: 'right', base: 'middle' });
-      if (i === 2 || i === 11) { ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fillRect(28, y + 12, 432, 1); }
+      if (i === 2 || i === 2 + ACTIONS.length) { ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fillRect(28, y + 11, 432, 1); }
     }
     this.renderMonitor(ctx, dev);
     if (this.cap || this.cal) this.renderOverlay(ctx);
@@ -6323,8 +6335,8 @@ Game.scenes.inputConfig = {
       drawText(ctx, 'P' + (p + 1), x0 + 12, y, { size: 14, font: 'en', color: col, base: 'middle' });
       const cx = x0 + 70, lit = (b, bx, by) => { ctx.fillStyle = (m & b) ? col : 'rgba(255,255,255,0.12)'; ctx.fillRect(bx, by, 12, 12); };
       lit(B_UP, cx + 14, y - 15); lit(B_DOWN, cx + 14, y + 3); lit(B_LEFT, cx, y - 6); lit(B_RIGHT, cx + 28, y - 6);
-      [['弱', B_L], ['強', B_H], ['必殺', B_S], ['投げ', B_T], ['Start', B_START]].forEach((bb, i) => {
-        const bx = x0 + 130 + i * 64;
+      [['弱', B_L], ['強', B_H], ['必殺', B_S], ['投げ', B_T], ['ガード', B_G], ['Start', B_START]].forEach((bb, i) => {
+        const bx = x0 + 126 + i * 56;
         ctx.beginPath(); ctx.arc(bx, y, 8, 0, 6.2832);
         ctx.fillStyle = (m & bb[1]) ? col : 'rgba(255,255,255,0.1)'; ctx.fill();
         drawText(ctx, bb[0], bx + 12, y, { size: 12, color: '#b9c7e6', base: 'middle' });
@@ -6354,9 +6366,9 @@ Game.scenes.inputConfig = {
       ctx.fillStyle = dev.stickOn ? '#7cff6b' : '#19f3ff';
       ctx.beginPath(); ctx.arc(cx + Util.clamp(dev.rotX, -1, 1) * R, cy + Util.clamp(dev.rotY, -1, 1) * R, 4, 0, 6.2832); ctx.fill();
       drawText(ctx, 'ボタン', x0 + 12, 398, { size: 12, color: '#ff4fa3' });
-      const nb = gp ? Math.min(gp.buttons.length, 20) : 0;
+      const nb = gp ? Math.min(gp.buttons.length, 24) : 0;
       for (let i = 0; i < nb; i++) {
-        const bx = x0 + 18 + (i % 10) * 43, by = 420 + Math.floor(i / 10) * 26;
+        const bx = x0 + 18 + (i % 12) * 36, by = 420 + Math.floor(i / 12) * 26;
         const on = gp.buttons[i].pressed || gp.buttons[i].value > 0.5;
         ctx.beginPath(); ctx.arc(bx, by, 9, 0, 6.2832); ctx.fillStyle = on ? '#ffe94d' : 'rgba(255,255,255,0.1)'; ctx.fill();
         drawText(ctx, String(i), bx, by, { size: 10, font: 'mono', color: on ? '#000' : '#b9c7e6', align: 'center', base: 'middle' });
