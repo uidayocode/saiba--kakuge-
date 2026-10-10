@@ -47,7 +47,7 @@ const CFG = {
   WORLD_W: 1280, GROUND_Y: 460, START_X: [470, 810],
   WALL_MIN: 40, WALL_MAX: 1240, MAX_DIST: 880, CAM_MARGIN: 30,
   CAM_FOLLOW_X: 0.18, CAM_FOLLOW_Z: 0.10,
-  GAUGE_MAX: 1000, SUPER_COST: 1000, JG_WINDOW: 5, JG_STUN_CUT: 5, JG_GAUGE: 40, OTG_SCALE: 0.6, GC_COST: 500, PUSHBLOCK_DIST: 90,
+  GAUGE_MAX: 1000, SUPER_COST: 1000, JG_WINDOW: 5, JG_LOCK: 20, JG_STUN_CUT: 5, JG_GAUGE: 40, OTG_SCALE: 0.6, GC_COST: 500, PUSHBLOCK_DIST: 90,
   /* ガードの耐久（スマブラのシールド風）: ガードボタンを押している間とガードするたびに減り、離すと回復。0 でガードブレイク */
   SHIELD_MAX: 100, SHIELD_DRAIN: 0.12, SHIELD_REGEN: 0.25, SHIELD_HIT: 0.14, SHIELD_HIT_MIN: 3, BREAK_STUN: 80, BREAK_REFILL: 45, COUNTER_DMG: 1.1, COUNTER_STUN: 6,
   /* ヒットストップ: 当たったときは衝撃の強さ（impact 1〜4）で伸ばす、ガードされたときは短く */
@@ -1641,7 +1641,7 @@ class InputBuf {
     this.age = { L: -1, H: -1, S: -1, T: -1 };
     this.pf = { L: -999, H: -999, S: -999, T: -999 };
     this.prevMask = 0; this.cur = 0; this.facing = 1; this.edge = 0;
-    this.lastFwd = -999; this.prevFwd = -999; this.lastBack = -999; this.prevBack = -999; this.backEdge = -999; this.gRelease = -999;
+    this.lastFwd = -999; this.prevFwd = -999; this.lastBack = -999; this.prevBack = -999; this.backEdge = -999; this.prevGuardEdge = -999;
     this.prevF = false; this.prevB = false;
     this.lastActFrame = -1;
   }
@@ -1660,8 +1660,8 @@ class InputBuf {
     this.abs[i] = mask; this.num[i] = n; this.fac[i] = facing;
     this.gd[i] = (mask & B_G) ? 1 : 0;
     const edge = mask & ~this.prevMask;
-    /* ガードボタンを離したフレーム（ジャストガードはここから数フレーム） */
-    if (this.prevMask & ~mask & B_G) this.gRelease = this.frame;
+    /* ガードの押し始め（ガードボタン or ←）。ジャストガードはここから数フレーム */
+    if (edge & B_G) this.markGuard();
     for (let k = 0; k < 4; k++) {
       const nm = BTN_BITS[k][0], bit = BTN_BITS[k][1];
       if (edge & bit) { this.age[nm] = 0; this.pf[nm] = this.frame; }
@@ -1669,7 +1669,7 @@ class InputBuf {
     }
     const f = fw > 0, b = fw < 0;
     if (f && !this.prevF) { this.prevFwd = this.lastFwd; this.lastFwd = this.frame; }
-    if (b && !this.prevB) { this.prevBack = this.lastBack; this.lastBack = this.frame; this.backEdge = this.frame; }
+    if (b && !this.prevB) { this.prevBack = this.lastBack; this.lastBack = this.frame; this.markGuard(); }
     this.prevF = f; this.prevB = b;
     this.prevMask = mask; this.cur = mask; this.facing = facing; this.edge = edge;
   }
@@ -1692,7 +1692,9 @@ class InputBuf {
     if (fr < 0 || this.frame - fr >= 64) return false;
     return this.gd[fr & 63] === 1;
   }
-  justRelease() { return !this.guardBtn(0) && this.frame - this.gRelease <= CFG.JG_WINDOW; }
+  markGuard() { this.prevGuardEdge = this.backEdge; this.backEdge = this.frame; }
+  /* ジャストガード: ガードを押し始めて JG_WINDOW 以内。連打対策で、前の押し始めから JG_LOCK 以上空いていること */
+  justPress() { return this.frame - this.backEdge <= CFG.JG_WINDOW && this.backEdge - this.prevGuardEdge >= CFG.JG_LOCK; }
   fwd() { return this.horiz(0) * this.facing > 0; }
   back() { return this.horiz(0) * this.facing < 0; }
   dtForward() { return this.frame - this.lastFwd <= 3 && this.lastFwd - this.prevFwd <= CFG.DTAP_WINDOW; }
@@ -2552,8 +2554,6 @@ class Combat {
   guards(D, s) {
     if (!D.canGuardState()) return false;
     const b = D.buf, lvl = s.hit.level;
-    /* ガードボタンを離した直後（JG_WINDOW 以内）に当たったら、上段も下段もジャストガード */
-    if (b.justRelease()) return true;
     const away = D.x > s.ax ? 1 : (D.x < s.ax ? -1 : -D.facing);
     let anyDir = false;
     if (s.src === 'move' && s.att.y > 0.001 && Math.abs(D.x - s.ax) <= CFG.CROSSUP_EPS) anyDir = true;
@@ -2602,10 +2602,8 @@ class Combat {
       return;
     }
     const guarded = this.guards(D, s);
-    /* ジャスト防御: ガードボタンを離した直後に当たった（スマブラのジャストシールド風）。
-       ← でガードする人は、当たる直前に ← を入れ始めたとき */
-    const jb = D.buf, just = guarded && D.state !== 'BLOCKSTUN' &&
-      (jb.justRelease() || (!jb.guardBtn(0) && jb.frame - jb.backEdge <= CFG.JG_WINDOW));
+    /* ジャスト防御: 当たる直前（JG_WINDOW 以内）にガード（ボタン or ←）を押し始めていた。連打では出ない */
+    const just = guarded && D.state !== 'BLOCKSTUN' && D.buf.justPress();
     let hs = hit.hitstop, advText = null;
     const crouchy = D.isCrouchy();
     /* カウンター: 相手が技を出している途中（発生〜持続）に当てた */
@@ -5100,7 +5098,7 @@ COMBO_ROWS.maneki = [
 ];
 const SYSTEM_ROWS = [
   ['守り', 'ガード中に →+強 = ガードキャンセル（ゲージ半分） / 弱+強 = 押し返し'],
-  ['ジャスト', '攻撃が当たる直前にガードボタンを離す（← でガードするなら直前に ← を入れる）= ガード硬直が短く、削られず、ゲージが増える'],
+  ['ジャスト', '攻撃が当たる直前にガード（ボタンか ←）を押し始める = ガード硬直が短く、削られず、ゲージが増える（連打では出ない）'],
   ['追い打ち', '倒れた相手に ↓弱 が1回だけ当たる'],
   ['受け身', '浮かされて落ちてくるときにボタン = 空中で立て直す'],
   ['カウンター', '相手の技の出始めに当てると、威力とのけぞりが増える'],
