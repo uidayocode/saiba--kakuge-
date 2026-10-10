@@ -39,7 +39,7 @@ window.GAME_DATA = {
       blurb: "お札の飛び道具と堅実な立ち回りで戦う、基本のキャラ。",
       ratings: { power: 3, speed: 3, range: 4, defense: 3 },
       stats: {
-        dmgMul: 0.95, hp: 1000, walkF: 3.4, walkB: 2.8, jumpVy: 15, jumpVx: 3.6, gravity: 0.75,
+        dmgMul: 0.97, hp: 1000, walkF: 3.4, walkB: 2.8, jumpVy: 15, jumpVx: 3.6, gravity: 0.75,
         airJumps: 0, prejump: 4, landLag: 3,
         dashF: { frames: 18, speed: 8.0 }, dashB: { frames: 18, speed: 5.5, invuln: 6 },
         gaugeMul: 1.0
@@ -256,7 +256,7 @@ window.GAME_DATA = {
       blurb: "前傾で突っ込む四つ足型。頭突きと対空で相手の動きを押さえる。",
       ratings: { power: 4, speed: 4, range: 2, defense: 3 },
       stats: {
-        dmgMul: 1.12, hp: 1050, walkF: 3.8, walkB: 3.0, jumpVy: 14.5, jumpVx: 4.2, gravity: 0.78,
+        dmgMul: 1.07, hp: 1050, walkF: 3.8, walkB: 3.0, jumpVy: 14.5, jumpVx: 4.2, gravity: 0.78,
         airJumps: 0, prejump: 4, landLag: 3,
         dashF: { frames: 20, speed: 9.5, run: true }, dashB: { frames: 18, speed: 6.0, invuln: 6 },
         gaugeMul: 1.0
