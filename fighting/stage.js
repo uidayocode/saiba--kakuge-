@@ -245,6 +245,10 @@ function create(W, H, GY, themeId) {
   const T_far = trim(far), T_hall = trim(hall), T_tf = trim(toriiFar), T_big = trim(toriiBig), T_lant = trim(lant);
   function px(cam, p) { return -PAD - (cam && cam.x || 0) * p; }
 
+  /* 動かないグラデーションは1回だけ作る */
+  const gctx = layer(1, 1).getContext("2d");
+  const HOR_G = gctx.createLinearGradient(0, GY - 170, 0, GY); HOR_G.addColorStop(0, "rgba(" + TH.hor + ",0)"); HOR_G.addColorStop(1, "rgba(" + TH.hor + ",0.16)");
+  const GROUND_G = gctx.createLinearGradient(0, GY, 0, H); GROUND_G.addColorStop(0, TH.ground[0]); GROUND_G.addColorStop(1, TH.ground[1]);
   function draw(ctx, cam, t, st) {
     st = st || {};
     const ko = st.ko || 0, intro = st.intro == null ? 1 : st.intro, hurry = st.hurry || 0, hit = st.hit || 0;
@@ -266,7 +270,7 @@ function create(W, H, GY, themeId) {
     blit(ctx, T_far, px(cam, 0.12), 0);
     for (const b of blinks) { if (Math.sin(t * 2.2 + b.ph) > 0.6) { ctx.fillStyle = "rgba(255,60,90,0.9)"; ctx.fillRect(b.x + px(cam, 0.12) - 1, b.y - 1, 3, 3); } }
     // 地平線の霞（キャラの黒いシルエットが沈まないよう、立ち位置の高さを少し明るく）
-    { const g = ctx.createLinearGradient(0, GY - 170, 0, GY); g.addColorStop(0, "rgba(" + TH.hor + ",0)"); g.addColorStop(1, "rgba(" + TH.hor + ",0.16)"); ctx.fillStyle = g; ctx.fillRect(0, GY - 170, W, 170); }
+    ctx.fillStyle = HOR_G; ctx.fillRect(0, GY - 170, W, 170);
     blit(ctx, T_hall, px(cam, 0.28), 0);
     blit(ctx, T_tf, px(cam, 0.42), 0);
     // 霞（奥）
@@ -310,8 +314,7 @@ function create(W, H, GY, themeId) {
     ctx.globalCompositeOperation = "source-over";
     // 参道（濡れた石畳）
     {
-      const g = ctx.createLinearGradient(0, GY, 0, H); g.addColorStop(0, TH.ground[0]); g.addColorStop(1, TH.ground[1]);
-      ctx.fillStyle = g; ctx.fillRect(0, GY, W, H - GY);
+      ctx.fillStyle = GROUND_G; ctx.fillRect(0, GY, W, H - GY);
       const vx = W / 2 - (cam && cam.x || 0) * 1.0, vy = GY - 120;
       ctx.strokeStyle = TH.sea ? "rgba(70,232,200,0.22)" : "rgba(120,90,190,0.16)"; ctx.lineWidth = 1; ctx.beginPath();
       for (let k = -14; k <= 14; k++) { const xb = vx + k * 90; const xa = vx + (xb - vx) * (1 / 6.0); ctx.moveTo(vx + (xa - vx), GY); ctx.lineTo(xb, H); }
@@ -319,8 +322,8 @@ function create(W, H, GY, themeId) {
       for (const yy of [6, 15, 28, 46, 70]) { const y2 = GY + yy * (1 + off * 0.25); ctx.moveTo(0, y2); ctx.lineTo(W, y2); }
       ctx.stroke();
     }
-    // 映り込み（建物）
-    reflectLayers(ctx, cam, t, intro);
+    // 映り込み（建物・灯籠の光・キャラをまとめて1回で）
+    reflectLayers(ctx, cam, t, intro, st.reflect);
     // 地面の境目の光
     ctx.fillStyle = rgba(NEON_RED, 0.35 + 0.25 * intro); ctx.fillRect(0, GY, W, 1.5);
     // 状態による色の変化
@@ -337,6 +340,7 @@ function create(W, H, GY, themeId) {
     refG.setTransform(1, 0, 0, 1, 0, 0); refG.globalAlpha = 1; refG.globalCompositeOperation = "source-over";
     refG.clearRect(0, 0, W, h);
     refG.save(); refG.translate(0, -(GY - h)); drawSrc(refG); refG.restore();
+    refG.globalAlpha = 1; refG.globalCompositeOperation = "source-over";
     for (let y = 0; y < h; y += band) {
       const fade = 1 - y / h, a = alpha * fade * fade;
       if (a < 0.01) continue;
@@ -348,33 +352,50 @@ function create(W, H, GY, themeId) {
       ctx.restore();
     }
   }
-  function reflectLayers(ctx, cam, t, intro) {
-    reflect(ctx, t, c => { blit(c, T_big, px(cam, 0.6), 0); blit(c, T_lant, px(cam, 0.85), 0); }, 0.28 * (0.4 + 0.6 * intro));
+  /* 映すもの（建物・灯籠の光・キャラ）を1枚に描いてから、1回だけ帯に分けて貼る（前は3回に分けていた） */
+  function reflectLayers(ctx, cam, t, intro, extra) {
     reflect(ctx, t, c => {
+      c.globalAlpha = 0.28 * (0.4 + 0.6 * intro); blit(c, T_big, px(cam, 0.6), 0); blit(c, T_lant, px(cam, 0.85), 0);
       c.globalCompositeOperation = "lighter";
       const lx = px(cam, 0.85);
-      c.globalAlpha = 0.6; LANTERNS.forEach((L) => { c.drawImage(GLOW, L.fire.x + lx - 50, L.fire.y - 50, 100, 100); }); c.globalAlpha = 1;
-    }, 0.5);
+      c.globalAlpha = 0.3; LANTERNS.forEach((L) => { c.drawImage(GLOW, L.fire.x + lx - 50, L.fire.y - 50, 100, 100); });
+      c.globalCompositeOperation = "source-over";
+      if (extra) { c.globalAlpha = 0.32; extra(c); }
+      c.globalAlpha = 1;
+    }, 1);
   }
   function drawReflection(ctx, cam, t, drawFn) { reflect(ctx, t, drawFn, 0.32); }
 
+  const FRONT = layer(W, H);
+  {
+    const g0 = FRONT.getContext("2d");
+    // 足元の霞（手前）
+    { const g = g0.createLinearGradient(0, GY - 40, 0, GY + 30); g.addColorStop(0, "rgba(" + TH.fog + ",0)"); g.addColorStop(0.6, "rgba(" + TH.fog + "," + (TH.motes === 'snow' ? 0.14 : 0.07) + ")"); g.addColorStop(1, "rgba(" + TH.fog + ",0)"); g0.fillStyle = g; g0.fillRect(0, GY - 40, W, 70); }
+    // HUDの読みやすさのため上端を少し暗く + 周辺減光
+    { const g = g0.createLinearGradient(0, 0, 0, 90); g.addColorStop(0, "rgba(3,2,8,0.55)"); g.addColorStop(1, "rgba(3,2,8,0)"); g0.fillStyle = g; g0.fillRect(0, 0, W, 90); }
+    { const g = g0.createRadialGradient(W / 2, H * 0.55, H * 0.45, W / 2, H * 0.55, W * 0.75); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(0,0,0,0.5)"); g0.fillStyle = g; g0.fillRect(0, 0, W, H); }
+  }
   function drawFront(ctx, cam, t, st) {
     st = st || {};
-    // 舞う光の粒
-    for (const m of MOTES) {
-      const y = ((m.y0 + t * m.v) % (H + 20)) - 10, x = ((m.x + Math.sin(t * m.f + m.ph) * m.sway - (cam && cam.x || 0) * m.p) % (W + 200) + W + 200) % (W + 200) - 100;
-      ctx.save(); ctx.translate(x, y); ctx.rotate(t * m.f * 1.5 + m.ph);
-      if (TH.motes === 'snow') { ctx.fillStyle = "rgba(235,245,255,0.75)"; ctx.beginPath(); ctx.arc(0, 0, m.s * 0.8, 0, Math.PI * 2); ctx.fill(); }
-      else if (TH.motes === 'bits') { ctx.rotate(-(t * m.f * 1.5 + m.ph)); ctx.fillStyle = m.petal ? rgba(CYAN, 0.6) : rgba(GOLD, 0.5); ctx.font = (8 + m.s * 3).toFixed(0) + "px monospace"; ctx.fillText(m.petal ? "1" : "0", 0, 0); }
-      else if (m.petal) { ctx.fillStyle = "rgba(255,150,195,0.55)"; ctx.beginPath(); ctx.ellipse(0, 0, m.s * 1.4, m.s * 0.7, 0, 0, Math.PI * 2); ctx.fill(); }
-      else { ctx.fillStyle = "rgba(70,232,255,0.5)"; ctx.fillRect(-m.s / 2, -m.s / 2, m.s, m.s); }
-      ctx.restore();
+    // 舞う光の粒（同じ色なので1つの形にまとめて1回で塗る）
+    const cx = cam && cam.x || 0;
+    if (TH.motes === 'bits') {
+      for (const m of MOTES) {
+        const y = ((m.y0 + t * m.v) % (H + 20)) - 10, x = ((m.x + Math.sin(t * m.f + m.ph) * m.sway - cx * m.p) % (W + 200) + W + 200) % (W + 200) - 100;
+        ctx.fillStyle = m.petal ? rgba(CYAN, 0.6) : rgba(GOLD, 0.5); ctx.font = (8 + m.s * 3).toFixed(0) + "px monospace"; ctx.fillText(m.petal ? "1" : "0", x, y);
+      }
+    } else {
+      const pa = new Path2D(), pb = new Path2D();
+      for (const m of MOTES) {
+        const y = ((m.y0 + t * m.v) % (H + 20)) - 10, x = ((m.x + Math.sin(t * m.f + m.ph) * m.sway - cx * m.p) % (W + 200) + W + 200) % (W + 200) - 100, rot = t * m.f * 1.5 + m.ph;
+        if (TH.motes === 'snow') { pa.moveTo(x + m.s * 0.8, y); pa.arc(x, y, m.s * 0.8, 0, Math.PI * 2); }
+        else if (m.petal) { pa.moveTo(x + Math.cos(rot) * m.s * 1.4, y + Math.sin(rot) * m.s * 1.4); pa.ellipse(x, y, m.s * 1.4, m.s * 0.7, rot, 0, Math.PI * 2); }
+        else { const c = Math.cos(rot) * m.s / 2, s2 = Math.sin(rot) * m.s / 2; pb.moveTo(x - c + s2, y - s2 - c); pb.lineTo(x + c + s2, y + s2 - c); pb.lineTo(x + c - s2, y + s2 + c); pb.lineTo(x - c - s2, y - s2 + c); pb.closePath(); }
+      }
+      ctx.fillStyle = TH.motes === 'snow' ? "rgba(235,245,255,0.75)" : "rgba(255,150,195,0.55)"; ctx.fill(pa);
+      ctx.fillStyle = "rgba(70,232,255,0.5)"; ctx.fill(pb);
     }
-    // 足元の霞（手前）
-    { const g = ctx.createLinearGradient(0, GY - 40, 0, GY + 30); g.addColorStop(0, "rgba(" + TH.fog + ",0)"); g.addColorStop(0.6, "rgba(" + TH.fog + "," + (TH.motes === 'snow' ? 0.14 : 0.07) + ")"); g.addColorStop(1, "rgba(" + TH.fog + ",0)"); ctx.fillStyle = g; ctx.fillRect(0, GY - 40, W, 70); }
-    // HUDの読みやすさのため上端を少し暗く + 周辺減光
-    { const g = ctx.createLinearGradient(0, 0, 0, 90); g.addColorStop(0, "rgba(3,2,8,0.55)"); g.addColorStop(1, "rgba(3,2,8,0)"); ctx.fillStyle = g; ctx.fillRect(0, 0, W, 90); }
-    { const g = ctx.createRadialGradient(W / 2, H * 0.55, H * 0.45, W / 2, H * 0.55, W * 0.75); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(0,0,0,0.5)"); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); }
+    ctx.drawImage(FRONT, 0, 0);
     if (st.hit) { ctx.fillStyle = "rgba(255,255,255," + (0.08 * st.hit) + ")"; ctx.fillRect(0, 0, W, H); }
   }
 

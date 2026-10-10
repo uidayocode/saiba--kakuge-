@@ -418,45 +418,7 @@ function costumeManeki(j, ch) {
   arm(J.EF, J.HF, "front", false);
   return parts;
 }
-/* 唐傘: 閉じた傘の胴（一つ目・長い舌）、一本足と下駄。開傘返し・大祓では傘が開く */
-function costumeKarakasa(j, ch, o) {
-  ch = ch || {}; o = o || {};
-  const { P, pel, neck, head, sh, tUp, back, fwd, down, parts, put } = bodyFrame(j);
-  /* 開き具合（0=閉じ 1=全開） */
-  let open = 0;
-  if (o.clip === "sp2") { const t = o.clipT || 0; open = t < 2 ? 0 : t < 6 ? (t - 2) / 4 : t < 24 ? 1 : Math.max(0, 1 - (t - 24) / 8); }
-  else if (o.clip === "super") { const t = o.clipT || 0; open = t < 4 ? 0 : t < 9 ? (t - 4) / 5 : t < 50 ? 1 : Math.max(0, 1 - (t - 50) / 10); }
-  /* 一本足: 両足の真ん中に1本（跳ねて見える）と、一本歯の下駄 */
-  const kn = lerp(P(J.KF), P(J.KB), 0.5), an = lerp(P(J.AF), P(J.AB), 0.5), to = lerp(P(J.TF), P(J.TB), 0.5);
-  put(capsule(pel, kn, 7, 6)); put(capsule(kn, an, 6, 5)); put(capsule(an, to, 4.5, 3.5));
-  const ft = lerp(an, to, 0.5);
-  put(polyPath([add(ft, [-13, 2]), add(ft, [13, 2]), add(ft, [12, 7]), add(ft, [-12, 7])]));
-  put(polyPath([add(ft, [-3, 6]), add(ft, [3, 6]), add(ft, [3, 15]), add(ft, [-3, 15])]));
-  /* 細い腕（傘の骨） */
-  const arm = (E, H, layer) => { put(capsule(sh, P(E), 4, 3.5), layer); put(capsule(P(E), P(H), 3.5, 3), layer); put(circle(P(H), 4), layer); };
-  arm(J.EB, J.HB);
-  /* 傘: 閉じているときは縦長のとがった袋、開くと頭の上で大きな笠になる */
-  const tip = add(head, tUp, 34), bot = add(pel, tUp, 4);
-  const closed = [tip, add(add(head, back, 20), tUp, -2), add(lerp(head, bot, 0.6), back, 26), add(bot, back, 18), add(bot, fwd, 18), add(lerp(head, bot, 0.6), fwd, 26), add(add(head, fwd, 20), tUp, -2)];
-  if (open < 0.05) put(smooth(closed));
-  else {
-    const W = 30 + 46 * open, top = add(head, tUp, 26 + 6 * open), rim = add(head, tUp, -6 + 4 * open);
-    const pts = [top];
-    for (let k = 0; k <= 6; k++) { const u = k / 6, x = -W + 2 * W * u, sag = (k % 2 ? 4 : 0) * open; pts.push(add(add(rim, back, -x), tUp, -sag - Math.abs(x) * 0.12)); }
-    put(smooth(pts));
-    put(polyPath([add(rim, back, 4), add(rim, fwd, 4), add(bot, fwd, 3), add(bot, back, 3)]));   /* 柄 */
-    put(smooth([add(head, back, 16), add(add(head, tUp, -4), fwd, 16), add(lerp(head, bot, 0.6), fwd, 20), add(bot, fwd, 14), add(bot, back, 14), add(lerp(head, bot, 0.6), back, 20)]));
-  }
-  /* 一つ目と長い舌 */
-  put(ell(add(add(head, fwd, 10), [0, -2]), 5, 4), "main", true);
-  /* 舌: ふだんは垂れ下がり、弱攻撃のときは前へ長く伸びる */
-  const m0 = add(lerp(head, bot, 0.3), fwd, 27);
-  const lick = o.clip === "5L" ? Math.max(0, Math.min(1, ((o.clipT || 0) - 2) / 2, (10 - (o.clipT || 0)) / 3)) : 0;
-  put(plume(m0, unit(add(fwd, down, 0.9 * (1 - lick) + 0.05)), 30 + 44 * lick, 0.25 * (1 - lick), 10, 4));
-  arm(J.EF, J.HF, "front");
-  return parts;
-}
-const COSTUMES = { miko: costumeMiko, komainu: costumeKomainu, oni404: costumeOni, fox: costumeFox, tengu: costumeTengu, maneki: costumeManeki, karakasa: costumeKarakasa };
+const COSTUMES = { miko: costumeMiko, komainu: costumeKomainu, oni404: costumeOni, fox: costumeFox, tengu: costumeTengu, maneki: costumeManeki };
 function costume(j, ch, id, o) { return (COSTUMES[id] || costumeMiko)(j, ch, o); }
 
 function rgba(h, a) { const n = parseInt(h.slice(1), 16); return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")"; }
@@ -473,9 +435,10 @@ function draw(ctx, joints, o) {
     if (!ps.length) continue;
     /* 縁取りは全部品を1つの形にまとめて、まとめて描く（部品ごとに描くより大幅に軽い） */
     const all = new Path2D(); for (const p of ps) all.addPath(p.g);
+    /* lite = 外側のぼんやりした光を1本に減らす（軽量の画質と、床の映り込み） */
     ctx.globalCompositeOperation = "lighter";
-    ctx.strokeStyle = rgba(c, front ? 0.10 : 0.16); ctx.lineWidth = front ? 8 : 14; ctx.stroke(all);
-    ctx.strokeStyle = rgba(c, front ? 0.18 : 0.30); ctx.lineWidth = front ? 4 : 7; ctx.stroke(all);
+    if (!o.lite) { ctx.strokeStyle = rgba(c, front ? 0.10 : 0.16); ctx.lineWidth = front ? 8 : 14; ctx.stroke(all); }
+    ctx.strokeStyle = rgba(c, front ? 0.18 : (o.lite ? 0.36 : 0.30)); ctx.lineWidth = front ? 4 : (o.lite ? 9 : 7); ctx.stroke(all);
     ctx.globalCompositeOperation = "source-over";
     ctx.strokeStyle = front ? rgba(c, 0.8) : c; ctx.lineWidth = front ? 1.6 : 3; ctx.stroke(all);
     const fill = flash > 0 ? "rgb(" + Math.round(6 + 240 * flash) + "," + Math.round(7 + 240 * flash) + "," + Math.round(13 + 240 * flash) + ")" : "#06070d";

@@ -3543,7 +3543,10 @@ const Display = {
     window.addEventListener('resize', () => { clearTimeout(this.rt); this.rt = setTimeout(() => this.resize(), 100); });
   },
   /* 描く解像度の上限（基準 960x540 の何倍まで）。大きい画面でも内部はこれ以下で描き、ブラウザが拡大して表示する */
-  QUALITY: { high: 2.0, normal: 1.25, low: 0.9 },
+  QUALITY: { high: 2.0, normal: 1.25, low: 0.9, min: 0.72 },
+  /* 背景だけさらに下げる倍率（背景はぼんやりした光が多く、解像度を下げても目立たない） */
+  BG: { high: 1, normal: 0.8, low: 0.8, min: 0.7 },
+  level() { const q = (Settings.data && Settings.data.quality) || 'auto'; return q === 'auto' ? this.autoLevel : q; },
   cap: 1.25, autoLevel: 'normal',
   capFor() {
     const q = (Settings.data && Settings.data.quality) || 'auto';
@@ -3568,9 +3571,10 @@ const Display = {
     this.autoSum += dt; this.autoN++;
     if (this.autoSum < 2) return;
     const avg = this.autoSum / this.autoN; this.autoSum = 0; this.autoN = 0;
-    const order = ['low', 'normal', 'high'], i = order.indexOf(this.autoLevel);
-    if (avg > 1 / 45 && i > 0) { this.autoLevel = order[i - 1]; this.resize(); }
-    else if (avg < 1 / 75 && i < 1) { this.autoLevel = order[i + 1]; this.resize(); }
+    /* 60fps を割り続けたら（平均 52fps 未満）1段下げる。自動で下がるのは「最軽量」まで、上がるのは「標準」まで */
+    const order = ['min', 'low', 'normal', 'high'], i = order.indexOf(this.autoLevel);
+    if (avg > 1 / 52 && i > 0) { this.autoLevel = order[i - 1]; this.resize(); }
+    else if (avg < 1 / 75 && i < 2) { this.autoLevel = order[i + 1]; this.resize(); }
   },
   begin() {
     const g = this.ctx;
@@ -3848,7 +3852,7 @@ function drawPuppet(ctx, pup, alpha, o) {
     /* フォールバック描画のキャラ空間: 原点=足元の中心、x=前(+)、y=上(+)。facing=-1 は ctx 側で反転 */
     ctx.scale(face * sc[0], -sc[1]);
   }
-  drawFighterVisual(ctx, pup, j, LookAdapter.palette(rt.ch, pup.pal), { fx: fx, fy: fy, face: face, alpha: alpha, ghost: !!o.ghost, ghostA: o.ghostA || 0 });
+  drawFighterVisual(ctx, pup, j, LookAdapter.palette(rt.ch, pup.pal), { fx: fx, fy: fy, face: face, alpha: alpha, ghost: !!o.ghost, ghostA: o.ghostA || 0, lite: !!o.lite });
   ctx.restore();
   return j;
 }
@@ -3875,7 +3879,7 @@ function drawMikoVisual(ctx, pup, j, o) {
   MikoVisual.draw(ctx, j, {
     x: 0, y: 0, facing: o.face, scale: 1, color: LookAdapter.edge(pup.rt.ch, pup.pal), id: pup.rt.id,
     flash: o.ghost ? 0 : pup.flash, alpha: ctx.globalAlpha * (o.ghost ? o.ghostA : 1), chains: chains,
-    clip: pup.cp.name, clipT: pup.cp.t
+    clip: pup.cp.name, clipT: pup.cp.t, lite: !!o.lite || Display.level() === 'low' || Display.level() === 'min'
   });
 }
 
@@ -4528,14 +4532,23 @@ function stageXform(ctx, cam, fn) {
   fn();
   ctx.restore();
 }
+const BGC = { c: null, g: null };
 function drawStage(ctx, cam, t, state) {
   state = state || {};
   if (!SV) { Stage.draw(ctx, cam, t, state); return; }
   const sc = { x: cam.x - 640 }, st = svState(state);
-  stageXform(ctx, cam, () => {
-    SV.draw(ctx, sc, t, st);
-    if (state.reflect) SV.drawReflection(ctx, sc, t, state.reflect);
-  });
+  st.reflect = state.reflect || null;   /* キャラの映り込みは、ステージの映り込みと一緒に1回で描く */
+  /* 背景は画面より少し低い解像度の画像に描いてから、1回で拡大して貼る（重なった大きな画像の拡大が一番重かった） */
+  const bs = Display.k * (Display.BG[Display.level()] || 1);
+  if (bs >= Display.k - 0.01) { stageXform(ctx, cam, () => SV.draw(ctx, sc, t, st)); return; }
+  const w = Math.ceil(CFG.W * bs), h = Math.ceil(CFG.H * bs);
+  if (!BGC.c || BGC.c.width !== w || BGC.c.height !== h) { BGC.c = document.createElement('canvas'); BGC.c.width = w; BGC.c.height = h; BGC.g = BGC.c.getContext('2d'); }
+  const g = BGC.g;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+  g.fillStyle = '#05060f'; g.fillRect(0, 0, w, h);
+  g.setTransform(bs, 0, 0, bs, 0, 0);
+  stageXform(g, cam, () => SV.draw(g, sc, t, st));
+  ctx.drawImage(BGC.c, 0, 0, w, h, 0, 0, w / bs, h / bs);
 }
 function drawStageFront(ctx, cam, t, state) {
   state = state || {};
@@ -4596,6 +4609,13 @@ const Game = {
   },
   charName(id) { return this.chars[id] ? this.chars[id].ch.name : id; },
   /* ロスターの先頭から。1体なら同キャラ対戦 */
+  /* CPU 戦の相手: 自分と違うキャラ（できれば直前の相手とも違うキャラ）をランダムに */
+  pickCpuOpp(me, prev) {
+    let c = this.roster.filter(id => id !== me && id !== prev);
+    if (!c.length) c = this.roster.filter(id => id !== me);
+    if (!c.length) c = this.roster.slice();
+    return c[fxRng.int(c.length)];
+  },
   defaultSel() {
     const last = Store.get('last', null);
     const r = this.roster;
@@ -4765,7 +4785,6 @@ const SPECIAL_DESC = {
   fox:     { sp1: '分身が前に飛ぶ（2ヒット）', sp2: '相手の後ろへ瞬間移動', sp3: '弾の下を滑る下段', super: '大祓ゲージ満タンで使える' },
   tengu:   { sp1: '風の刃を飛ばす', sp2: '出始め無敵の対空', sp3: '弾を飛び越えて上から襲う（立ちガード）', super: '進む竜巻（6ヒット）' },
   maneki:  { sp1: '遠くの相手を引き寄せる。当たったら 強 でつながる', sp2: 'ガードできない掴み', sp3: '弾を受け流して突っ込む', super: 'ガードできない大投げ。密着で' },
-  karakasa:{ sp1: '放物線で落ちる雨粒', sp2: '傘を開いて弾を打ち返す', sp3: '高く跳ねて上から（立ちガード）', super: '回る傘で前へ（9ヒット）' }
 };
 /* キャラだけの仕組み（技一覧の最後の行） */
 const UNIQUE_ROW = {
@@ -4774,7 +4793,6 @@ const UNIQUE_ROW = {
   fox:     ['急降下蹴り', 'ジャンプ中に 必殺', '同じ', '斜め下へ蹴る。立ちガードのみ'],
   tengu:   ['空風（空中静止）', 'ジャンプ中に 必殺', '同じ', '空中で止まり、斜め下へ風を撃つ。1回のジャンプに1回'],
   maneki:  ['手招きコンボ', '手招きが当たったら 強', '同じ', '引き寄せて、そのまま連続技に'],
-  karakasa:['2段ジャンプ / 弾返し', '空中で ↑ / ↓↙← + 必殺', '同じ / → + 必殺', '返した弾は自分の弾になる']
 };
 function normalDesc(m, base) {
   const h = m.hit || {}, t = [];
@@ -4846,12 +4864,6 @@ COMBO_ROWS.maneki = [
   ['下段から', '↓弱 → 弱 → 強 → ←+必殺', '4ヒット'],
   ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
   ['大祓', '密着で ↓+必殺 (ゲージ満タン)', 'ガードできない大投げ']
-];
-COMBO_ROWS.karakasa = [
-  ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。雨粒で締める'],
-  ['下段から', '↓弱 → 弱 → 強 → 必殺', '4ヒット'],
-  ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
-  ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '9ヒット']
 ];
 const SYSTEM_ROWS = [
   ['守り', 'ガード中に →+強 = ガードキャンセル（ゲージ半分） / 弱+強 = 押し返し'],
@@ -5127,7 +5139,7 @@ Game.scenes.settings = {
     const s = Settings.data, onoff = b => (b ? 'ON' : 'OFF');
     return [
       { label: '音量', val: () => s.volume + ' / 10' },
-      { label: '画質（重いときは 軽量）', val: () => ({ auto: '自動（いま ' + ({ high: '高', normal: '標準', low: '軽量' })[Display.autoLevel] + '）', high: '高', normal: '標準', low: '軽量' })[s.quality] },
+      { label: '画質（重いときは 軽量）', val: () => ({ auto: '自動（いま ' + ({ high: '高', normal: '標準', low: '軽量', min: '最軽量' })[Display.autoLevel] + '）', high: '高', normal: '標準', low: '軽量' })[s.quality] },
       { label: '画面揺れ', val: () => onoff(s.shake) },
       { label: 'グリッチ演出', val: () => onoff(s.glitch) },
       { label: '走査線', val: () => onoff(s.scanline) },
@@ -5279,7 +5291,7 @@ Game.scenes.charSelect = {
     /* 1人で練習: P2 は CPU。P1 が決めたら同じキャラ・別の配色で自動的に決まる */
     if (this.training) {
       const a = this.p[0], b = this.p[1];
-      if (a.decided && !b.decided) { b.decided = true; b.picked = a.picked; b.pal = 1 - a.pal; this.refreshPreview(1); }
+      if (a.decided && !b.decided) { b.decided = true; b.picked = Game.pickCpuOpp(a.picked, null); b.pal = 1 - a.pal; this.refreshPreview(1); }
       else if (!a.decided && b.decided) { b.decided = false; b.picked = null; this.refreshPreview(1); }
     }
     if (this.p[0].decided && this.p[1].decided) {
@@ -5420,34 +5432,22 @@ const VS_LINES = {
   'fox>oni404':     ['鬼さんこちら、手の鳴るほうへ', '……404'],
   'miko>tengu':     ['天狗さん、鼻が通信の邪魔です', '我が鼻は高性能アンテナだ'],
   'miko>maneki':    ['招き猫さん、千客万来ですね', 'いらっしゃいませ。お一人様ですか'],
-  'miko>karakasa':  ['傘の付喪神…お祓い対象です', 'まだ使えるのに！'],
   'komainu>tengu':  ['空から見下ろすな、天狗', '地を這う犬に用はない'],
   'komainu>maneki': ['猫か。門の前で何をしている', '客引きでございます'],
-  'komainu>karakasa': ['傘が跳ねるな。止まれ', 'ぴょん！ 止まらないよ'],
   'oni404>tengu':   ['降りてこい、天狗', '風に乗れぬ者は哀れよ'],
   'oni404>maneki':  ['猫、そこをどけ', 'お客様、乱暴はお断りです'],
-  'oni404>karakasa':['傘ごとへし折る', '骨は折らないでえ！'],
   'fox>tengu':      ['天狗さん、化かし合いしよ？', '我を化かすか、狐'],
   'fox>maneki':     ['猫ちゃん、小判ちょうだい', '本日の小判は売り切れです'],
-  'fox>karakasa':   ['一本足でよく立てるね', '狐さんこそ尻尾重くない？'],
   'tengu>miko':     ['巫女よ、風の音を聞け', 'ノイズにしか聞こえません'],
   'tengu>komainu':  ['門番、空はがら空きだぞ', '吽！ 跳んで食らいつく'],
   'tengu>oni404':   ['重いな、鬼。風で飛ばしてやる', '404…飛ばない'],
   'tengu>fox':      ['狐、木の葉で化けても無駄だ', 'じゃあ風ごと化かそうか'],
   'tengu>maneki':   ['猫よ、手招きは届かんぞ', 'お呼びすれば、皆さま来られます'],
-  'tengu>karakasa': ['傘よ、風に勝てると思うな', '風の日こそ、傘の出番！'],
   'maneki>miko':    ['本日のおすすめは、投げでございます', '注文してません'],
   'maneki>komainu': ['狛犬さま、福を招きに参りました', '門を通るなら礼をせよ'],
   'maneki>oni404':  ['大きなお客様、いらっしゃいませ', '…客ではない'],
   'maneki>fox':     ['狐さま、お代はいただきます', 'ツケにしといて'],
   'maneki>tengu':   ['天狗さま、こちらへどうぞ', '招かれても降りぬ'],
-  'maneki>karakasa':['傘のお忘れ物ですか', 'わたし本人です！'],
-  'karakasa>miko':  ['巫女さん、雨宿りしてく？', '晴れてます'],
-  'karakasa>komainu': ['わんちゃん、遊ぼ！', '犬ではない。狛犬だ'],
-  'karakasa>oni404':['鬼さん、雨降ってるよ', '404…傘…ない'],
-  'karakasa>fox':   ['狐の嫁入り、傘いる？', 'ありがと、でも勝つのは私'],
-  'karakasa>tengu': ['天狗さんの風、打ち返しちゃう', 'ほう、やってみせよ'],
-  'karakasa>maneki':['招き猫さん、招いて〜', 'お客様、傘はこちらにお預けください'],
   'mirror':         ['偽物め', 'それはこちらの台詞']
 };
 function vsLines(a, b) { return VS_LINES[a === b ? 'mirror' : a + '>' + b] || null; }
@@ -5518,6 +5518,8 @@ Game.scenes.versus = {
  * ================================================================ */
 const _V = { x: 640, zoom: 1, y: 0 }, _SHK = { x: 0, y: 0 };
 /* ワールド（背景・キャラ・エフェクト）を描く。HUD は含まない。 */
+/* 計測用: 描画の一部を止める（__denno.PerfOff.stage = true など。ふだんは空） */
+const PerfOff = {};
 function renderFightWorld(ctx, m, alpha, o) {
   o = o || {};
   m.cam.view(alpha, _V);
@@ -5535,8 +5537,8 @@ function renderFightWorld(ctx, m, alpha, o) {
   ctx.save();
   ctx.translate(sh.x, sh.y);
   const ss = fightStageState(m);
-  ss.reflect = makeReflection(m, alpha, cam.x);
-  drawStage(ctx, cam, t, ss);
+  ss.reflect = PerfOff.reflect ? null : makeReflection(m, alpha, cam.x);
+  if (!PerfOff.stage) drawStage(ctx, cam, t, ss);
   if (m.freeze > 0) { ctx.fillStyle = 'rgba(0,0,10,0.74)'; ctx.fillRect(-20, -20, CFG.W + 40, CFG.H + 40); }
   ctx.save();
   ctx.translate(480, 460 + cam.y); ctx.scale(z, z); ctx.translate(-cam.x, 0);
@@ -5544,15 +5546,15 @@ function renderFightWorld(ctx, m, alpha, o) {
   const order = m.front === 0 ? [1, 0] : [0, 1];
   for (let i = 0; i < 2; i++) drawGhosts(ctx, F[i].pup);
   const zk = Display.k * z;
-  for (let k = 0; k < 2; k++) drawFighterFull(ctx, F[order[k]], alpha, zk);
+  if (!PerfOff.fighters) for (let k = 0; k < 2; k++) drawFighterFull(ctx, F[order[k]], alpha, zk);
   for (let i = 0; i < 2; i++) drawTrail(ctx, F[i]);
   for (let i = 0; i < 2; i++) drawStrike(ctx, F[i]);
   for (let i = 0; i < 2; i++) drawGuardShield(ctx, F[i]);
   drawProjectiles(ctx, m, alpha);
-  FX.draw(ctx);
+  if (!PerfOff.fx) FX.draw(ctx);
   if (o.debugWorld) o.debugWorld(ctx, m);
   ctx.restore();
-  drawStageFront(ctx, cam, t, fightStageState(m));
+  if (!PerfOff.front) drawStageFront(ctx, cam, t, fightStageState(m));
   ctx.restore();
 }
 
@@ -5620,12 +5622,17 @@ function makeReflection(m, alpha, camX) {
   if (!SV) return null;
   if (!Refl.c) { Refl.c = document.createElement('canvas'); Refl.c.width = CFG.W; Refl.c.height = REFL_H; Refl.g = Refl.c.getContext('2d'); }
   const g = Refl.g;
-  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, CFG.W, REFL_H);
-  g.save();
-  g.translate(480 - camX, REFL_H);
-  const F = m.fighters;
-  for (let i = 0; i < 2; i++) if (F[i].pup.alpha > 0.01) drawPuppet(g, F[i].pup, alpha, { noShake: true });
-  g.restore();
+  /* 映り込みはぼやけて見えるので、2回に1回だけ描き直す（輪郭の光も簡単に） */
+  Refl.n = (Refl.n || 0) + 1;
+  if (Refl.n % 2 === 0 || !Refl.drawn) {
+    Refl.drawn = true;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, CFG.W, REFL_H);
+    g.save();
+    g.translate(480 - camX, REFL_H);
+    const F = m.fighters;
+    for (let i = 0; i < 2; i++) if (F[i].pup.alpha > 0.01) drawPuppet(g, F[i].pup, alpha, { noShake: true, lite: true });
+    g.restore();
+  }
   return function (c) { c.drawImage(Refl.c, 0, CFG.GROUND_Y - REFL_H); };
 }
 
@@ -6011,7 +6018,7 @@ Game.scenes.fight = {
     const dbg = Debug.on ? (c, mm) => Debug.world(c, mm) : null;
     renderFightWorld(ctx, m, this.paused ? 1 : alpha, { debugWorld: dbg });
     drawCutin(ctx, m, this);
-    drawHUD(ctx, m, this.hud, Game.t);
+    if (!PerfOff.hud) drawHUD(ctx, m, this.hud, Game.t);
     if (!this.paused) drawText(ctx, 'Esc: ポーズ / 技一覧', 480, 503, { size: 11, align: 'center', color: '#8fa3c8', alpha: 0.75 });
     drawFightBanners(ctx, m, this);
     if (this.tut && !this.paused) this.tutRender(ctx);
@@ -6051,6 +6058,7 @@ Game.scenes.result = {
     /* CPU 戦の連勝数 */
     this.vsCpu = !!Game.training && CPU_LEVELS[Game.cpuLevel];
     if (this.vsCpu) Game.cpuStreak = r.winner === 0 ? (Game.cpuStreak || 0) + 1 : 0;
+    if (this.vsCpu && r.winner === 0) this.items[0] = '次の相手';
     /* 本日の記録（CPU 戦は P1 だけ、2人対戦は両方のコンボを記録） */
     {
       const combo = this.vsCpu ? r.maxCombo[0] : Math.max(r.maxCombo[0], r.maxCombo[1]);
@@ -6092,7 +6100,11 @@ Game.scenes.result = {
     if (n & (B_LEFT | B_RIGHT)) Audio.play('menuMove');
     if (n & B_L) {
       Audio.play('menuOk');
-      if (this.sel === 0) Game.go('versus', { training: !!Game.training || !!HASH.p.training });
+      if (this.sel === 0) {
+        /* CPU に勝ったら次の相手へ（負けたら同じ相手ともう一度） */
+        if (this.vsCpu && this.win === 0 && Game.sel) Game.sel = [Game.sel[0], Game.pickCpuOpp(Game.sel[0], Game.sel[1])];
+        Game.go('versus', { training: !!Game.training || !!HASH.p.training });
+      }
       else if (this.sel === 1) Game.go('charSelect');
       else Game.go('title');
     }
@@ -6571,9 +6583,7 @@ const CPU_CHAR = {
   fox:     { aa: '5H', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['5H', 'sp1']], punish: ['5L', '5H', 'sp1'] },
   tengu:   { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'sp2'], ['5H', 'sp1']], punish: ['5H', 'sp2'] },
   /* 招き猫: 遠くでは歩いて近づき、中くらいの距離で手招き → 強 → 小判タックル */
-  maneki:  { aa: '5H', zone: null, mid: ['sp1', '5H', 'sp3'], routes: [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['5H', 'sp3']], punish: ['5H', 'sp3'], closeGrab: 'sp2' },
-  /* 唐傘: 飛んでくる弾は開傘返しで打ち返す */
-  karakasa:{ aa: '5H', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'sp1'], ['5H', 'sp1']], punish: ['5L', '5H', 'sp1'], reflect: 'sp2' }
+  maneki:  { aa: '5H', zone: null, mid: ['sp1', '5H', 'sp3'], routes: [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['5H', 'sp3']], punish: ['5H', 'sp3'], closeGrab: 'sp2' }
 };
 class CpuPolicy {
   /* mode: 'test' = ランダムに全技を踏む / 'dummy' = 立ち・ガード固定の練習相手 / 'cpu' = 対戦用（level: easy|normal|hard） */
@@ -7525,7 +7535,7 @@ function boot() {
   Game.pal2 = [false, true];
   const eff = Settings.eff();
   Game.easy = [eff.easy.p1, eff.easy.p2];
-  window.__denno = { Game: Game, Input: Input, Devices: Devices, FX: FX, Debug: Debug, SelfTest: SelfTest, Gallery: Gallery, Settings: Settings, validateGameData: validateGameData, CFG: CFG, Match: Match, NullFX: NullFX, CpuPolicy: CpuPolicy, BGM: BGM, get SV() { return SV; }, Display: Display };
+  window.__denno = { Game: Game, Input: Input, Devices: Devices, FX: FX, Debug: Debug, SelfTest: SelfTest, Gallery: Gallery, Settings: Settings, validateGameData: validateGameData, CFG: CFG, Match: Match, NullFX: NullFX, CpuPolicy: CpuPolicy, BGM: BGM, get SV() { return SV; }, Display: Display, PerfOff: PerfOff };
   Main.applyMode();
   Main.startLoops();
 }
