@@ -47,7 +47,7 @@ const CFG = {
   CAM_FOLLOW_X: 0.18, CAM_FOLLOW_Z: 0.10,
   GAUGE_MAX: 1000, SUPER_COST: 1000, JG_WINDOW: 5, JG_STUN_CUT: 5, JG_GAUGE: 40, OTG_SCALE: 0.6, GC_COST: 500, PUSHBLOCK_DIST: 90,
   /* ガードの耐久（スマブラのシールド風）: ガードボタンを押している間とガードするたびに減り、離すと回復。0 でガードブレイク */
-  SHIELD_MAX: 100, SHIELD_DRAIN: 0.28, SHIELD_REGEN: 0.16, SHIELD_HIT: 0.22, SHIELD_HIT_MIN: 4, BREAK_STUN: 80, BREAK_REFILL: 45, COUNTER_DMG: 1.1, COUNTER_STUN: 6,
+  SHIELD_MAX: 100, SHIELD_DRAIN: 0.12, SHIELD_REGEN: 0.25, SHIELD_HIT: 0.14, SHIELD_HIT_MIN: 3, BREAK_STUN: 80, BREAK_REFILL: 45, COUNTER_DMG: 1.1, COUNTER_STUN: 6,
   /* ヒットストップ: 当たったときは衝撃の強さ（impact 1〜4）で伸ばす、ガードされたときは短く */
   HITSTOP_HIT: [1.0, 1.15, 1.4, 1.55], HITSTOP_BLOCK: 0.75, HITSTOP_COUNTER: 6, HITSTOP_DOWN: 3, HITSTOP_MAX: 24, AIR_TECH_AFTER: 20, AIR_TECH_INV: 12, GAUGE_GAIN: 1.4, GAUGE_COMEBACK: 2.0, PROJ_GUARD_GAUGE: 25,
   DOWN_FRAMES: 28, WAKEUP_FRAMES: 18, WAKEUP_QUICK: 14, QUICK_WINDOW: 6, WAKE_DELAY: 22, ROLL_FRAMES: 20, ROLL_SPEED: 6, WAKE_THROW_INV: 6,
@@ -2554,7 +2554,9 @@ class Combat {
       if (anyDir ? h !== 0 : h === away) { held = true; break; }
     }
     if (!held) return false;
-    if (!btn && !anyDir && b.horiz(0) === -away) return false;
+    /* ガードボタンは上段も下段も全部防ぐ（そのかわり耐久が減る。崩すのは投げとガードブレイク） */
+    if (btn) return true;
+    if (!anyDir && b.horiz(0) === -away) return false;
     const crouch = b.down();
     if (lvl === 'low' && !crouch) return false;
     if (lvl === 'high' && crouch) return false;
@@ -4866,7 +4868,7 @@ function moveListRows(ch, id) {
   return [
     ['移動 / ジャンプ', '←→ / ↑', '同じ', '↗↖ で前後にジャンプ'],
     ['ダッシュ / バックステップ', '→→ / ←←', '同じ', 'すばやく近づく・離れる'],
-    ['ガード', '← (相手と反対) / ガードボタン', '同じ', '下段は ↓ を足す。使いすぎるとガードブレイク'],
+    ['ガード', '← (相手と反対) / ガードボタン', '同じ', '←は下段に↓が要る。ボタンは全部防ぐが耐久が減る'],
     [nm('5L'), '弱', '同じ', normalDesc(M['5L'], '速い。弱→強→必殺とつながる')],
     [nm('2L'), '↓ + 弱', '同じ', normalDesc(M['2L'], '速い下段')],
     [nm('5H'), '強', '同じ', normalDesc(M['5H'], '強い一撃')],
@@ -6951,12 +6953,17 @@ class CpuPolicy {
       /* ガードを固める相手（ボタンで構えている / 耐久が減っている）には、つよい・ふつうは攻め続けて割りに行く */
       const guarding = opp.shieldHeld || opp.state === 'BLOCKSTUN' || (opp.buf.back() && (opp.state === 'IDLE' || opp.state === 'CROUCH' || opp.state === 'WALK_B'));
       const turtle = guarding || opp.shield < CFG.SHIELD_MAX * 0.7;
+      /* ガードボタンで固まっている相手には投げを混ぜる（ガードボタンは打撃を全部防ぐので、崩しは投げ） */
+      if ((opp.shieldHeld || opp.state === 'BLOCKSTUN') && dist < 150 && L.punish >= 0.45 && rng.chance(0.4)) {
+        const walk = Math.max(0, Math.round((dist - 62) / Math.max(1, me.st.walkF)));
+        this.q = this.rep(F, walk, []).concat(this.pressFor(C.closeGrab && rng.chance(0.4) ? C.closeGrab : 'throw', me)); return this.q.shift();
+      }
       if (turtle && L.punish >= 0.45 && rng.chance(L.combo * (opp.shield < CFG.SHIELD_MAX * 0.5 ? 0.95 : 0.6))) {
         this.startCombo(rng.chance(0.5) ? ['5L', '5L', '5H', C.zone || 'sp3'] : ['2L', '5L', '5H'], rng); this.combo.pressure = true; this.combo.dropAt = -1; return this.stepCombo(me, rng);
       }
       if (L.punish > 0 && rng.chance(this.caution * 0.75)) this.q = this.rep(Bk | B_DOWN, 18 + rng.int(16), []);
       else if (r < L.combo) { this.startCombo(rng.pick(routes), rng); return this.stepCombo(me, rng); }
-      else if (r < L.combo + 0.12) this.q = this.pressFor(C.closeGrab && rng.chance(0.5) ? C.closeGrab : 'throw', me);
+      else if (r < L.combo + 0.12) this.q = this.rep(F, Math.max(0, Math.round((dist - 62) / Math.max(1, me.st.walkF))), []).concat(this.pressFor(C.closeGrab && rng.chance(0.5) ? C.closeGrab : 'throw', me));
       else if (r < L.combo + 0.3) this.q = this.pressFor(rng.pick(['5L', '2L', '5H']), me);
       else this.q = this.rep(Bk | (rng.chance(0.5) ? B_DOWN : 0), 8 + rng.int(12), []);
     }
