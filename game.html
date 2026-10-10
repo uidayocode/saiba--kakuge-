@@ -36,6 +36,7 @@ if (window.__dataMissing) { document.write('<script src="data.sample.js" charset
 <script src="stage.js" charset="utf-8"></script>
 <script src="sfx_kit.js" charset="utf-8"></script>
 <script src="bgm_kit.js" charset="utf-8"></script>
+<script src="net.js" charset="utf-8"></script>
 <script>
 (function () {
 "use strict";
@@ -110,8 +111,15 @@ function mulberry32(a) {
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   };
 }
+/* 乱数（mulberry32 と同じ列）。状態 s を自分のプロパティに持つので、試合の状態ごと保存・巻き戻しできる */
 class Rng {
-  constructor(seed) { this.seed = seed >>> 0; this.f = mulberry32(this.seed); }
+  constructor(seed) { this.seed = seed >>> 0; this.s = this.seed | 0; }
+  f() {
+    const a = this.s = (this.s + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
   next() { return this.f(); }
   int(n) { return Math.floor(this.f() * n); }
   range(a, b) { return a + (b - a) * this.f(); }
@@ -2381,6 +2389,10 @@ class Fighter {
  * S5b  Projectiles / Combat / Physics / Camera / Match
  * ================================================================ */
 const NullFX = new Proxy({}, { get: function () { return function () { }; } });
+/* オンライン対戦（net.js）。中身は使うときに参照するのでゲッターで渡す */
+const { Snap, Net, NetSession } = window.DennoNet({
+  get Game() { return Game; }, get FX() { return FX; }, get NullFX() { return NullFX; }, get Match() { return Match; }, get HASH() { return HASH; }
+});
 
 function rectOv(a, b) { return a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1]; }
 function rectCenter(a, b) {
@@ -5184,10 +5196,12 @@ Game.scenes.boot = {
 /* ================= TITLE ================= */
 Game.scenes.title = {
   idleLimit: 0,
-  ALL: ['はじめての人へ', '2人で対戦', '1人で遊ぶ (CPU)', '技一覧', 'あそびかた', '入力設定', '設定'],
+  ALL: ['はじめての人へ', '2人で対戦', '1人で遊ぶ (CPU)', '技一覧', 'あそびかた', 'オンライン対戦', '入力設定', '設定'],
   get items() { return (Settings.data.lock && !Game.staff) ? this.ALL.slice(0, 5) : this.ALL; },
   enter() {
     this.sel = 0; this.hintT = 0; this.demo = false; this.demoT = 0; this.demoI = 0; this.pups = [];
+    if (Net.state !== 'idle') Net.close();   /* オンラインから戻ったら切断 */
+    Game.netLinger = null;
     FX.reset();
   },
   startDemo() {
@@ -5227,6 +5241,7 @@ Game.scenes.title = {
       else if (it === '2人で対戦') Game.go('charSelect');
       else if (it === '1人で遊ぶ (CPU)') Game.go('cpuSelect');
       else if (it === '技一覧') Game.go('moves');
+      else if (it === 'オンライン対戦') Game.go('online');
       else if (it === 'あそびかた') Game.go('howto');
       else if (it === '入力設定') Game.go('inputConfig', { from: 'title' });
       else Game.go('settings');
@@ -5255,7 +5270,7 @@ Game.scenes.title = {
     drawText(ctx, T.title, 480 + off, 168, { size: 66, align: 'center', color: '#ffffff', glow: '#ff3b5c' });
     drawText(ctx, T.titleEn, 480, 206, { size: 18, font: 'en', align: 'center', color: '#19f3ff', glow: '#19f3ff' });
     drawText(ctx, T.tagline, 480, 238, { size: 16, align: 'center', color: '#e6f1ff' });
-    drawMenuList(ctx, this.items, this.sel, 480, 262, 29, { size: 18 });
+    drawMenuList(ctx, this.items, this.sel, 480, 258, this.items.length > 7 ? 25 : 29, { size: 18 });
     {
       const R = Records.get(), S = R.streak;
       if (R.matches > 0) {
@@ -5437,6 +5452,113 @@ Game.scenes.settings = {
 /* ================================================================
  * S8b  CHAR_SELECT（1〜4キャラ対応・2人同時）/ VERSUS
  * ================================================================ */
+/* ================================================================
+ * オンライン対戦: 部屋を作る / 部屋番号を入れて入る。つながったらキャラ選択へ
+ * ホストが P1、入った側が P2。どちらも自分の P1 の機器で操作する
+ * ================================================================ */
+/* ホストが試合を始める（両者に同じ seed・ルール・ステージを渡す） */
+function netHostStart() {
+  const list = window.StageVisual && StageVisual.THEMES ? StageVisual.THEMES.map(x => x.id) : ['sando'];
+  const eff = Settings.eff(), seed = Math.floor(Math.random() * 0x7ffffffe) + 1;
+  const msg = { t: 'start', sel: Game.sel.slice(), pal2: [false, true], easy: Game.easy.slice(), seed: seed, rounds: eff.rounds, time: eff.time, stage: list[seed % list.length] };
+  Net.send(msg);
+  netApplyStart(msg);
+}
+function netApplyStart(msg) {
+  Game.sel = msg.sel.slice(); Game.pal2 = msg.pal2.slice(); Game.easy = msg.easy.slice();
+  Game.netRules = { seed: msg.seed, rounds: msg.rounds, time: msg.time, stage: msg.stage };
+  Game.training = false; Game.tutorial = false; Game.netLinger = null;
+  Game.go('versus', { net: true });
+}
+/* 接続が切れていたらお知らせしてタイトルへ（切れていたら true） */
+function netLost() {
+  Net.poll();
+  if (Net.state === 'open') return false;
+  Toast.push(Net.err || '相手との接続が切れました');
+  Net.close(); Game.go('title');
+  return true;
+}
+Game.scenes.online = {
+  idleLimit: 0,
+  ITEMS: ['部屋を作る', '部屋に入る', 'タイトルへ'],
+  enter() { this.mode = 'menu'; this.sel = 0; this.dig = this.dig || [0, 0, 0, 0]; this.di = 0; Net.close(); FX.reset(); },
+  update() {
+    Net.poll();
+    const n = Input.nav, back = (n & B_H) || Input.keyPressed('Escape'), ok = (n & B_L) || Input.keyPressed('Enter') || Input.keyPressed('NumpadEnter');
+    if (this.mode === 'menu') {
+      this.sel = menuMove(this.sel, this.ITEMS.length, n);
+      if (back) { Audio.play('menuCancel'); Game.go('title'); return; }
+      if (ok) {
+        Audio.play('menuOk');
+        if (this.sel === 0) { Net.host(); this.mode = 'host'; }
+        else if (this.sel === 1) { this.mode = 'code'; this.di = 0; }
+        else Game.go('title');
+      }
+      return;
+    }
+    if (this.mode === 'code') {
+      if (n & B_LEFT) { this.di = (this.di + 3) % 4; Audio.play('menuMove'); }
+      if (n & B_RIGHT) { this.di = (this.di + 1) % 4; Audio.play('menuMove'); }
+      if (n & B_UP) { this.dig[this.di] = (this.dig[this.di] + 1) % 10; Audio.play('menuMove'); }
+      if (n & B_DOWN) { this.dig[this.di] = (this.dig[this.di] + 9) % 10; Audio.play('menuMove'); }
+      for (let d = 0; d < 10; d++) {
+        if (Input.keyPressed('Digit' + d) || Input.keyPressed('Numpad' + d)) { this.dig[this.di] = d; this.di = Math.min(3, this.di + 1); Audio.play('menuMove'); }
+      }
+      if (Input.keyPressed('Backspace')) this.di = Math.max(0, this.di - 1);
+      if (back) { Audio.play('menuCancel'); this.mode = 'menu'; return; }
+      if (ok) { Audio.play('menuOk'); Net.join(this.dig.join('')); this.mode = 'join'; }
+      return;
+    }
+    /* 接続待ち */
+    if (Net.state === 'open') {
+      Audio.play('padOn');
+      Game.netSlot = Net.role === 'host' ? 0 : 1;
+      Game.go('charSelect', { net: true });
+      return;
+    }
+    const bad = Net.state === 'error' || Net.state === 'closed';
+    if (back || (bad && ok)) { Audio.play('menuCancel'); Net.close(); this.mode = 'menu'; }
+  },
+  render(ctx) {
+    Backdrop.draw(ctx, 0.6);
+    drawText(ctx, 'オンライン対戦', 480, 64, { size: 30, align: 'center', color: '#ffffff', glow: '#19f3ff' });
+    const sub = (t, y, c) => drawText(ctx, t, 480, y, { size: 14, align: 'center', color: c || '#8fa3c8' });
+    if (this.mode === 'menu') {
+      drawMenuList(ctx, this.ITEMS, this.sel, 480, 190, 46);
+      sub('ネット越しに 2人で対戦します。片方が部屋を作り、部屋番号を相手に伝えて入ってもらいます', 392);
+      sub('2人とも Chrome か Edge で遊んでください', 416);
+      sub('学校など制限のあるネットワークでは、つながらないことがあります', 440);
+    } else if (this.mode === 'code') {
+      sub('相手から聞いた 部屋番号（4けた）を入れてください', 150, '#e6f1ff');
+      for (let i = 0; i < 4; i++) {
+        const x = 480 + (i - 1.5) * 84, on = i === this.di;
+        ctx.save(); ctx.fillStyle = on ? 'rgba(25,243,255,0.16)' : 'rgba(4,5,16,0.72)'; fillRR(ctx, x - 32, 196, 64, 84, 8); ctx.fill();
+        ctx.strokeStyle = on ? '#19f3ff' : 'rgba(143,163,200,0.4)'; ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
+        drawText(ctx, String(this.dig[i]), x, 240, { size: 46, font: 'en', align: 'center', base: 'middle', color: '#ffffff', glow: on ? '#19f3ff' : null });
+      }
+      sub('↑↓: 数字を変える   ←→: けたを移る   （数字キーでも入れられます）', 320);
+      sub('決定: 入る   強 / Esc: 戻る', 346);
+    } else {
+      const st = Net.state, dots = '.'.repeat(1 + Math.floor(Game.t * 2) % 3);
+      if (st === 'error' || st === 'closed') {
+        drawText(ctx, Net.err || 'つながりませんでした', 480, 220, { size: 18, align: 'center', color: '#ff6b8b' });
+        sub('決定 / 強: 戻る', 270);
+      } else if (this.mode === 'host' && st === 'waiting') {
+        sub('部屋番号', 150, '#e6f1ff');
+        drawText(ctx, Net.code, 480, 215, { size: 72, font: 'en', align: 'center', base: 'middle', color: '#ffffff', glow: '#19f3ff' });
+        sub('この番号を相手に伝えて、「部屋に入る」で入力してもらってください', 290, '#e6f1ff');
+        sub('相手を待っています' + dots, 330);
+      } else if (st === 'connecting') {
+        sub('相手と接続しています' + dots, 230, '#e6f1ff');
+      } else {
+        sub('仲介サーバーに接続しています' + dots, 230, '#e6f1ff');
+      }
+      if (st !== 'error' && st !== 'closed') sub('強 / Esc: やめる', 420);
+    }
+    drawConn(ctx);
+  }
+};
+
 Game.scenes.charSelect = {
   idleLimit: 3600,
   enter(args) {
@@ -5459,8 +5581,23 @@ Game.scenes.charSelect = {
       a.cur = Math.max(0, r.indexOf(Game.sel[0])); a.decided = true; a.picked = Game.sel[0];
       a.pal = Game.pal2[0] ? 1 : 0; a.easy = Game.easy[0]; b.pal = 1 - a.pal;
     }
+    /* オンライン: 自分の側だけ操作。配色は P1 赤 / P2 シアンで固定 */
+    this.net = !!(args && args.net) && Net.state === 'open';
+    this.local = Game.netSlot || 0; this.sent = ''; this.idleLimit = this.net ? 0 : 3600;
+    if (this.net) { this.training = false; Game.training = false; this.p[0].pal = 0; this.p[1].pal = 1; }
     this.refreshPreview(0); this.refreshPreview(1);
     FX.reset();
+  },
+  netRecv() {
+    let m;
+    while ((m = Net.take('sel'))) {
+      const q = this.p[1 - this.local];
+      q.cur = m.cur | 0; q.decided = !!m.decided; q.picked = m.picked || null; q.easy = !!m.easy;
+      if (!q.decided) this.cd = -1;
+    }
+    const st = Net.take('start');
+    if (st) { netApplyStart(st); return true; }
+    return false;
   },
   perRow() { const n = this.cards.length; return n > 5 ? Math.ceil(n / 2) : n; },
   hoverId(i) {
@@ -5479,6 +5616,7 @@ Game.scenes.charSelect = {
     previewPlay(p.pup, p.decided && !wasDecided ? 'intro' : 'idle', 0);
   },
   togglePal(i) {
+    if (this.net) return;
     const p = this.p[i], q = this.p[1 - i];
     p.pal = 1 - p.pal;
     /* 同じキャラ同士なら配色がかぶらないよう、相手と入れ替える */
@@ -5492,8 +5630,16 @@ Game.scenes.charSelect = {
     this.t++;
     const R = Game.roster.length;
     const anyDecided = this.p[0].decided || this.p[1].decided;
+    if (this.net) {
+      if (netLost() || this.netRecv()) return;
+      const me = this.p[this.local];
+      if (Input.keyPressed('Escape') || ((Input.edge[0] & B_H) && !me.decided)) { Audio.play('menuCancel'); Net.close(); Game.go('title'); return; }
+    }
     for (let i = 0; i < 2; i++) {
-      const p = this.p[i], pu = Input.pulse[i], ed = Input.edge[i];
+      /* オンライン: 相手の側は届いた状態を表示するだけ。自分の側は自分の機器（P1 の機器）で動かす */
+      if (this.net && i !== this.local) { this.refreshPreview(i); continue; }
+      const src = this.net ? 0 : i;
+      const p = this.p[i], pu = Input.pulse[src], ed = Input.edge[src];
       if (!p.decided) {
         if (pu & B_LEFT) { if (R > 1) { p.cur = (p.cur + this.cards.length - 1) % this.cards.length; Audio.play('menuMove'); } else this.togglePal(i); }
         if (pu & B_RIGHT) { if (R > 1) { p.cur = (p.cur + 1) % this.cards.length; Audio.play('menuMove'); } else this.togglePal(i); }
@@ -5522,16 +5668,20 @@ Game.scenes.charSelect = {
       this.refreshPreview(i);
     }
     /* 戻る: 誰も決定していなければ強/Escでタイトルへ */
-    if (Input.keyPressed('Escape') || ((Input.edge[0] | Input.edge[1]) & B_H && !anyDecided)) {
+    if (!this.net && (Input.keyPressed('Escape') || ((Input.edge[0] | Input.edge[1]) & B_H && !anyDecided))) {
       if (anyDecided) { this.p.forEach(p => { p.decided = false; p.picked = null; }); this.cd = -1; Audio.play('menuCancel'); }
       else { Audio.play('menuCancel'); Game.go('title'); return; }
     }
-    if (!(Settings.data.lock && !Game.staff) && (Input.startHold[0] === 45 || Input.startHold[1] === 45 || Input.keyPressed('Tab'))) { Game.go('inputConfig', { from: 'charSelect' }); return; }
+    if (!this.net && !(Settings.data.lock && !Game.staff) && (Input.startHold[0] === 45 || Input.startHold[1] === 45 || Input.keyPressed('Tab'))) { Game.go('inputConfig', { from: 'charSelect' }); return; }
     /* 1人で練習: P2 は CPU。P1 が決めたら同じキャラ・別の配色で自動的に決まる */
     if (this.training) {
       const a = this.p[0], b = this.p[1];
       if (a.decided && !b.decided) { b.decided = true; b.picked = Game.pickCpuOpp(a.picked, null); b.pal = 1 - a.pal; this.refreshPreview(1); }
       else if (!a.decided && b.decided) { b.decided = false; b.picked = null; this.refreshPreview(1); }
+    }
+    if (this.net) {
+      const me = this.p[this.local], key = [me.cur, me.decided ? 1 : 0, me.picked || '', me.easy ? 1 : 0].join(',');
+      if (key !== this.sent) { this.sent = key; Net.send({ t: 'sel', cur: me.cur, decided: me.decided, picked: me.picked, easy: me.easy }); }
     }
     if (this.p[0].decided && this.p[1].decided) {
       if (this.cd < 0) this.cd = 60;
@@ -5542,16 +5692,18 @@ Game.scenes.charSelect = {
   },
   start() {
     const a = this.p[0], b = this.p[1];
+    if (this.net && this.local !== 0) return;   /* オンライン: 始めるのはホスト（ゲストは start を待つ） */
     Game.sel = [a.picked, b.picked];
     Game.pal2 = [a.pal === 1, b.pal === 1];
     Game.easy = [a.easy, b.easy];
     if (Game.pal2[0] === Game.pal2[1]) Game.pal2[1] = !Game.pal2[0];
+    if (this.net) { netHostStart(); return; }
     Store.set('last', { p1: Game.sel[0], p2: Game.sel[1] });
     Game.go('versus', { training: this.training });
   },
   render(ctx) {
     Backdrop.draw(ctx, 0.6);
-    drawText(ctx, this.challenger ? '乱入！  P2 キャラクター選択' : (this.training ? '1人で遊ぶ  キャラクター選択' : 'キャラクター選択'), 480, 44, { size: 28, align: 'center', color: '#ffffff', glow: '#19f3ff' });
+    drawText(ctx, this.net ? 'オンライン対戦  キャラクター選択（あなたは P' + (this.local + 1) + '）' : this.challenger ? '乱入！  P2 キャラクター選択' : (this.training ? '1人で遊ぶ  キャラクター選択' : 'キャラクター選択'), 480, 44, { size: 28, align: 'center', color: '#ffffff', glow: '#19f3ff' });
     /* 左右の大きな人形を先に描き、カードを手前に重ねる（カードが隠れないように） */
     for (let i = 0; i < 2; i++) {
       const p = this.p[i], col = i === 0 ? UI_COL.p1 : UI_COL.p2, cx = i === 0 ? 105 : 855;
@@ -5620,28 +5772,32 @@ Game.scenes.charSelect = {
         drawText(ctx, '「' + q + '」', ix + iw - 14, 462, { size: 11, color: '#e6f1ff', align: 'right', base: 'middle' });
       } else drawText(ctx, 'おまかせ', ix + iw / 2, 420, { size: 20, align: 'center', color: '#8fa3c8' });
       /* 配色とモード */
+      /* オンライン: 自分の側は自分の機器（P1 の機器）のキー、相手の側は「相手」 */
+      const ki = this.net ? 0 : i;
       const st = p.decided ? (this.training && i === 1 ? 'CPU' : 'READY')
         : (this.training && i === 1 ? 'CPU ' + (CPU_LEVELS[Game.cpuLevel] ? CPU_LEVELS[Game.cpuLevel].label : '練習台')
-        : (keyName(i, 'L') + ': 決定    ' + keyName(i, 'T') + ': 配色    ' + keyName(i, 'S') + ': かんたん切替'));
+        : this.net && i !== this.local ? '相手が選んでいます'
+        : (keyName(ki, 'L') + ': 決定    ' + (this.net ? '' : keyName(ki, 'T') + ': 配色    ') + keyName(ki, 'S') + ': かんたん切替'));
       drawText(ctx, st, ix + iw / 2, 494, { size: p.decided ? 18 : 12, font: p.decided ? 'en' : 'jp', align: 'center', color: p.decided ? '#7cff6b' : '#b9c7e6', glow: p.decided ? '#7cff6b' : null, base: 'middle' });
       if (id) {
         ctx.fillStyle = LookAdapter.edge(Game.chars[id].ch, p.pal === 1 ? 'paletteP2' : 'palette'); ctx.fillRect(ix + iw - 50, 352, 12, 12);
         drawText(ctx, '配色', ix + iw - 56, 363, { size: 10, color: '#8fa3c8', align: 'right' });
       }
       /* デバイス */
-      const d = Devices.slots[i];
+      const d = this.net ? (i === this.local ? Devices.slots[0] : null) : Devices.slots[i];
       const y2 = 524;
-      drawText(ctx, 'P' + (i + 1) + ' ' + (d ? (d.kind === 'pad' ? d.name : d.name) : '---'), ix, y2, { size: 12, color: col });
-      ctx.fillStyle = d && d.connected !== false ? '#7cff6b' : '#ff3b5c';
+      drawText(ctx, 'P' + (i + 1) + ' ' + (this.net ? (i === this.local ? 'あなた ' + (d ? d.name : '') : 'オンラインの相手') : (d ? d.name : '---')), ix, y2, { size: 12, color: col });
+      ctx.fillStyle = (this.net && i !== this.local) || (d && d.connected !== false) ? '#7cff6b' : '#ff3b5c';
       ctx.beginPath(); ctx.arc(ix + iw - 8, y2 - 4, 4, 0, 6.2832); ctx.fill();
       if (p.easy) { panel(ctx, ix + iw - 110, y2 - 14, 90, 18, '#ffe94d', 0.6); drawText(ctx, 'かんたん: ON', ix + iw - 65, y2 - 5, { size: 11, color: '#ffe94d', align: 'center', base: 'middle' }); }
       else drawText(ctx, 'かんたん: OFF', ix + iw - 20, y2 - 5, { size: 11, color: '#6a7490', align: 'right', base: 'middle' });
     }
     if (this.cd < 0) {
-      const msg = this.training ? 'P1 の 弱ボタン（' + keyName(0, 'L') + '）を押すと始まります'
+      const msg = this.net ? '2人とも決めると始まります（あなたの 弱ボタン: ' + keyName(0, 'L') + '）'
+        : this.training ? 'P1 の 弱ボタン（' + keyName(0, 'L') + '）を押すと始まります'
         : '2人とも 弱ボタンを押すと始まります（P1: ' + keyName(0, 'L') + '   P2: ' + keyName(1, 'L') + '）';
       drawText(ctx, msg, 480, 262, { size: 15, align: 'center', color: '#ffe94d', alpha: 0.75 + 0.25 * Math.sin(Game.t * 4) });
-      drawText(ctx, (Settings.data.lock && !Game.staff) ? 'Esc: 戻る' : 'Tab: 入力設定    Esc: 戻る', 480, 284, { size: 12, align: 'center', color: '#8fa3c8' });
+      drawText(ctx, this.net ? 'Esc: 切断してタイトルへ' : (Settings.data.lock && !Game.staff) ? 'Esc: 戻る' : 'Tab: 入力設定    Esc: 戻る', 480, 284, { size: 12, align: 'center', color: '#8fa3c8' });
     }
     if (this.cd >= 0) {
       const k = this.cd / 60;
@@ -5715,7 +5871,9 @@ Game.scenes.versus = {
   idleLimit: 0,
   enter(args) {
     this.args = args || {};
-    if (Game.tutorial) initStage(Game.data.stage.colors, 'sando'); else pickStage();
+    if (Game.tutorial) initStage(Game.data.stage.colors, 'sando');
+    else if (this.args.net && Game.netRules && Game.netRules.stage) initStage(Game.data.stage.colors, Game.netRules.stage);
+    else pickStage();
     this.pups = [0, 1].map(i => {
       const p = makePreview(Game.sel[i], Game.pal2[i]);
       p.cp.play('intro', 0, true); p.cp.tick(26); p.cp.commit(true);
@@ -5727,9 +5885,10 @@ Game.scenes.versus = {
   update() {
     this.pups.forEach(p => { p.beginStep(); p.commit(false, false); });
     /* 掛け合いがあるときは少し長く見せる（決定で飛ばせる） */
+    if (this.args.net && netLost()) return;
     const len = vsLines(Game.sel[0], Game.sel[1]) && !Game.tutorial ? 210 : 120;
-    if (Game.sceneT > 30 && (Input.nav & B_L) && Game.sceneT < len - 20) Game.sceneT = len - 20;
-    if (Game.sceneT >= len) Game.go('fight', { training: this.args.training });
+    if (!this.args.net && Game.sceneT > 30 && (Input.nav & B_L) && Game.sceneT < len - 20) Game.sceneT = len - 20;
+    if (Game.sceneT >= len) Game.go('fight', { training: this.args.training, net: this.args.net });
   },
   render(ctx) {
     const t = Game.sceneT, T = Game.data.stage;
@@ -6081,7 +6240,10 @@ function drawShieldBar(ctx, i, f, col, t) {
 const JOYPOS = { L: { 13: 'r', 14: 'b', 15: 't', 12: 'l', 18: 'SL', 19: 'SR' }, R: { 0: 'r', 2: 'b', 1: 't', 3: 'l', 20: 'SL', 21: 'SR' } };
 function drawButtonGuide(ctx, i, col) {
   if (Settings.data.buttonGuide === false) return;
-  const d = Devices.slots[i];
+  /* オンライン: 自分の側だけ、自分の機器（P1 の機器）のボタンを出す */
+  const ns = Game.scene === Game.scenes.fight && Game.scenes.fight.net;
+  if (ns && i !== ns.local) return;
+  const d = Devices.slots[ns ? 0 : i];
   if (!d) return;
   const al = i === 0 ? 'left' : 'right', gx = i === 0 ? 40 : 920;
   if (d.kind === 'kb') {
@@ -6240,8 +6402,9 @@ Game.scenes.fight = {
       return;
     }
     const eff = Settings.eff();
-    this.training = !!args.training || !!HASH.p.training;
-    const seed = HASH.p.seed != null && HASH.p.seed !== true ? (parseInt(HASH.p.seed, 10) || 1) : ((Date.now() & 0xffff) + 1);
+    const net = !!args.net && Net.state === 'open' && Game.netRules;
+    this.training = !net && (!!args.training || !!HASH.p.training);
+    const seed = net ? Game.netRules.seed : HASH.p.seed != null && HASH.p.seed !== true ? (parseInt(HASH.p.seed, 10) || 1) : ((Date.now() & 0xffff) + 1);
     FX.reset();
     FX.glitchWords = Game.data.texts.glitchWords;
     /* 同じ引数・同じ入力でもう一度シミュレートすると同じ試合になる（KO のリプレイに使う） */
@@ -6249,7 +6412,12 @@ Game.scenes.fight = {
       rts: [Game.chars[Game.sel[0]], Game.chars[Game.sel[1]]], pal2: Game.pal2.slice(), easy: Game.easy.slice(),
       rounds: Game.tutorial ? 1 : eff.rounds, time: (Game.tutorial || this.practice()) ? 0 : eff.time, seed: seed
     };
+    if (net) { this.mArgs.rounds = Game.netRules.rounds; this.mArgs.time = Game.netRules.time; }
     this.match = new Match(Object.assign({ fx: FX }, this.mArgs));
+    /* オンライン: 試合はロールバックのセッションが進める */
+    this.net = net ? new NetSession(Game.netSlot || 0, this.mArgs) : null;
+    if (this.net) this.match = this.net.match;
+    this.quitAsk = false;
     this.rec = []; this.koStep = -1; this.koRound = 0; this.lastPhase = ''; this.replay = null; this.challenger = null;
     FX.showAdv = this.practice(); this.chal = null;
     this.tut = Game.tutorial ? { i: 0, t: 0, base: null, done: 0 } : null;
@@ -6441,6 +6609,7 @@ Game.scenes.fight = {
   update() {
     if (this.replay) { this.replayUpdate(); return; }
     if (this.challenger) { this.challengerUpdate(); return; }
+    if (this.net) { this.netUpdate(); return; }
     const m = this.match, hud = this.hud;
     if (this.paused) { this.updatePause(); return; }
     if (Game.blurPause) { Game.blurPause = false; this.openPause('blur'); return; }
@@ -6461,17 +6630,7 @@ Game.scenes.fight = {
     BGM.setHurry(m.timeMax > 0 && m.timer <= 10 && m.phase === 'FIGHTING');
     if (this.tut) this.tutUpdate(m);
     if (this.practice()) this.practiceUpdate(m);
-    /* HUD の遅延バー */
-    if (m.round !== hud.round) { hud.round = m.round; for (let i = 0; i < 2; i++) { hud.lag[i] = m.fighters[i].hp; hud.last[i] = m.fighters[i].hp; } }
-    for (let i = 0; i < 2; i++) {
-      const f = m.fighters[i];
-      if (f.hp < hud.last[i]) { hud.wait[i] = CFG.HP_BAR_LAG; f.lastHitFrame = m.frame; }
-      hud.last[i] = f.hp;
-      if (hud.wait[i] > 0) hud.wait[i]--;
-      else if (hud.lag[i] > f.hp) hud.lag[i] = Math.max(f.hp, hud.lag[i] - f.maxHp * 0.012);
-      else hud.lag[i] = f.hp;
-    }
-    for (let i = 0; i < 2; i++) { const d = m.fighters[1 - i]; if (d.combo.hits >= 2) d.lastHitFrame = d.lastHitFrame || 0; }
+    this.hudStep(m);
     if (m.ended) {
       Game.result = Object.assign({}, m.result, { ids: Game.sel.slice(), pal2: Game.pal2.slice() });
       /* KO で決着したら、最後の一撃をリプレイしてからリザルトへ */
@@ -6483,6 +6642,73 @@ Game.scenes.fight = {
     }
     /* 両者無入力のタイムアウト */
     if (Input.idle > 2400) { this.match = null; Game.go('title'); }
+  },
+  /* HUD の遅延バー */
+  hudStep(m) {
+    const hud = this.hud;
+    if (m.round !== hud.round) { hud.round = m.round; for (let i = 0; i < 2; i++) { hud.lag[i] = m.fighters[i].hp; hud.last[i] = m.fighters[i].hp; } }
+    for (let i = 0; i < 2; i++) {
+      const f = m.fighters[i];
+      if (f.hp < hud.last[i]) { hud.wait[i] = CFG.HP_BAR_LAG; f.lastHitFrame = m.frame; }
+      hud.last[i] = f.hp;
+      if (hud.wait[i] > 0) hud.wait[i]--;
+      else if (hud.lag[i] > f.hp) hud.lag[i] = Math.max(f.hp, hud.lag[i] - f.maxHp * 0.012);
+      else hud.lag[i] = f.hp;
+    }
+    for (let i = 0; i < 2; i++) { const d = m.fighters[1 - i]; if (d.combo.hits >= 2) d.lastHitFrame = d.lastHitFrame || 0; }
+  },
+  /* ---- オンライン対戦の 1 フレーム ---- */
+  netUpdate() {
+    if (netLost()) { this.match = null; this.net = null; return; }
+    const S = this.net;
+    /* オンラインは止められないので、やめるときは確認だけ出して試合は進める */
+    if (this.quitAsk) {
+      if ((Input.nav & B_L) || Input.keyPressed('Enter')) { Audio.play('menuOk'); Net.close(); this.match = null; this.net = null; Game.go('title'); return; }
+      if ((Input.nav & B_H) || Input.keyPressed('Escape')) { this.quitAsk = false; Audio.play('menuCancel'); }
+    } else if (Input.keyPressed('Escape') || (Input.edge[0] & B_START)) { this.quitAsk = true; Audio.play('menuOk'); }
+    const mask = this.quitAsk ? 0 : (Input.raw[0] & ~B_START);
+    /* 終わった後は進めない（入力は送り続けて、相手の確定を待つ） */
+    if (S.match.ended) { S.sendInputs(); if (S.rbFrom >= 0) S.rollback(); }
+    else S.tick(mask);
+    const m = this.match = S.match;
+    BGM.setHurry(m.timeMax > 0 && m.timer <= 10 && m.phase === 'FIGHTING');
+    this.hudStep(m);
+    if (m.ended && S.settled()) {
+      Game.result = Object.assign({}, m.result, { ids: Game.sel.slice(), pal2: Game.pal2.slice() });
+      Game.netLinger = S;   /* リザルト画面でも少しのあいだ入力を送り続ける（相手の確定のため） */
+      this.rec = S.record();
+      const ko = this.findKo();
+      this.match = null; this.net = null;
+      if (ko && m.result.winner >= 0 && this.startReplay()) return;
+      Game.go('result');
+    }
+  },
+  /* 記録した入力を流し直して、最後のラウンドが KO で決まったか・そのフレームを調べる */
+  findKo() {
+    try {
+      const m = new Match(Object.assign({ fx: NullFX }, this.mArgs));
+      let ko = -1, koRound = 0, last = '';
+      for (let i = 0; i < this.rec.length; i++) {
+        m.step(this.rec[i]);
+        if (m.phase === 'KO' && last !== 'KO') { ko = i + 1; koRound = m.round; }
+        last = m.phase;
+      }
+      this.koStep = ko; this.p2Easy = false;
+      return ko >= 0 && koRound === m.round;
+    } catch (e) { return false; }
+  },
+  drawNet(ctx) {
+    const S = this.net; if (!S) return;
+    const me = S.local, col = me === 0 ? UI_COL.p1 : UI_COL.p2;
+    drawText(ctx, 'YOU', me === 0 ? 40 : 920, 112, { size: 13, font: 'en', align: me === 0 ? 'left' : 'right', color: col, glow: col });
+    drawText(ctx, 'ONLINE  ' + Math.round(Net.rtt) + 'ms', 480, 488, { size: 11, font: 'en', align: 'center', color: '#8fa3c8', alpha: 0.7 });
+    if (S.waitT > 20) drawText(ctx, '通信を待っています…', 480, 210, { size: 18, align: 'center', color: '#ffb347', glow: '#ffb347' });
+    if (S.desync >= 0) drawText(ctx, '同期ずれが起きました（2人の画面の結果が違う可能性があります）', 480, 466, { size: 13, align: 'center', color: '#ff6b8b' });
+    if (this.quitAsk) {
+      ctx.fillStyle = 'rgba(3,4,12,0.6)'; ctx.fillRect(0, 210, CFG.W, 110);
+      drawText(ctx, '対戦をやめて 切断しますか？', 480, 246, { size: 22, align: 'center', base: 'middle', color: '#ffffff' });
+      drawText(ctx, '決定: やめる   強 / Esc: 続ける（試合は止まりません）', 480, 288, { size: 14, align: 'center', base: 'middle', color: '#8fa3c8' });
+    }
   },
   updatePause() {
     const n = Input.nav, items = this.pauseItems();
@@ -6533,13 +6759,14 @@ Game.scenes.fight = {
     drawCutin(ctx, m, this);
     if (!PerfOff.hud) drawHUD(ctx, m, this.hud, Game.t);
     if (this.practice()) this.drawChallenge(ctx, m);
-    if (!this.paused && !this.challenger) {
+    if (this.net) this.drawNet(ctx);
+    else if (!this.paused && !this.challenger) {
       drawText(ctx, 'Esc: ポーズ / 技一覧', 480, 503, { size: 11, align: 'center', color: '#8fa3c8', alpha: 0.75 });
       if (this.canChallenge()) drawText(ctx, 'P2: ' + keyName(1, 'start') + ' で乱入！', 940, 503, { size: 12, align: 'right', color: UI_COL.p2, alpha: 0.6 + 0.3 * Math.sin(Game.t * 3) });
     }
     drawFightBanners(ctx, m, this);
     if (this.tut && !this.paused) this.tutRender(ctx);
-    if (Input.idle > 1800 && !this.paused) {
+    if (Input.idle > 1800 && !this.paused && !this.net) {
       drawText(ctx, '10秒後にタイトルへ戻ります', 480, 150, { size: 20, align: 'center', color: '#ffb347', alpha: 0.6 + 0.4 * Math.sin(Game.t * 8) });
     }
     if (Debug.on) Debug.hud(ctx, m);
@@ -6573,6 +6800,8 @@ Game.scenes.result = {
   enter() {
     const r = Game.result;
     this.r = r; this.t = 0; this.sel = 0; this.items = ['もう一度', 'キャラ選択へ', 'タイトルへ'];
+    /* オンライン: もう一度は 2人とも選んだら始まる */
+    this.net = Net.state === 'open'; this.wantAgain = false; this.peerAgain = false; this.idleLimit = this.net ? 0 : 2700;
     /* CPU 戦の連勝数 */
     this.vsCpu = !!Game.training && CPU_LEVELS[Game.cpuLevel];
     if (this.vsCpu) Game.cpuStreak = r.winner === 0 ? (Game.cpuStreak || 0) + 1 : 0;
@@ -6603,8 +6832,19 @@ Game.scenes.result = {
     this.omiPlayed = false; this.winPlayed = false;
     FX.reset();
   },
+  netStep() {
+    if (netLost()) return true;
+    if (Game.netLinger && this.t < 360) Game.netLinger.sendInputs();
+    if (Net.take('again')) this.peerAgain = true;
+    if (Net.take('toSelect')) { Game.go('charSelect', { net: true }); return true; }
+    const st = Net.take('start');
+    if (st) { netApplyStart(st); return true; }
+    if (Net.role === 'host' && this.wantAgain && this.peerAgain) { netHostStart(); return true; }
+    return false;
+  },
   update() {
     this.t++;
+    if (this.net && this.netStep()) return;
     const T0 = this.win >= 0 ? 200 : 60;
     if (this.t === 4 && this.win >= 0) Audio.play('win');
     if (this.win >= 0 && this.t === 190 && !this.omiPlayed) { this.omiPlayed = true; Audio.play('omikuji', { good: this.good }); }
@@ -6619,6 +6859,12 @@ Game.scenes.result = {
     if (n & (B_LEFT | B_RIGHT)) Audio.play('menuMove');
     if (n & B_L) {
       Audio.play('menuOk');
+      if (this.net) {
+        if (this.sel === 0) { if (!this.wantAgain) { this.wantAgain = true; Net.send({ t: 'again' }); } }
+        else if (this.sel === 1) { Net.send({ t: 'toSelect' }); Game.go('charSelect', { net: true }); }
+        else { Net.close(); Game.go('title'); }
+        return;
+      }
       if (this.sel === 0) {
         /* CPU に勝ったら次の相手へ（負けたら同じ相手ともう一度） */
         if (this.vsCpu && this.win === 0 && Game.sel) Game.sel = [Game.sel[0], Game.pickCpuOpp(Game.sel[0], Game.sel[1])];
@@ -6716,6 +6962,10 @@ Game.scenes.result = {
         drawText(ctx, this.items[i], x, 496, { size: 18, align: 'center', base: 'middle', color: on ? '#ffffff' : '#8fa3c8', glow: on ? '#19f3ff' : null });
       }
     } else drawText(ctx, '決定で スキップ', 480, 520, { size: 12, align: 'center', color: '#6a7490' });
+    if (this.net && t >= T0) {
+      const msg = this.wantAgain ? '相手を待っています…' : (this.peerAgain ? '相手は「もう一度」を選びました' : '');
+      if (msg) drawText(ctx, msg, 480, 528, { size: 13, align: 'center', color: '#ffe94d' });
+    }
     drawConn(ctx);
   }
 };
@@ -8074,7 +8324,7 @@ function boot() {
   Game.pal2 = [false, true];
   const eff = Settings.eff();
   Game.easy = [eff.easy.p1, eff.easy.p2];
-  window.__denno = { Game: Game, Input: Input, Devices: Devices, FX: FX, Debug: Debug, SelfTest: SelfTest, Gallery: Gallery, Settings: Settings, validateGameData: validateGameData, CFG: CFG, Match: Match, NullFX: NullFX, CpuPolicy: CpuPolicy, BGM: BGM, get SV() { return SV; }, Display: Display, PerfOff: PerfOff, Audio: Audio };
+  window.__denno = { Game: Game, Input: Input, Devices: Devices, FX: FX, Debug: Debug, SelfTest: SelfTest, Gallery: Gallery, Settings: Settings, validateGameData: validateGameData, CFG: CFG, Match: Match, NullFX: NullFX, CpuPolicy: CpuPolicy, BGM: BGM, Net: Net, Snap: Snap, NetSession: NetSession, get SV() { return SV; }, Display: Display, PerfOff: PerfOff, Audio: Audio };
   Main.applyMode();
   Main.startLoops();
 }
