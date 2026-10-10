@@ -34,6 +34,7 @@ if (window.__dataMissing) { document.write('<script src="data.sample.js" charset
 </script>
 <script src="miko_visual.js" charset="utf-8"></script>
 <script src="stage.js" charset="utf-8"></script>
+<script src="sfx_kit.js" charset="utf-8"></script>
 <script>
 (function () {
 "use strict";
@@ -3178,7 +3179,30 @@ const Audio = {
       for (let i = 0; i < n; i++) { s = (s * 1664525 + 1013904223) >>> 0; d[i] = (s / 4294967296) * 2 - 1; }
       this.applyVol();
       this.ready = true;
+      this.loadKit();
     } catch (e) { this.ctx = null; }
+  },
+  /* 録音の効果音（sfx_kit.js）を読み込む。読めた名前は録音で鳴らし、無い名前は今までの合成音 */
+  buf: {},
+  loadKit() {
+    const K = window.SFX_KIT || {};
+    for (const name in K) {
+      (K[name] || []).forEach(url => {
+        try {
+          const b64 = url.slice(url.indexOf(',') + 1), bin = atob(b64), u8 = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+          this.ctx.decodeAudioData(u8.buffer, ab => { (this.buf[name] = this.buf[name] || []).push(ab); }, () => { /* 読めない録音は使わない */ });
+        } catch (e) { /* 無視 */ }
+      });
+    }
+  },
+  /* 録音を鳴らす: 毎回少し音程を揺らして、同じ音の繰り返しに聞こえないように */
+  sample(name, pan, o) {
+    const list = this.buf[name], c = this.ctx;
+    const src = c.createBufferSource(); src.buffer = list[Math.floor(Math.random() * list.length)];
+    src.playbackRate.value = (o && o.rate) || (0.95 + Math.random() * 0.1);
+    const g = c.createGain(); g.gain.value = ((window.SFX_GAIN || {})[name] || 1) * 0.9;
+    src.connect(g); g.connect(this._out(pan)); src.start();
   },
   resume() {
     this.init();
@@ -3244,7 +3268,10 @@ const Audio = {
     const now = performance.now(), mi = this.MIN_INT[name];
     if (mi && this.last[name] && now - this.last[name] < mi) return;
     this.last[name] = now;
-    try { fn(this, (opts && opts.pan) || 0, opts || {}); } catch (e) { /* 音で落とさない */ }
+    try {
+      if (this.buf[name] && this.buf[name].length) this.sample(name, (opts && opts.pan) || 0, opts);
+      else fn(this, (opts && opts.pan) || 0, opts || {});
+    } catch (e) { /* 音で落とさない */ }
   },
   SFX: {
     swingL: (a, p) => a.noise({ filterType: 'bandpass', fq0: 2400, fq1: 1200, dur: 0.07, gain: 0.08, pan: p }),
@@ -7792,7 +7819,7 @@ function boot() {
   Game.pal2 = [false, true];
   const eff = Settings.eff();
   Game.easy = [eff.easy.p1, eff.easy.p2];
-  window.__denno = { Game: Game, Input: Input, Devices: Devices, FX: FX, Debug: Debug, SelfTest: SelfTest, Gallery: Gallery, Settings: Settings, validateGameData: validateGameData, CFG: CFG, Match: Match, NullFX: NullFX, CpuPolicy: CpuPolicy, BGM: BGM, get SV() { return SV; }, Display: Display, PerfOff: PerfOff };
+  window.__denno = { Game: Game, Input: Input, Devices: Devices, FX: FX, Debug: Debug, SelfTest: SelfTest, Gallery: Gallery, Settings: Settings, validateGameData: validateGameData, CFG: CFG, Match: Match, NullFX: NullFX, CpuPolicy: CpuPolicy, BGM: BGM, get SV() { return SV; }, Display: Display, PerfOff: PerfOff, Audio: Audio };
   Main.applyMode();
   Main.startLoops();
 }
