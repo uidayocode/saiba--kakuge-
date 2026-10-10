@@ -39,7 +39,7 @@ window.GAME_DATA = {
       blurb: "お札の飛び道具と堅実な立ち回りで戦う、基本のキャラ。",
       ratings: { power: 3, speed: 3, range: 4, defense: 3 },
       stats: {
-        dmgMul: 0.91, hp: 1000, walkF: 3.4, walkB: 2.8, jumpVy: 15, jumpVx: 3.6, gravity: 0.75,
+        dmgMul: 0.92, hp: 1000, walkF: 3.4, walkB: 2.8, jumpVy: 15, jumpVx: 3.6, gravity: 0.75,
         airJumps: 0, prejump: 4, landLag: 3,
         dashF: { frames: 18, speed: 7.0 }, dashB: { frames: 18, speed: 5.5, invuln: 6 },
         gaugeMul: 1.0
@@ -256,7 +256,7 @@ window.GAME_DATA = {
       blurb: "前傾で突っ込む四つ足型。頭突きと対空で相手の動きを押さえる。",
       ratings: { power: 4, speed: 4, range: 2, defense: 3 },
       stats: {
-        dmgMul: 1.15, hp: 1050, walkF: 3.8, walkB: 3.0, jumpVy: 14.5, jumpVx: 4.2, gravity: 0.78,
+        dmgMul: 1.08, hp: 1050, walkF: 3.8, walkB: 3.0, jumpVy: 14.5, jumpVx: 4.2, gravity: 0.78,
         airJumps: 0, prejump: 4, landLag: 3,
         dashF: { frames: 20, speed: 9.5, run: true }, dashB: { frames: 18, speed: 6.0, invuln: 6 },
         gaugeMul: 1.0
@@ -470,7 +470,7 @@ window.GAME_DATA = {
       blurb: "巨体と金棒の大振りで一撃が重い。動きは遅いが、404で場を制圧する。",
       ratings: { power: 5, speed: 1, range: 3, defense: 4 },
       stats: {
-        dmgMul: 0.64, hp: 1100, walkF: 2.6, walkB: 2.2, jumpVy: 13.5, jumpVx: 2.8, gravity: 0.78,
+        dmgMul: 0.69, hp: 1100, walkF: 2.6, walkB: 2.2, jumpVy: 13.5, jumpVx: 2.8, gravity: 0.78,
         airJumps: 0, prejump: 5, landLag: 4,
         dashF: { frames: 22, speed: 5.5 }, dashB: { frames: 22, speed: 4.0, invuln: 4 },
         gaugeMul: 0.9
@@ -681,7 +681,7 @@ window.GAME_DATA = {
       blurb: "俊敏で軽い。三本の尻尾と分身で、読みにくい攻めを仕掛ける。",
       ratings: { power: 2, speed: 5, range: 3, defense: 1 },
       stats: {
-        dmgMul: 1.28, hp: 900, walkF: 4.2, walkB: 3.6, jumpVy: 16.5, jumpVx: 4.8, gravity: 0.72,
+        dmgMul: 1.38, hp: 900, walkF: 4.2, walkB: 3.6, jumpVy: 16.5, jumpVx: 4.8, gravity: 0.72,
         airJumps: 1, prejump: 3, landLag: 3,
         dashF: { frames: 14, speed: 10.5 }, dashB: { frames: 16, speed: 7.5, invuln: 8 },
         gaugeMul: 1.15
@@ -901,7 +901,7 @@ window.GAME_DATA = {
       title: "遠距離・空中型",
       blurb: "羽うちわの風で寄せつけない。空中で一度だけ止まり、上から風を撃ち下ろす。",
       ratings: { power: 3, speed: 3, range: 5, defense: 2 },
-      stats: { dmgMul: 1.15, hp: 950, walkF: 3, walkB: 2.9, jumpVy: 15.5, jumpVx: 3.8, gravity: 0.68, airJumps: 0, prejump: 4, landLag: 3, dashF: { frames: 18, speed: 7.6 }, dashB: { frames: 18, speed: 6.5, invuln: 6 }, gaugeMul: 1 },
+      stats: { dmgMul: 1.18, hp: 950, walkF: 3, walkB: 2.9, jumpVy: 15.5, jumpVx: 3.8, gravity: 0.68, airJumps: 0, prejump: 4, landLag: 3, dashF: { frames: 18, speed: 7.6 }, dashB: { frames: 18, speed: 6.5, invuln: 6 }, gaugeMul: 1 },
       boxes: { push: { stand: { w: 52, h: 100 }, crouch: { w: 56, h: 70 }, air: { w: 44, h: 100 } }, hurt: { stand: [ { x: -18, y: 138, w: 38, h: 38 }, { x: -26, y: 60, w: 54, h: 82 }, { x: -24, y: 0, w: 48, h: 64 } ], crouch: [ { x: -14, y: 70, w: 40, h: 42 }, { x: -28, y: 0, w: 58, h: 74 } ], air: [ { x: -24, y: 20, w: 50, h: 140 } ] } },
       look: { palette: { skin: "#ffe0cc", hair: "#1a1033", primary: "#f4f7ff", secondary: "#ff3b5c", accent: "#ffd24a", glow: "#19f3ff", outline: "#0a0620", eye: "#19f3ff" }, paletteP2: { skin: "#ffe0cc", hair: "#2b1033", primary: "#e8ddff", secondary: "#a56bff", accent: "#ffd24a", glow: "#ff4fa3", outline: "#0a0620", eye: "#ff4fa3" }, body: { torsoLen: 52, torsoWTop: 30, torsoWBottom: 24, neckLen: 8, headR: 15, shoulderDrop: 6, uArmLen: 31, fArmLen: 29, handR: 6, thighLen: 42, shinLen: 42, footLen: 20, footH: 8, limbW: { uArm: [ 11, 9 ], fArm: [ 9, 7 ], thigh: [ 16, 13 ], shin: [ 12, 9 ] } }, colors: { head: "skin", neck: "skin", torso: "primary", uArm: "primary", fArm: "primary", hand: "skin", thigh: "secondary", shin: "secondary", foot: "accent" }, prop: { kind: "gohei", len: 46, thick: 4, angle: 0, color: "accent" }, neon: { tubeW: 3, glowW: 8, glowAlpha: 0.24, coreW: 1, fill: 0.9 }, decor: [], chains: [] },
       feel: { breath: { amp: 0.012, period: 90 }, jump: { sx: 0.94, sy: 1.08, frames: 4 }, land: { sx: 1.1, sy: 0.88, frames: 6 }, dash: { sx: 1.06, sy: 0.97, frames: 5 }, hitShake: { amp: [ 1, 2, 3, 3.5 ] }, recoil: { x: [ 3, 6, 10, 14 ], rot: [ 2, 4, 7, 10 ], frames: 4 }, squashHit: { sx: 1.06, sy: 0.94, frames: 3 } },
@@ -969,7 +969,7 @@ window.GAME_DATA = {
       title: "投げ・一発逆転型",
       blurb: "動きは遅いが、手招きで相手を引き寄せる。近づけばガードできない大投げ。",
       ratings: { power: 5, speed: 1, range: 3, defense: 4 },
-      stats: { dmgMul: 1.2, hp: 1100, walkF: 2.4, walkB: 2.2, jumpVy: 13.5, jumpVx: 2.8, gravity: 0.8, airJumps: 0, prejump: 5, landLag: 4, dashF: { frames: 22, speed: 5.5 }, dashB: { frames: 22, speed: 4, invuln: 4 }, gaugeMul: 0.95 },
+      stats: { dmgMul: 1.06, hp: 1100, walkF: 2.4, walkB: 2.2, jumpVy: 13.5, jumpVx: 2.8, gravity: 0.8, airJumps: 0, prejump: 5, landLag: 4, dashF: { frames: 22, speed: 5.5 }, dashB: { frames: 22, speed: 4, invuln: 4 }, gaugeMul: 0.95 },
       boxes: { push: { stand: { w: 72, h: 116 }, crouch: { w: 80, h: 88 }, air: { w: 64, h: 116 } }, hurt: { stand: [ { x: -24, y: 140, w: 44, h: 50 }, { x: -34, y: 60, w: 70, h: 86 }, { x: -30, y: 0, w: 62, h: 64 } ], crouch: [ { x: -22, y: 72, w: 52, h: 50 }, { x: -36, y: 0, w: 72, h: 78 } ], air: [ { x: -30, y: 20, w: 62, h: 170 } ] } },
       look: { palette: { skin: "#d9344f", hair: "#2a1a3a", primary: "#ffa13c", secondary: "#2a1a3a", accent: "#ffe94d", glow: "#ff3b5c", outline: "#0a0620", eye: "#ffe94d" }, paletteP2: { skin: "#8f1f3a", hair: "#101018", primary: "#ffe94d", secondary: "#2a1a3a", accent: "#ffa13c", glow: "#ffa13c", outline: "#0a0620", eye: "#ff3b5c" }, body: { torsoLen: 44, torsoWTop: 42, torsoWBottom: 34, neckLen: 8, headR: 18, shoulderDrop: 6, uArmLen: 26, fArmLen: 24, handR: 8, thighLen: 30, shinLen: 30, footLen: 24, footH: 10, limbW: { uArm: [ 15, 12 ], fArm: [ 13, 10 ], thigh: [ 20, 16 ], shin: [ 16, 12 ] } }, colors: { head: "skin", neck: "skin", torso: "glow", uArm: "primary", fArm: "primary", hand: "skin", thigh: "glow", shin: "glow", foot: "accent" }, prop: { kind: "kanabo", len: 62, thick: 10, angle: 0, color: "accent" }, neon: { tubeW: 4, glowW: 10, glowAlpha: 0.26, coreW: 1.2, fill: 0.92 }, decor: [], chains: [] },
       feel: { breath: { amp: 0.01, period: 90 }, jump: { sx: 0.96, sy: 1.05, frames: 4 }, land: { sx: 1.1, sy: 0.84, frames: 7 }, dash: { sx: 1.04, sy: 0.97, frames: 6 }, hitShake: { amp: [ 1, 2, 3, 3.5 ] }, recoil: { x: [ 2, 4, 6, 8 ], rot: [ 1, 3, 5, 7 ], frames: 4 }, squashHit: { sx: 1.04, sy: 0.95, frames: 3 } },
