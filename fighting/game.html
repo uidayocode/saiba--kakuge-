@@ -3269,10 +3269,16 @@ const Audio = {
     if (mi && this.last[name] && now - this.last[name] < mi) return;
     this.last[name] = now;
     try {
-      if (this.buf[name] && this.buf[name].length) this.sample(name, (opts && opts.pan) || 0, opts);
-      else fn(this, (opts && opts.pan) || 0, opts || {});
+      const pan = (opts && opts.pan) || 0;
+      if (this.buf[name] && this.buf[name].length) {
+        this.sample(name, pan, opts);
+        const sub = this.SUB[name]; /* 録音は低域が薄いので重い音だけ合成のサブを下に敷く */
+        if (sub) this.tone({ type: 'sine', f0: sub[0], f1: sub[1], dur: sub[2], gain: sub[3], pan: pan });
+      } else fn(this, pan, opts || {});
     } catch (e) { /* 音で落とさない */ }
   },
+  /* 録音に重ねるサブ低音: [開始Hz, 終了Hz, 長さs, 音量] */
+  SUB: { hitH: [120, 45, 0.18, 0.22], hitX: [90, 30, 0.45, 0.3], throwImpact: [110, 40, 0.25, 0.25], down: [90, 40, 0.14, 0.15], guardBreak: [120, 50, 0.35, 0.25] },
   SFX: {
     swingL: (a, p) => a.noise({ filterType: 'bandpass', fq0: 2400, fq1: 1200, dur: 0.07, gain: 0.08, pan: p }),
     swingH: (a, p) => { a.noise({ filterType: 'bandpass', fq0: 1600, fq1: 500, dur: 0.14, gain: 0.12, pan: p }); a.tone({ type: 'sine', f0: 180, f1: 90, dur: 0.14, gain: 0.1, pan: p }); },
