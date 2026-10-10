@@ -68,7 +68,7 @@
 - `game.html#selftest&matches=64&maxSec=150&seed=N` … 全キャラの組み合わせで CPU 同士の自動対戦。`document.title` が `SELFTEST PASS` なら合格。
 - `game.html#gallery&all` … 全キャラ全ポーズ。右上の「警告 0」を確認。
 - `window.__denno.Match` / `CpuPolicy` / `NullFX` を使うと、ページ内で試合を直接回せる（コンボ・バランスの計測に使った）。
-- 最後に測ったバランス（CPU つよい 同士、総当たり）: 唐傘を外す前の7人で全員 47〜53%（1人192試合）。新キャラの dmgMul は scratchpad の bal7.js で合わせた。単純な戦法（弾連打・無敵技連打・でたらめ押し）は CPU ふつう / つよい にほぼ勝てない。
+- 最後に測ったバランス（CPU つよい 同士、総当たり）: 6人で全員 48〜54%（1人160試合）。新キャラの dmgMul は scratchpad の bal7.js で合わせた。単純な戦法（弾連打・無敵技連打・でたらめ押し）は CPU ふつう / つよい にほぼ勝てない。
 
 ## 次にやること（候補）
 
