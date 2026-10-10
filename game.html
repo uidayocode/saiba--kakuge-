@@ -4784,7 +4784,15 @@ function drawStage(ctx, cam, t, state) {
   const bs = Display.k * (Display.BG[Display.level()] || 1);
   if (bs >= Display.k - 0.01) { stageXform(ctx, cam, () => SV.draw(ctx, sc, t, st)); return; }
   const w = Math.ceil(CFG.W * bs), h = Math.ceil(CFG.H * bs);
-  if (!BGC.c || BGC.c.width !== w || BGC.c.height !== h) { BGC.c = document.createElement('canvas'); BGC.c.width = w; BGC.c.height = h; BGC.g = BGC.c.getContext('2d'); }
+  if (!BGC.c || BGC.c.width !== w || BGC.c.height !== h) { BGC.c = document.createElement('canvas'); BGC.c.width = w; BGC.c.height = h; BGC.g = BGC.c.getContext('2d'); BGC.ok = false; }
+  /* 軽い画質（低・最軽量）では、背景を描き直すのは 2 回に 1 回（キャラは毎回）。カメラの寄りが変わったときは描き直す */
+  const lv = Display.level(), half = lv === 'low' || lv === 'min';
+  BGC.n = (BGC.n || 0) + 1;
+  if (half && BGC.ok && (BGC.n & 1) && Math.abs(cam.zoom - BGC.zoom) < 0.01 && Math.abs(cam.y - BGC.cy) < 2 && Math.abs(cam.x - BGC.cx) < 12) {
+    ctx.drawImage(BGC.c, 0, 0, w, h, 0, 0, w / bs, h / bs);
+    return;
+  }
+  BGC.ok = true; BGC.zoom = cam.zoom; BGC.cy = cam.y; BGC.cx = cam.x;
   const g = BGC.g;
   g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
   g.fillStyle = '#05060f'; g.fillRect(0, 0, w, h);
@@ -8178,6 +8186,7 @@ const Main = {
     if (lim && Game.idleT > lim && Game.scene === sc) { Game.go('title'); }
   },
   frame(now) {
+    const t0 = performance.now();
     const realDt = Math.min(Math.max((now - this.last) / 1000, 0), CFG.MAX_DT);
     this.last = now;
     Game.t += realDt;
@@ -8196,6 +8205,7 @@ const Main = {
       this.render(this.acc / CFG.STEP);
       try { FX.update(realDt, sc && sc.fxScale ? sc.fxScale() : (ts < 1 ? 0.5 : 1)); } catch (e) { reportErr(e, 'fx'); }
     }
+    this.busy = (this.busy || 0) * 0.9 + (performance.now() - t0) * 0.1;
     Debug.tick(now, steps);
   },
   render(alpha) {
@@ -8204,6 +8214,11 @@ const Main = {
     try { if (sc) sc.render(g, alpha); } catch (e) { reportErr(e, 'render'); return; }
     try {
       Overlay.draw(g, Game.t);
+      /* F4: 動作の重さの表示（fps・画質・1フレームの処理時間） */
+      if (Game.showFps) {
+        const L = { high: '高', normal: '標準', low: '低', min: '最軽量' }, lv = Display.level();
+        drawText(g, Math.round(Debug.fps) + ' fps  画質:' + (L[lv] || lv) + (((Settings.data && Settings.data.quality) || 'auto') === 'auto' ? '(自動)' : '') + '  処理 ' + (Main.busy || 0).toFixed(1) + 'ms', 8, 14, { size: 12, color: '#7cff6b', font: 'mono' });
+      }
       Toast.draw(g);
       if (Debug.on) Debug.overlay(g);
     } catch (e) { reportErr(e, 'overlay'); return; }
@@ -8283,6 +8298,7 @@ function boot() {
   /* ---- 入力イベント ---- */
   window.addEventListener('keydown', e => {
     if (e.code === 'F2') { toggleFullscreen(); e.preventDefault(); return; }
+    if (e.code === 'F4') { Game.showFps = !Game.showFps; e.preventDefault(); return; }
     if (e.code === 'F3') { Audio.resume(); Audio.setMute(!Audio.muted); Toast.push(Audio.muted ? 'ミュート' : 'ミュート解除'); e.preventDefault(); return; }
     Audio.resume();
     Keys.onDown(e);
