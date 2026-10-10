@@ -1247,9 +1247,9 @@ function defaultPadProfile(gp, half) {
   const btn = i => ({ t: 'b', i: i });
   const face = () => { prof.binds.L = [btn(0)]; prof.binds.H = [btn(1)]; prof.binds.S = [btn(2)]; prof.binds.T = [btn(3)]; };
   const four = (l, h, s, t) => { prof.binds.L = [btn(l)]; prof.binds.H = [btn(h)]; prof.binds.S = [btn(s)]; prof.binds.T = [btn(t)]; };
-  /* 横持ち: 自分から見て 下=弱 / 右=強 / 左=必殺 / 上=投げ（標準配置の番号は縦持ちの位置） */
-  if (half === 'L') { prof.stick.rot = 270; four(14, 13, 12, 15); prof.binds.start = [btn(8)]; }
-  else if (half === 'R') { prof.stick.rot = 90; prof.stick.axX = 2; prof.stick.axY = 3; four(2, 0, 3, 1); prof.binds.start = [btn(9)]; }
+  /* 横持ち: 自分から見て 右=弱 / 手前=強 / 奥=必殺 / 左=投げ（標準配置の番号は縦持ちの位置） */
+  if (half === 'L') { prof.stick.rot = 270; four(13, 14, 15, 12); prof.binds.start = [btn(8)]; }
+  else if (half === 'R') { prof.stick.rot = 90; prof.stick.axX = 2; prof.stick.axY = 3; four(0, 2, 1, 3); prof.binds.start = [btn(9)]; }
   else if (/Joy-Con\s*\(L\)/i.test(id)) { prof.stick.rot = 270; face(); prof.binds.start = [btn(8)]; }
   else if (/Joy-Con\s*\(R\)/i.test(id)) { prof.stick.rot = 90; face(); prof.binds.start = [btn(9)]; }
   else if (std) {
