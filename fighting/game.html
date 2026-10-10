@@ -1233,13 +1233,24 @@ function shortPadName(id) {
   if (!s) s = 'Gamepad';
   return s.length > 22 ? s.slice(0, 22) : s;
 }
-function defaultPadProfile(gp) {
+/* Chrome は左右の Joy-Con を両方つなぐと1台（標準配置）にまとめる。その場合は左右の半分を別の機器として扱う */
+function isJoyPair(id) {
+  id = id || '';
+  if (/Joy-?Con\s*\((L|R)\)/i.test(id)) return false;
+  return /Joy-?Con/i.test(id) || /L\s*\+\s*R/.test(id) || /Product:\s*200e/i.test(id);
+}
+function keyHalf(key) { const m = /:(L|R)$/.exec(key || ''); return m ? m[1] : ''; }
+function defaultPadProfile(gp, half) {
   const id = (gp && gp.id) || '';
   const std = !!gp && gp.mapping === 'standard';
   const prof = { binds: { up: [], down: [], left: [], right: [], L: [], H: [], S: [], T: [], start: [] }, stick: { enabled: true, rot: 0, deadzone: 0.45, axX: 0, axY: 1 } };
   const btn = i => ({ t: 'b', i: i });
   const face = () => { prof.binds.L = [btn(0)]; prof.binds.H = [btn(1)]; prof.binds.S = [btn(2)]; prof.binds.T = [btn(3)]; };
-  if (/Joy-Con\s*\(L\)/i.test(id)) { prof.stick.rot = 270; face(); prof.binds.start = [btn(8)]; }
+  const four = (l, h, s, t) => { prof.binds.L = [btn(l)]; prof.binds.H = [btn(h)]; prof.binds.S = [btn(s)]; prof.binds.T = [btn(t)]; };
+  /* 横持ち: 自分から見て 下=弱 / 右=強 / 左=必殺 / 上=投げ（標準配置の番号は縦持ちの位置） */
+  if (half === 'L') { prof.stick.rot = 270; four(14, 13, 12, 15); prof.binds.start = [btn(8)]; }
+  else if (half === 'R') { prof.stick.rot = 90; prof.stick.axX = 2; prof.stick.axY = 3; four(2, 0, 3, 1); prof.binds.start = [btn(9)]; }
+  else if (/Joy-Con\s*\(L\)/i.test(id)) { prof.stick.rot = 270; face(); prof.binds.start = [btn(8)]; }
   else if (/Joy-Con\s*\(R\)/i.test(id)) { prof.stick.rot = 90; face(); prof.binds.start = [btn(9)]; }
   else if (std) {
     prof.binds.up = [btn(12)]; prof.binds.down = [btn(13)]; prof.binds.left = [btn(14)]; prof.binds.right = [btn(15)];
@@ -1248,8 +1259,8 @@ function defaultPadProfile(gp) {
   return prof;
 }
 function cloneJSON(o) { return JSON.parse(JSON.stringify(o)); }
-function sanitizeProfile(p, gp) {
-  const d = defaultPadProfile(gp);
+function sanitizeProfile(p, gp, half) {
+  const d = defaultPadProfile(gp, half);
   if (!p || typeof p !== 'object' || !p.binds || typeof p.binds !== 'object') return d;
   const out = { binds: {}, stick: Object.assign({}, d.stick) };
   ACTIONS.forEach(a => {
@@ -1280,7 +1291,8 @@ const PadProfiles = {
   get(key, gp) {
     if (this.cache[key]) return this.cache[key];
     const saved = this.all()[key];
-    const p = saved ? sanitizeProfile(saved, gp) : defaultPadProfile(gp);
+    const h = keyHalf(key);
+    const p = saved ? sanitizeProfile(saved, gp, h) : defaultPadProfile(gp, h);
     this.cache[key] = p;
     return p;
   },
@@ -1293,7 +1305,7 @@ const PadProfiles = {
     const all = this.all();
     delete all[key];
     Store.set('pads', all);
-    this.cache[key] = defaultPadProfile(gp);
+    this.cache[key] = defaultPadProfile(gp, keyHalf(key));
     return this.cache[key];
   }
 };
@@ -1315,20 +1327,22 @@ function bindLabel(b) {
 }
 
 class PadDevice {
-  constructor(index) {
-    this.kind = 'pad'; this.index = index; this.id = 'pad:' + index;
-    this.connected = false; this.gp = null; this.profileKey = ''; this.profile = null; this.name = 'Gamepad';
+  constructor(index, half) {
+    this.kind = 'pad'; this.index = index; this.half = half || ''; this.id = 'pad:' + index + this.half;
+    this.connected = false; this.gp = null; this.baseKey = ''; this.profileKey = ''; this.profile = null; this.name = 'Gamepad';
     this.held = 0; this.latch = 0; this.stickOn = false;
     this.rawX = 0; this.rawY = 0; this.rotX = 0; this.rotY = 0;
     this.configured = false;
   }
   attach(gp) {
     this.gp = gp; this.connected = true;
-    const key = padProfileKey(gp.id);
+    this.baseKey = padProfileKey(gp.id);
+    const key = this.baseKey + (this.half ? ':' + this.half : '');
     this.profileKey = key;
     this.profile = PadProfiles.get(key, gp);
     this.configured = PadProfiles.has(key);
-    this.name = shortPadName(gp.id);
+    const nm = shortPadName(gp.id);
+    this.name = !this.half ? nm : (isJoyPair(gp.id) ? 'Joy-Con ' : nm + ' ') + (this.half === 'L' ? '左' : '右');
     this.held = 0; this.latch = 0; this.stickOn = false;
   }
   poll(gp) {
@@ -1400,8 +1414,23 @@ const Devices = {
   connectedPads() {
     const a = [];
     for (const k in this.pads) if (this.pads[k].connected) a.push(this.pads[k]);
-    a.sort((x, y) => x.index - y.index);
+    a.sort((x, y) => x.index - y.index || (x.half < y.half ? -1 : (x.half > y.half ? 1 : 0)));
     return a;
+  },
+  /* 1台を左右2人で分けるか。Joy-Con の左右まとめは既定で分ける。入力設定で切り替え可 */
+  isSplit(id) {
+    const m = Store.get('splitPads', {}), k = padProfileKey(id);
+    return (m && typeof m[k] === 'boolean') ? m[k] : isJoyPair(id);
+  },
+  toggleSplit(dev) {
+    const gp = dev.gp;
+    if (!gp) return;
+    const m = Store.get('splitPads', {}) || {};
+    m[dev.baseKey] = !this.isSplit(gp.id);
+    Store.set('splitPads', m);
+    for (const k in this.pads) if (this.pads[k].index === dev.index) { this.pads[k].releaseAll(); delete this.pads[k]; }
+    this.poll();
+    this.resolve();
   },
   onKey(code, down) {
     this.kb.kb1.key(code, down); this.kb.kb2.key(code, down); this.kb.kb3.key(code, down);
@@ -1414,23 +1443,27 @@ const Devices = {
     for (let i = 0; i < gps.length; i++) {
       const gp = gps[i];
       if (!gp || !gp.connected) continue;
-      seen[gp.index] = true;
-      let d = this.pads[gp.index];
-      if (!d) { d = new PadDevice(gp.index); this.pads[gp.index] = d; }
-      if (!d.connected) {
-        d.attach(gp); changed = true; this.padSeen = true;
-        this.events.push({ type: 'connect', dev: d });
-        Toast.push(d.name + ' が接続されました', 'pad');
-        if (!d.configured) Toast.push('入力設定でボタンを割り当ててください', 'pad');
-        Audio.play('padOn');
-      } else if (padProfileKey(gp.id) !== d.profileKey) {
-        d.attach(gp); changed = true;
+      const halves = this.isSplit(gp.id) ? ['L', 'R'] : [''];
+      for (let h = 0; h < halves.length; h++) {
+        const k = gp.index + halves[h];
+        seen[k] = true;
+        let d = this.pads[k];
+        if (!d) { d = new PadDevice(gp.index, halves[h]); this.pads[k] = d; }
+        if (!d.connected) {
+          d.attach(gp); changed = true; this.padSeen = true;
+          this.events.push({ type: 'connect', dev: d });
+          Toast.push(d.name + ' が接続されました', 'pad');
+          if (!d.configured && !d.half) Toast.push('入力設定でボタンを割り当ててください', 'pad');
+          Audio.play('padOn');
+        } else if (padProfileKey(gp.id) !== d.baseKey) {
+          d.attach(gp); changed = true;
+        }
+        d.poll(gp);
       }
-      d.poll(gp);
     }
     for (const k in this.pads) {
       const d = this.pads[k];
-      if (d.connected && !seen[d.index]) {
+      if (d.connected && !seen[k]) {
         d.connected = false; d.releaseAll(); changed = true;
         this.events.push({ type: 'disconnect', dev: d });
         Toast.push(d.name + ' が切断されました', 'pad');
@@ -6041,7 +6074,7 @@ Game.scenes.inputConfig = {
   rows() {
     const r = [{ t: 'slot', i: 0 }, { t: 'slot', i: 1 }, { t: 'target' }];
     ACTIONS.forEach(a => r.push({ t: 'act', a: a }));
-    r.push({ t: 'stick' }, { t: 'rot' }, { t: 'dz' }, { t: 'wizard' }, { t: 'reset' }, { t: 'back' });
+    r.push({ t: 'stick' }, { t: 'rot' }, { t: 'dz' }, { t: 'split' }, { t: 'wizard' }, { t: 'reset' }, { t: 'back' });
     return r;
   },
   bindText(dev, a) {
@@ -6218,6 +6251,12 @@ Game.scenes.inputConfig = {
           PadProfiles.save(dev.profileKey); Audio.play('menuMove');
         }
         break;
+      case 'split':
+        if ((lr || ok) && dev && dev.kind === 'pad') {
+          Devices.toggleSplit(dev); Audio.play('menuOk');
+          if (!this.dev()) this.target = 0;
+        }
+        break;
       case 'wizard':
         if (ok && dev) { Audio.play('menuOk'); this.wiz = { i: 0 }; this.startCapture(ACTIONS[0], true); }
         break;
@@ -6245,7 +6284,7 @@ Game.scenes.inputConfig = {
     panel(ctx, 16, 48, 456, 462, '#19f3ff', 0.82);
     const slotChoices = Devices.slotChoices();
     for (let i = 0; i < rows.length; i++) {
-      const r = rows[i], y = 70 + i * 24, on = i === this.sel;
+      const r = rows[i], y = 70 + i * 23, on = i === this.sel;
       if (on) { ctx.fillStyle = 'rgba(25,243,255,0.16)'; fillRR(ctx, 24, y - 11, 440, 22, 4); ctx.fill(); }
       let label = '', val = '', col = on ? '#ffffff' : '#a9b8d8';
       if (r.t === 'slot') { label = 'P' + (r.i + 1) + ' デバイス'; val = Devices.slotLabel(r.i); col = on ? '#ffffff' : (r.i === 0 ? UI_COL.p1 : UI_COL.p2); }
@@ -6254,6 +6293,7 @@ Game.scenes.inputConfig = {
       else if (r.t === 'stick') { label = 'スティック'; val = dev && dev.kind === 'pad' ? (dev.profile.stick.enabled ? '有効' : '無効') : '---'; }
       else if (r.t === 'rot') { label = 'スティックの向き'; val = dev && dev.kind === 'pad' ? dev.profile.stick.rot + '°  (決定で自動検出)' : '---'; }
       else if (r.t === 'dz') { label = 'デッドゾーン'; val = dev && dev.kind === 'pad' ? dev.profile.stick.deadzone.toFixed(2) : '---'; }
+      else if (r.t === 'split') { label = '1台を左右で2人に分ける'; val = dev && dev.kind === 'pad' ? (dev.half ? 'ON (' + (dev.half === 'L' ? '左' : '右') + '半分)' : 'OFF') : '---'; }
       else if (r.t === 'wizard') label = 'ウィザードで一括設定';
       else if (r.t === 'reset') label = '初期値に戻す';
       else label = '戻る';
