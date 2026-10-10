@@ -8,4 +8,4 @@ if %errorlevel%==0 (
 ) else (
   echo git not found - opening the local copy without updating.
 )
-start "" "%~dp0fighting\game.html"
+start "" "%~dp0game.html"

@@ -2,7 +2,7 @@
 
 すべて CC0（パブリックドメイン）。Freesound と Kenney (kenney.nl) より。
 
-## 効果音（fighting/sfx_kit.js）
+## 効果音（sfx_kit.js）
 
 - "BodyFall.wav" by 000600
 - "DullThud.wav" by TriqyStudio
@@ -26,7 +26,7 @@
 - "whoosh_med_low.wav" by DJT4NN3R
 - Kenney (kenney.nl), Impact Sounds
 
-## BGM の楽器（fighting/bgm_kit.js）
+## BGM の楽器（bgm_kit.js）
 
 - "1ring" by iluppai (https://freesound.org/people/iluppai/sounds/148849)
 - "Koto C4.wav" by --DeletedUser-- (https://freesound.org/people/--DeletedUser--/sounds/223958)
