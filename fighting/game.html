@@ -2402,7 +2402,7 @@ class Projectiles {
     p.x = owner.x + dir * s.x; p.y = def.ground ? 0 : owner.y + s.y;
     p.px = p.x; p.py = p.y; p.vx = def.vx * dir; p.vy = def.vy;
     p.life = def.life; p.maxLife = def.life; p.age = 0; p.hitsLeft = def.hits; p.hitTimer = 0;
-    p.serial = ++this.m.serial; p.clash = 0;
+    p.serial = ++this.m.serial; p.clash = 0; p.srcMove = owner.mv ? owner.mv.id : null;
     if (!slot) this.list.push(p);
     return true;
   }
@@ -2639,6 +2639,7 @@ class Combat {
       if (c.serial !== s.serial) {
         if (c.techs === 0 && !isProj && mv) { A.usedInCombo = {}; A.usedInCombo[mv.id] = 1; }
         c.techs++; c.serial = s.serial;
+        (c.seq = c.seq || []).push(isProj ? ((s.proj && s.proj.srcMove) || 'proj') : mv.id);
       }
       const ti = Math.min(c.techs, 8) - 1;
       let scale = CFG.COMBO_SCALE[ti];
@@ -2762,7 +2763,7 @@ class Combat {
     const scale = Math.max(CFG.COMBO_SCALE[0], 0.5);
     const dmg = Math.max(1, Math.round(def.damage * scale * (A.st.dmgMul || 1)));
     D.hp = Math.max(0, D.hp - dmg); D.dmgRound += dmg;
-    D.combo.hits = 1; D.combo.dmg = dmg;
+    D.combo.hits = 1; D.combo.dmg = dmg; D.combo.seq = ['throw'];
     m.noteCombo(A.slot, 1);
     this.addGauge(A, def.gauge ? def.gauge.hit : 0); this.addGauge(D, Math.floor(dmg * 0.6));
     const ko = D.hp <= 0;
@@ -6053,7 +6054,7 @@ Game.scenes.fight = {
       rts: [Game.chars[Game.sel[0]], Game.chars[Game.sel[1]]], pal2: Game.pal2.slice(), easy: Game.easy.slice(),
       rounds: Game.tutorial ? 1 : eff.rounds, time: (Game.tutorial || this.practice()) ? 0 : eff.time, seed: seed, fx: FX
     });
-    FX.showAdv = this.practice();
+    FX.showAdv = this.practice(); this.chal = null;
     this.tut = Game.tutorial ? { i: 0, t: 0, base: null, done: 0 } : null;
     this.hud = { lag: [this.match.fighters[0].hp, this.match.fighters[1].hp], wait: [0, 0], last: [0, 0], round: 1 };
     this.paused = false; this.pauseSel = 0; this.pauseWhy = ''; this.devs = [Devices.slots[0], Devices.slots[1]];
@@ -6068,9 +6069,50 @@ Game.scenes.fight = {
   practice() { return !!this.training && (Game.cpuLevel || 'dummy') === 'dummy' && !Game.tutorial; },
   DUMMY_MODES: ['stand', 'guard', 'crouch', 'random'],
   DUMMY_LABEL: { stand: '棒立ち', guard: '立ちガード', crouch: 'しゃがみガード', random: 'ランダムガード' },
+  /* コンボチャレンジ（練習台）: キャラごとのお題。どれも自動テストでつながることを確かめたもの */
+  CHALLENGES: {
+    miko:    [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2L', '2H', 'sp2'], ['2H', 'jL', 'jH'], ['5H', 'super']],
+    komainu: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'sp2'], ['2H', 'jL', 'jH'], ['5H', 'super']],
+    oni404:  [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'jL', 'jH'], ['5H', 'super']],
+    fox:     [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'jL', 'jH'], ['5H', 'super']],
+    tengu:   [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'sp2'], ['5H', 'super']],
+    maneki:  [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['sp1', '5H', 'sp3'], ['sp1', '5L', '5L', '5H', 'sp3']]
+  },
+  STEP_LABEL: { '5L': '弱', '2L': '↓弱', '5H': '強', '2H': '↓強', jL: 'J弱', jH: 'J強', jS: 'J必殺', sp1: '必殺', sp2: '→+必殺', sp3: '←+必殺', super: '↓+必殺', throw: '投げ' },
+  /* かんたん操作でないときの必殺技の表記 */
+  STEP_CMD: { sp1: '↓↘→+必', sp2: '↓↙←+必', sp3: '→↓↘+必', super: '↓↘→↓↘→+必' },
+  challengeUpdate(m) {
+    const list = this.CHALLENGES[m.fighters[0].rt.id];
+    if (!list) return;
+    const c = this.chal || (this.chal = { i: 0, got: 0, clearT: 0, done: false });
+    if (c.clearT > 0) { c.clearT--; if (c.clearT === 0) { c.i = (c.i + 1) % list.length; c.got = 0; } return; }
+    const T = list[c.i], seq = m.fighters[1].combo.seq || [];
+    let k = 0; while (k < T.length && k < seq.length && seq[k] === T[k]) k++;
+    c.got = seq.length ? k : 0;
+    if (k === T.length) { c.clearT = 90; if (c.i === list.length - 1) c.done = true; Audio.play('gaugeFull'); FX.addText('クリア！', m.fighters[1].x, m.fighters[1].y + 170, '#7cff6b', 24, 60, 0.5, 'jp'); }
+  },
+  drawChallenge(ctx, m) {
+    const list = this.CHALLENGES[m.fighters[0].rt.id], c = this.chal;
+    if (!list || !c || Settings.data.challenge === false) return;
+    const T = list[c.i], L = this.STEP_LABEL, clear = c.clearT > 0;
+    const easy = m.fighters[0].easy, parts = T.map(id => (!easy && this.STEP_CMD[id]) || L[id] || id);
+    ctx.save(); ctx.fillStyle = 'rgba(4,5,16,0.72)'; fillRR(ctx, 300, 92, 360, 44, 8); ctx.fill(); ctx.restore();
+    drawText(ctx, 'コンボチャレンジ ' + (c.i + 1) + ' / ' + list.length + (c.done ? '  全部クリア！' : ''), 480, 106, { size: 11, align: 'center', color: '#8fa3c8', base: 'middle' });
+    /* お題: できた所まで緑、クリアしたら全部金色 */
+    ctx.font = '15px ' + FONT_JP;
+    const sep = ' → ', widths = parts.map(t => ctx.measureText(t).width), sw = ctx.measureText(sep).width;
+    let x = 480 - (widths.reduce((a, b) => a + b, 0) + sw * (parts.length - 1)) / 2;
+    parts.forEach((t, i) => {
+      const col = clear ? '#ffd24a' : (i < c.got ? '#7cff6b' : '#ffffff');
+      drawText(ctx, t, x, 124, { size: 15, color: col, base: 'middle', glow: clear || i < c.got ? col : null });
+      x += widths[i];
+      if (i < parts.length - 1) { drawText(ctx, sep, x, 124, { size: 15, color: '#6a7490', base: 'middle' }); x += sw; }
+    });
+  },
   /* 練習: コンボが終わって落ち着いたら体力を戻す。大祓ゲージは常に満タン */
   practiceUpdate(m) {
     if (m.phase !== 'FIGHTING') return;
+    if (Settings.data.challenge !== false) this.challengeUpdate(m);
     const F = m.fighters, FREE = { IDLE: 1, CROUCH: 1, WALK_F: 1, WALK_B: 1 };
     F[0].gauge = CFG.GAUGE_MAX;
     for (let i = 0; i < 2; i++) {
@@ -6127,7 +6169,7 @@ Game.scenes.fight = {
   pauseItems() {
     if (this.pauseWhy === 'disconnect') return ['キーボードで継続', 'タイトルへ'];
     const a = (Settings.data.lock && !Game.staff) ? ['再開', '技一覧', 'キャラ選択へ', 'タイトルへ'] : ['再開', '技一覧', '入力設定', 'キャラ選択へ', 'タイトルへ'];
-    if (this.practice()) a.splice(1, 0, '練習台の動き: ' + this.DUMMY_LABEL[Game.dummyMode || 'stand']);
+    if (this.practice()) a.splice(1, 0, '練習台の動き: ' + this.DUMMY_LABEL[Game.dummyMode || 'stand'], 'コンボチャレンジ: ' + (Settings.data.challenge === false ? 'OFF' : 'ON'));
     return a;
   },
   openPause(why) {
@@ -6192,6 +6234,7 @@ Game.scenes.fight = {
       const it = items[this.pauseSel];
       Audio.play('menuOk');
       if (it === '再開') { this.paused = false; Input.lockFor(10); }
+      else if (it.indexOf('コンボチャレンジ') === 0) { Settings.data.challenge = Settings.data.challenge === false; }
       else if (it.indexOf('練習台の動き') === 0) { const M = this.DUMMY_MODES; Game.dummyMode = M[(M.indexOf(Game.dummyMode || 'stand') + 1) % M.length]; }
       else if (it === '技一覧') this.showMoves = true;
       else if (it === 'キーボードで継続') {
@@ -6212,6 +6255,7 @@ Game.scenes.fight = {
     renderFightWorld(ctx, m, this.paused ? 1 : alpha, { debugWorld: dbg });
     drawCutin(ctx, m, this);
     if (!PerfOff.hud) drawHUD(ctx, m, this.hud, Game.t);
+    if (this.practice()) this.drawChallenge(ctx, m);
     if (!this.paused) drawText(ctx, 'Esc: ポーズ / 技一覧', 480, 503, { size: 11, align: 'center', color: '#8fa3c8', alpha: 0.75 });
     drawFightBanners(ctx, m, this);
     if (this.tut && !this.paused) this.tutRender(ctx);
