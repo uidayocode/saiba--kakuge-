@@ -47,7 +47,7 @@ const CFG = {
   CAM_FOLLOW_X: 0.18, CAM_FOLLOW_Z: 0.10,
   GAUGE_MAX: 1000, SUPER_COST: 1000, JG_WINDOW: 5, JG_STUN_CUT: 5, JG_GAUGE: 40, OTG_SCALE: 0.6, GC_COST: 500, PUSHBLOCK_DIST: 90,
   /* ガードの耐久（スマブラのシールド風）: ガードボタンを押している間とガードするたびに減り、離すと回復。0 でガードブレイク */
-  SHIELD_MAX: 100, SHIELD_DRAIN: 0.28, SHIELD_REGEN: 0.22, SHIELD_HIT: 0.22, SHIELD_HIT_MIN: 4, BREAK_STUN: 80, BREAK_REFILL: 45, COUNTER_DMG: 1.25, COUNTER_STUN: 6, AIR_TECH_AFTER: 20, AIR_TECH_INV: 12, GAUGE_GAIN: 1.4, GAUGE_COMEBACK: 2.0, PROJ_GUARD_GAUGE: 25,
+  SHIELD_MAX: 100, SHIELD_DRAIN: 0.28, SHIELD_REGEN: 0.16, SHIELD_HIT: 0.22, SHIELD_HIT_MIN: 4, BREAK_STUN: 80, BREAK_REFILL: 45, COUNTER_DMG: 1.25, COUNTER_STUN: 6, AIR_TECH_AFTER: 20, AIR_TECH_INV: 12, GAUGE_GAIN: 1.4, GAUGE_COMEBACK: 2.0, PROJ_GUARD_GAUGE: 25,
   DOWN_FRAMES: 28, WAKEUP_FRAMES: 18, WAKEUP_QUICK: 14, QUICK_WINDOW: 6, WAKE_DELAY: 22, ROLL_FRAMES: 20, ROLL_SPEED: 6, WAKE_THROW_INV: 6,
   JUGGLE_DEFAULT: 3, THROW_HITSTOP: 12, THROW_TECH: 7, THROW_TECH_PUSH: 40, THROW_TECH_STUN: 12,
   GUARD_GRACE: 3, CROSSUP_EPS: 12, BTN_BUFFER: 6, CHORD_WINDOW: 3, DTAP_WINDOW: 12,
@@ -1792,7 +1792,7 @@ class Fighter {
     this.state = 'IDLE'; this.stateT = 0; this.mv = null;
     this.hitstop = 0; this.hitstopTotal = 0; this.hitstopHit = false;
     this.stunLeft = 0; this.blockCrouch = false; this.hitCrouch = false;
-    this.shield = CFG.SHIELD_MAX; this.shieldHeld = false; this.breakPending = false;
+    this.shield = CFG.SHIELD_MAX; this.shieldHeld = false; this.breakPending = false; this.brokenT = 0;
     this.kb = { total: 0, dir: 1, i: 10 }; this.kbSrc = null;
     this.combo = { techs: 0, hits: 0, dmg: 0, serial: -1 }; this.comboShow = { hits: 0, dmg: 0, t: 0 };
     this.usedInCombo = {}; this.juggle = 0; this.ko = false;
@@ -2099,8 +2099,9 @@ class Fighter {
     this.setState('HITSTUN', 'hurtHigh', 1, true);
     this.hitCrouch = false; this.stunLeft = CFG.BREAK_STUN;
     this.kb = { total: 0, dir: 1, i: 10 };
-    this.shield = CFG.BREAK_REFILL;
+    this.shield = CFG.BREAK_REFILL; this.brokenT = CFG.BREAK_STUN;
     this.fx.guardBreak(this.x, this.y + 90, this);
+    this.fx.sfx('guardBreak', this.x);
   }
   /* ---------- 毎ステップの更新（ヒットストップ中は呼ばれない） ---------- */
   update(opp) {
@@ -2111,6 +2112,7 @@ class Fighter {
     this.dx = 0; this.kbPart = 0;
     const b = this.buf, st = this.st;
     let free = false;
+    if (this.brokenT > 0) this.brokenT--;
     if (this.breakPending) { this.breakPending = false; this.guardBreak(); return; }
     /* ガードの耐久: ボタンで構えている間は減り、構えていない間は回復 */
     const ready = this.state === 'IDLE' || this.state === 'CROUCH' || this.state === 'BLOCKSTUN' || this.state === 'WALK_F' || this.state === 'WALK_B';
@@ -3233,6 +3235,12 @@ const Audio = {
     dash: (a, p) => a.noise({ filterType: 'bandpass', fq0: 1200, fq1: 2400, dur: 0.1, gain: 0.1, pan: p }),
     jump: (a, p) => a.tone({ type: 'sine', f0: 300, f1: 500, dur: 0.06, gain: 0.05, pan: p }),
     down: (a, p) => { a.noise({ filterType: 'lowpass', fq0: 500, dur: 0.12, gain: 0.2, pan: p }); a.tone({ type: 'sine', f0: 90, f1: 40, dur: 0.15, gain: 0.25, pan: p }); },
+    /* 風（天狗）: 帯域ノイズが高い方へ吹き抜ける */
+    wind: (a, p) => { a.noise({ filterType: 'bandpass', fq0: 500, fq1: 2600, dur: 0.32, gain: 0.16, pan: p }); a.noise({ filterType: 'highpass', fq0: 3000, dur: 0.18, gain: 0.05, delay: 0.06, pan: p }); },
+    /* 鈴（招き猫）: ちりん */
+    beckon: (a, p) => { a.bell(1568, 0.5, 0.09, p); a.bell(2093, 0.4, 0.06, p, 0.05); a.tone({ type: 'sine', f0: 300, f1: 180, dur: 0.18, gain: 0.08, pan: p }); },
+    /* ガードブレイク: 結界が割れる音 */
+    guardBreak: (a, p) => { a.noise({ filterType: 'highpass', fq0: 2500, dur: 0.35, gain: 0.22, pan: p }); [1760, 1320, 990, 660].forEach((f, i) => a.tone({ type: 'triangle', f0: f, f1: f * 0.7, dur: 0.16, gain: 0.08, delay: i * 0.045, pan: p })); a.tone({ type: 'sine', f0: 120, f1: 50, dur: 0.4, gain: 0.3, pan: p }); },
     teleport: (a, p) => { a.tone({ type: 'sine', f0: 1800, f1: 300, dur: 0.15, gain: 0.1, pan: p }); a.noise({ filterType: 'highpass', fq0: 4000, dur: 0.1, gain: 0.06, pan: p }); },
     superFlash: (a, p) => { a.tone({ type: 'sine', f0: 110, f1: 100, dur: 1.2, gain: 0.35, pan: p }); a.tone({ type: 'sawtooth', f0: 200, f1: 2400, dur: 0.5, gain: 0.08, pan: p }); a.bell(880, 0.8, 0.08, p, 0.1); a.bell(1320, 0.8, 0.06, p, 0.15); a.bell(1760, 0.8, 0.05, p, 0.2); },
     super: (a, p) => { a.tone({ type: 'sawtooth', f0: 140, f1: 90, dur: 0.3, gain: 0.15, pan: p }); a.noise({ filterType: 'bandpass', fq0: 800, fq1: 300, dur: 0.3, gain: 0.15, pan: p }); },
@@ -3370,7 +3378,6 @@ const FX = {
     this.addText('ガードブレイク！', x, y + 60, '#ffe94d', 22, 50, 0.8, 'jp');
     this.flash(0.25, '#ffe94d', 8);
     this.shake(6, 12);
-    Audio.play('counter', { pan: 0 });
   },
   justGuard(x, y, def) {
     this.addRing(x, y, 6, 70, 12, '#ffffff', 4, 'hex');
@@ -5550,6 +5557,7 @@ function renderFightWorld(ctx, m, alpha, o) {
   for (let i = 0; i < 2; i++) drawTrail(ctx, F[i]);
   for (let i = 0; i < 2; i++) drawStrike(ctx, F[i]);
   for (let i = 0; i < 2; i++) drawGuardShield(ctx, F[i]);
+  for (let i = 0; i < 2; i++) drawMoveFx(ctx, F[i]);
   drawProjectiles(ctx, m, alpha);
   if (!PerfOff.fx) FX.draw(ctx);
   if (o.debugWorld) o.debugWorld(ctx, m);
@@ -5585,6 +5593,39 @@ function drawStrike(ctx, f) {
 }
 
 /* ガード中: 体の前に六角形の結界を出す（しゃがみガードなら低く）。色はそのプレイヤーの縁 */
+/* 技の仕組みを目で分かるように:
+ *  引き寄せ（hit.knock.hit が負）… 当たり判定の中を、手前へ流れる「く」の字の列
+ *  空中静止（hover）… 足元から広がる風の輪と、羽ばたきの線 */
+function drawMoveFx(ctx, f) {
+  const mv = f.mv;
+  if (f.state !== 'ATTACK' || !mv) return;
+  const m = mv.m, n = mv.n, col = LookAdapter.edge(f.rt.ch, f.pup.pal);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  if (m.hit && m.hit.knock && m.hit.knock.hit < 0 && m.boxes && m.boxes.length && n >= m.startup - 4 && n <= m.startup + m.active + 6) {
+    const b = f.boxWorld(m.boxes[0]), x0 = b[0], x1 = b[2], yc = -(b[1] + b[3]) / 2, hh = (b[3] - b[1]) * 0.35;
+    const near = f.facing > 0 ? x0 : x1, far = f.facing > 0 ? x1 : x0;
+    const k = Util.clamp((n - (m.startup - 4)) / 6, 0, 1) * Util.clamp((m.startup + m.active + 6 - n) / 6, 0, 1);
+    for (let c = 0; c < 5; c++) {
+      const u = ((c / 5) + n * 0.06) % 1, x = far + (near - far) * u, a = k * Math.sin(u * Math.PI);
+      ctx.strokeStyle = rgba(col, 0.85 * a); ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(x + f.facing * hh * 0.6, yc - hh); ctx.lineTo(x, yc); ctx.lineTo(x + f.facing * hh * 0.6, yc + hh); ctx.stroke();
+    }
+  }
+  if (m.hover && n >= m.hover.f0 && n <= m.hover.f1) {
+    const fx = f.x, fy = -f.y;
+    for (let r = 0; r < 2; r++) {
+      const u = ((n + r * 7) % 14) / 14;
+      ctx.strokeStyle = rgba(col, 0.7 * (1 - u)); ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.ellipse(fx, fy + 6 + u * 18, 18 + u * 46, 4 + u * 7, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+    /* 羽ばたき: 背中の後ろに、上下する2本の弧 */
+    const fl = Math.sin(n * 0.9) * 14, bx = fx - f.facing * 34, by = fy - 120;
+    ctx.strokeStyle = rgba(col, 0.55); ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.quadraticCurveTo(bx - f.facing * 40, by - 30 + fl, bx - f.facing * 70, by + fl); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bx, by + 14); ctx.quadraticCurveTo(bx - f.facing * 34, by - 6 + fl, bx - f.facing * 60, by + 22 + fl); ctx.stroke();
+  }
+  ctx.restore();
+}
 function drawGuardShield(ctx, f) {
   if (f.state !== 'BLOCKSTUN' && !f.shieldHeld) return;
   const col = LookAdapter.edge(f.rt.ch, f.pup.pal);
@@ -5743,6 +5784,54 @@ function drawHPBar(ctx, side, hp, lag, max, color, t) {
   ctx.restore();
 }
 
+/* ガードの耐久（ラウンドのひし形の横）。減ると縮み、残りわずかで黄色く点滅、割れたら BREAK */
+function drawShieldBar(ctx, i, f, col, t) {
+  const w = 120, h = 6, x = i === 0 ? 112 : 848 - w, y = 73;
+  const r = Util.clamp(f.shield / CFG.SHIELD_MAX, 0, 1), low = r < 0.3, broken = f.brokenT > 0;
+  /* 盾の印（六角形） */
+  const hx = i === 0 ? x - 10 : x + w + 10;
+  ctx.save();
+  ctx.beginPath(); for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2 + Math.PI / 6; ctx[k ? 'lineTo' : 'moveTo'](hx + Math.cos(a) * 6, y + h / 2 + Math.sin(a) * 6); } ctx.closePath();
+  ctx.strokeStyle = broken ? '#ff3b5c' : (low ? '#ffe94d' : col); ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.fillStyle = 'rgba(4,5,16,0.85)'; ctx.fillRect(x, y, w, h);
+  if (broken) {
+    drawText(ctx, 'GUARD BREAK', i === 0 ? x : x + w, y + h / 2, { size: 11, font: 'en', align: i === 0 ? 'left' : 'right', base: 'middle', color: '#ff3b5c', glow: '#ff3b5c', alpha: 0.6 + 0.4 * Math.sin(t * 14) });
+  } else {
+    const blink = low && (Math.floor(t * 8) & 1);
+    ctx.fillStyle = low ? (blink ? '#fff6b0' : '#ffe94d') : col;
+    const fw = w * r; ctx.fillRect(i === 0 ? x : x + w - fw, y, fw, h);
+    ctx.strokeStyle = rgba(col, 0.5); ctx.lineWidth = 1; ctx.strokeRect(x, y, w, h);
+  }
+  ctx.restore();
+}
+/* ボタン案内: Joy-Con（左右で分けた半分）は横持ちのボタンの並びを絵で、キーボードはキー名を、ゲージの下に小さく出す */
+const JOYPOS = { L: { 13: 'r', 14: 'b', 15: 't', 12: 'l', 18: 'SL', 19: 'SR' }, R: { 0: 'r', 2: 'b', 1: 't', 3: 'l', 20: 'SL', 21: 'SR' } };
+function drawButtonGuide(ctx, i, col) {
+  if (Settings.data.buttonGuide === false) return;
+  const d = Devices.slots[i];
+  if (!d) return;
+  const al = i === 0 ? 'left' : 'right', gx = i === 0 ? 40 : 920;
+  if (d.kind === 'kb') {
+    const s = ['L', 'H', 'S', 'T'].map(a => codeLabel(d.binds[a]) + ' ' + ACT_LABEL[a]).join('   ');
+    drawText(ctx, s, gx, 527, { size: 11, color: '#b9c7e6', align: al, alpha: 0.85 });
+    return;
+  }
+  if (d.kind !== 'pad' || !d.half) return;
+  const map = JOYPOS[d.half], where = {};
+  ['L', 'H', 'S', 'T', 'G'].forEach(a => { (d.profile.binds[a] || []).forEach(b => { if (b.t === 'b' && map[b.i]) { const p = map[b.i]; if (!where[p]) where[p] = a; } }); });
+  const SHORT = { L: '弱', H: '強', S: '必', T: '投', G: 'ガ' };
+  const cx = i === 0 ? 70 : 890, cy = 447, off = { t: [0, -14], b: [0, 14], l: [-14, 0], r: [14, 0] };
+  ctx.save(); ctx.globalAlpha = 0.85;
+  for (const p of ['t', 'b', 'l', 'r']) {
+    const x = cx + off[p][0], y = cy + off[p][1], a = where[p];
+    ctx.beginPath(); ctx.arc(x, y, 8, 0, 6.2832); ctx.fillStyle = 'rgba(4,5,16,0.8)'; ctx.fill();
+    ctx.strokeStyle = a ? col : 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1.3; ctx.stroke();
+    if (a) drawText(ctx, SHORT[a], x, y + 0.5, { size: 10, align: 'center', base: 'middle', color: '#ffffff' });
+  }
+  const sh = ['SL', 'SR'].filter(p => where[p]).map(p => p + ' ' + ACT_LABEL[where[p]]).join('  ');
+  if (sh) drawText(ctx, sh, i === 0 ? cx + 26 : cx - 26, cy + 4, { size: 10, color: '#b9c7e6', align: al, base: 'middle' });
+  ctx.restore();
+}
 function drawHUD(ctx, m, hud, t) {
   const F = m.fighters, T = Game.data.texts;
   /* 上下の帯（HUD を背景から浮かせる） */
@@ -5770,6 +5859,8 @@ function drawHUD(ctx, m, hud, t) {
       if (on) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = rgba(col, 0.35); ctx.fillRect(-9, -9, 18, 18); }
       ctx.restore();
     }
+    drawShieldBar(ctx, i, f, col, t);
+    drawButtonGuide(ctx, i, col);
     /* ゲージ（斜めの帯・10目盛り。半分の所にガードキャンセルの印） */
     const gx = i === 0 ? 40 : 600, gw = 320, y = 497, gh = 14, full = f.gauge >= CFG.GAUGE_MAX;
     ctx.save();
@@ -6654,8 +6745,9 @@ class CpuPolicy {
     if (mv && mv.id === c.list[c.i]) { c.i++; c.tog = 0; c.t = 0; }
     if (c.i >= c.list.length || c.t > 70) { this.combo = null; return 0; }
     if (c.i > 0) {
-      if (!mv || mv.contact === 'block' || (mv.n > mv.m.startup + mv.m.active + 2 && !mv.contact)) { this.combo = null; return 0; }
-      if (mv.contact !== 'hit') return 0;
+      /* 攻め続け（pressure）はガードされても続ける（ガードの耐久を削って割りに行く） */
+      if (!mv || (mv.contact === 'block' && !c.pressure) || (mv.n > mv.m.startup + mv.m.active + 2 && !mv.contact)) { this.combo = null; return 0; }
+      if (mv.contact !== 'hit' && !(c.pressure && mv.contact === 'block')) return 0;
       if (c.dropAt === c.i) return 0;
     }
     const p = this.pressFor(c.list[c.i], me);
@@ -6783,6 +6875,12 @@ class CpuPolicy {
       else this.q = this.rep(Bk, 8 + rng.int(8), []);
     } else {
       const r = rng.next();
+      /* ガードを固める相手（ボタンで構えている / 耐久が減っている）には、つよい・ふつうは攻め続けて割りに行く */
+      const guarding = opp.shieldHeld || opp.state === 'BLOCKSTUN' || (opp.buf.back() && (opp.state === 'IDLE' || opp.state === 'CROUCH' || opp.state === 'WALK_B'));
+      const turtle = guarding || opp.shield < CFG.SHIELD_MAX * 0.7;
+      if (turtle && L.punish >= 0.45 && rng.chance(L.combo * (opp.shield < CFG.SHIELD_MAX * 0.5 ? 0.95 : 0.6))) {
+        this.startCombo(rng.chance(0.5) ? ['5L', '5L', '5H', C.zone || 'sp3'] : ['2L', '5L', '5H'], rng); this.combo.pressure = true; this.combo.dropAt = -1; return this.stepCombo(me, rng);
+      }
       if (L.punish > 0 && rng.chance(this.caution * 0.75)) this.q = this.rep(Bk | B_DOWN, 18 + rng.int(16), []);
       else if (r < L.combo) { this.startCombo(rng.pick(routes), rng); return this.stepCombo(me, rng); }
       else if (r < L.combo + 0.12) this.q = this.pressFor(C.closeGrab && rng.chance(0.5) ? C.closeGrab : 'throw', me);
