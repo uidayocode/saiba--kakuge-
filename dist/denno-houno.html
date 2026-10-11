@@ -429,7 +429,9 @@ window.GAME_DATA = {
       moves: {
         sp3: { kind: "special", name: "跳び掛かり", stance: "stand", startup: 16, active: 8, recovery: 12, landLag: 10,
           boxes: [{ f0: 17, f1: 24, x: 24, y: 60, w: 95, h: 54 }],
-          hit: { damage: 72, chip: 5, level: "high", hitstun: 22, blockstun: 16, hitstop: 10, knock: { hit: 12, block: 16 }, effect: "stun", gauge: { hit: 50, block: 25 }, impact: 3 },
+          hit: { damage: 72, chip: 5, level: "high", hitstun: 22, blockstun: 16, hitstop: 10, knock: { hit: 12, block: 16 }, effect: "stun", gauge: { hit: 50, block: 25 }, impact: 3,
+            /* カウンターで当てたときだけ、のけぞりを長く・相手を引き寄せて弱につながるように */
+            counterStun: 24, counterKnock: -80 },
           motion: [{ f0: 5, f1: 5, vx: 8, vy: 10.5 }], invuln: [{ f0: 1, f1: 20, type: "proj" }],
           trail: { from: "handF", color: "glow", width: 12, frames: 8 }, sfx: "swingH" },
         "5L": { kind: "normal", name: "立ち弱（前脚）", stance: "stand", startup: 5, active: 3, recovery: 9,
@@ -5084,11 +5086,13 @@ class Combat {
       if (ko) { D.ko = true; if (eff === 'stun') { eff = 'launch'; lv = { vx: 3, vy: wasAir ? 4 : 6 }; } }
       if (eff === 'stun') {
         if (!wasAir) {
-          const stun = (hit.hitstun > 0 ? Math.max(6, Math.round(hit.hitstun * CFG.STUN_SCALE[ti])) : 6) + (counter ? CFG.COUNTER_STUN : 0);
+          /* カウンター時ののけぞり延長。技ごとに counterStun で増やせる（狛犬の跳び掛かりはカウンターなら弱につながる） */
+          const stun = (hit.hitstun > 0 ? Math.max(6, Math.round(hit.hitstun * CFG.STUN_SCALE[ti])) : 6) + (counter ? (hit.counterStun != null ? hit.counterStun : CFG.COUNTER_STUN) : 0);
           D.hitCrouch = crouchy;
           D.setState('HITSTUN', (crouchy || hit.level === 'low') ? 'hurtLow' : 'hurtHigh', 1, true);
           D.stunLeft = stun; D.vx = 0;
-          D.kb = { total: hit.knock.hit, dir: dir, i: 0 }; D.kbSrc = isProj ? null : A;
+          /* counterKnock: カウンター時だけ押し戻しを変える（マイナスで引き寄せ。狛犬の跳び掛かりはカウンターなら弱が届く距離まで寄せる） */
+          D.kb = { total: counter && hit.counterKnock != null ? hit.counterKnock : hit.knock.hit, dir: dir, i: 0 }; D.kbSrc = isProj ? null : A;
           if (!isProj) advText = stun - ((mv.m.active - (mvn - mv.m.startup)) + mv.m.recovery);
         } else {
           D.juggle = D.state === 'AIR_HURT' ? D.juggle - 1 : CFG.JUGGLE_DEFAULT - 1;

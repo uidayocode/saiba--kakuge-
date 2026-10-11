@@ -95,6 +95,8 @@
 
 - 配布: `python3 tools/build_single.py` で全部を 1 ファイルにまとめた `dist/denno-houno.html`（約1MB）を作る。友達にはこれを送ればダブルクリックで遊べる（オンライン対戦も可）。**ゲームを直したら毎回作り直してコミットする。** `index.html` は GitHub Pages 用の入口（game.html へ飛ぶ）。Pages を有効にすると `https://uidayocode.github.io/saiba--kakuge-/` で遊べる（設定はユーザーが GitHub の Settings → Pages で行う）。
 
+- 技データの `hit.counterStun`（カウンター時ののけぞり延長。既定は CFG.COUNTER_STUN=6）と `hit.counterKnock`（カウンター時の押し戻し。マイナスで引き寄せ）。狛犬の跳び掛かり（sp3）は counterStun 24 / counterKnock -80 で、カウンターで当てたときだけ 弱→弱→強→必殺 が全キャラ・全距離で確定（scratchpad の ktrace2.js で確認）。普通に当てたときはつながらない。
+
 ## 確認のしかた（ヘッドレスの Chromium で回せる）
 
 - `game.html#selftest&matches=64&maxSec=150&seed=N` … 全キャラの組み合わせで CPU 同士の自動対戦。`document.title` が `SELFTEST PASS` なら合格。

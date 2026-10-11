@@ -399,7 +399,9 @@ window.GAME_DATA = {
       moves: {
         sp3: { kind: "special", name: "跳び掛かり", stance: "stand", startup: 16, active: 8, recovery: 12, landLag: 10,
           boxes: [{ f0: 17, f1: 24, x: 24, y: 60, w: 95, h: 54 }],
-          hit: { damage: 72, chip: 5, level: "high", hitstun: 22, blockstun: 16, hitstop: 10, knock: { hit: 12, block: 16 }, effect: "stun", gauge: { hit: 50, block: 25 }, impact: 3 },
+          hit: { damage: 72, chip: 5, level: "high", hitstun: 22, blockstun: 16, hitstop: 10, knock: { hit: 12, block: 16 }, effect: "stun", gauge: { hit: 50, block: 25 }, impact: 3,
+            /* カウンターで当てたときだけ、のけぞりを長く・相手を引き寄せて弱につながるように */
+            counterStun: 24, counterKnock: -80 },
           motion: [{ f0: 5, f1: 5, vx: 8, vy: 10.5 }], invuln: [{ f0: 1, f1: 20, type: "proj" }],
           trail: { from: "handF", color: "glow", width: 12, frames: 8 }, sfx: "swingH" },
         "5L": { kind: "normal", name: "立ち弱（前脚）", stance: "stand", startup: 5, active: 3, recovery: 9,
