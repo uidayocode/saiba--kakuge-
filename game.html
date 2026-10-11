@@ -1045,7 +1045,7 @@ function validateGameData(D) {
       if (isInt(pr.maxActive) && (pr.maxActive < 1 || pr.maxActive > 3)) E(pp + '.maxActive', '1〜3');
       if (pr.box != null) vBox(pp + '.box', pr.box);
       if (pr.hit != null) vHit(pp + '.hit', pr.hit, true);
-      if (!isObj(pr.look) || ['fuda', 'orb', 'shock', 'beam', 'ghost', 'slash'].indexOf(pr.look.style) < 0) E(pp + '.look.style', 'fuda|orb|shock|beam|ghost|slash');
+      if (!isObj(pr.look) || ['fuda', 'orb', 'shock', 'beam', 'ghost', 'slash', 'flame', 'puddle'].indexOf(pr.look.style) < 0) E(pp + '.look.style', 'fuda|orb|shock|beam|ghost|slash|flame|puddle');
       else {
         if (pal(c, pr.look.color) == null) E(pp + '.look.color', 'palette のキー名が必要');
         if (pr.look.style === 'ghost' && (!pr.look.clip || !c.clips[pr.look.clip])) E(pp + '.look.clip', 'ghost には実在するクリップ名が必要');
@@ -1810,7 +1810,7 @@ class Fighter {
     this.state = 'IDLE'; this.stateT = 0; this.mv = null;
     this.hitstop = 0; this.hitstopTotal = 0; this.hitstopHit = false;
     this.stunLeft = 0; this.blockCrouch = false; this.hitCrouch = false;
-    this.shield = CFG.SHIELD_MAX; this.shieldHeld = false; this.breakPending = false; this.brokenT = 0;
+    this.shield = CFG.SHIELD_MAX; this.shieldHeld = false; this.breakPending = false; this.brokenT = 0; this.poison = null;
     this.kb = { total: 0, dir: 1, i: 10 }; this.kbSrc = null;
     this.combo = { techs: 0, hits: 0, dmg: 0, serial: -1 }; this.comboShow = { hits: 0, dmg: 0, t: 0 };
     this.usedInCombo = {}; this.juggle = 0; this.ko = false;
@@ -1998,6 +1998,15 @@ class Fighter {
   /* 1フレーム進める。戻り値 0=技終了(行動可能へ) 1=継続 2=状態が変わった */
   stepMove() {
     const mv = this.mv, m = mv.m, st = this.st;
+    /* ため（charge: {at, max}）: その フレームで必殺ボタンを押している間は止まって力をためる */
+    if (m.charge && mv.n === m.charge.at && !mv.chargeDone) {
+      if ((this.buf.cur & B_S) && (mv.charge || 0) < m.charge.max) {
+        mv.charge = (mv.charge || 0) + 1; this.pup.cp.speed = 0;
+        if (mv.charge % 10 === 1) this.fx.charge(this, mv.charge / m.charge.max);
+        return 1;
+      }
+      mv.chargeDone = true; this.pup.cp.speed = 1;
+    }
     mv.n++;
     if (mv.n > mv.total) { return this.endMove(); }
     const n = mv.n;
@@ -2143,6 +2152,13 @@ class Fighter {
     const b = this.buf, st = this.st;
     let free = false;
     if (this.brokenT > 0) this.brokenT--;
+    if (this.poison && this.poison.left > 0 && this.match.phase === 'FIGHTING' && this.hp > 1) {
+      if (++this.poison.t >= this.poison.every) {
+        this.poison.t = 0; this.poison.left--;
+        const d = Math.min(this.poison.dmg, this.hp - 1);
+        this.hp -= d; this.dmgRound += d; this.fx.poison(this);
+      }
+    }
     if (this.breakPending) { this.breakPending = false; this.guardBreak(); return; }
     /* ガードの耐久: ボタンで構えている間は減り、構えていない間は回復 */
     const ready = this.state === 'IDLE' || this.state === 'CROUCH' || this.state === 'BLOCKSTUN' || this.state === 'WALK_F' || this.state === 'WALK_B';
@@ -2421,14 +2437,27 @@ class Projectiles {
     p.px = p.x; p.py = p.y; p.vx = def.vx * dir; p.vy = def.vy;
     p.life = def.life; p.maxLife = def.life; p.age = 0; p.hitsLeft = def.hits; p.hitTimer = 0;
     p.serial = ++this.m.serial; p.clash = 0; p.srcMove = owner.mv ? owner.mv.id : null;
+    /* ため撃ち（def.chargeScale）: ためた量 k(0〜1) で速さ・大きさ・威力・ヒット数が増える */
+    p.sc = 1; p.hit = null;
+    const cs = def.chargeScale, mv = owner.mv;
+    if (cs && mv && mv.m.charge) {
+      const k = Math.min(1, (mv.charge || 0) / mv.m.charge.max), L = (a) => a[0] + (a[1] - a[0]) * k;
+      p.k = k;
+      if (cs.vx) p.vx = L(cs.vx) * dir;
+      if (cs.size) p.sc = L(cs.size);
+      if (cs.hits) p.hitsLeft = Math.round(L(cs.hits));
+      if (cs.dmg) { p.hit = Object.assign({}, def.hit, { damage: Math.round(def.hit.damage * L(cs.dmg)), chip: Math.round((def.hit.chip || 0) * L(cs.dmg)) }); }
+      if (k >= 1 && cs.full) p.hit = Object.assign({}, p.hit || def.hit, cs.full);
+    }
     if (!slot) this.list.push(p);
     return true;
   }
   boxWorld(p) {
     const b = p.def.box;
     if (!b) return null;
-    const x0 = p.x + (p.dir > 0 ? b.x : -(b.x + b.w));
-    return [x0, p.y + b.y, x0 + b.w, p.y + b.y + b.h];
+    const k = p.sc || 1;
+    const x0 = p.x + (p.dir > 0 ? b.x * k : -(b.x + b.w) * k);
+    return [x0, p.y + b.y * k, x0 + b.w * k, p.y + (b.y + b.h) * k];
   }
   step() {
     const L = this.list;
@@ -2529,6 +2558,8 @@ class Combat {
   }
   collectProj(p, strikes) {
     if (!p.alive || !p.def.box || !p.def.hit || p.hitTimer > 0) return;
+    /* armAt: 置いてからしばらくは発動しない罠（ガードの上から置いて確定、を防ぐ） */
+    if (p.def.armAt && p.age < p.def.armAt) return;
     const O = p.owner, D = this.m.opp(O);
     if (!this.hittable(D) || D.invulnerable('proj')) return;
     const bw = this.m.projs.boxWorld(p);
@@ -2537,7 +2568,7 @@ class Combat {
     for (let k = 0; k < hb.length; k++) {
       if (rectOv(bw, hb[k])) {
         const c = rectCenter(bw, hb[k]);
-        strikes.push({ att: O, def: D, hit: p.def.hit, src: 'proj', px: c[0], py: c[1], ax: p.x, serial: p.serial, proj: p, mv: null, n: 0 });
+        strikes.push({ att: O, def: D, hit: p.hit || p.def.hit, src: 'proj', px: c[0], py: c[1], ax: p.x, serial: p.serial, proj: p, mv: null, n: 0 });
         return;
       }
     }
@@ -2613,7 +2644,7 @@ class Combat {
       mv.hitCount++; mv.hitDone = true; mv.contact = 'hit';
       return;
     }
-    const guarded = this.guards(D, s);
+    const guarded = !s.hit.unblockable && this.guards(D, s);
     /* ジャスト防御: 当たる直前（JG_WINDOW 以内）にガード（ボタン or ←）を押し始めていた。連打では出ない */
     const just = guarded && D.state !== 'BLOCKSTUN' && D.buf.justPress();
     let hs = hit.hitstop, advText = null;
@@ -2668,6 +2699,8 @@ class Combat {
       const dmg = Math.max(1, Math.round(hit.damage * scale * (A.st.dmgMul || 1)));
       D.hp = Math.max(0, D.hp - dmg); D.dmgRound += dmg;
       c.hits++; c.dmg += dmg;
+      /* 毒（hit.poison: {every, ticks, dmg}）: しばらく少しずつ体力が減る（毒では倒れない） */
+      if (hit.poison && D.hp > 0) D.poison = { left: hit.poison.ticks, every: hit.poison.every, dmg: Math.max(1, Math.round(hit.poison.dmg * (A.st.dmgMul || 1))), t: 0 };
       m.noteCombo(A.slot, c.hits);
       if (!isSuperHit) { this.addGauge(A, hit.gauge.hit); this.addGauge(D, Math.floor(dmg * 0.6)); }
       const ko = D.hp <= 0;
@@ -3602,6 +3635,19 @@ const FX = {
     this.flash(0.25, '#ffe94d', 8);
     this.shake(6, 12);
   },
+  /* ため: 前に光の粒が吸い込まれる。満タンで MAX */
+  charge(f, k) {
+    const c = f.pup.glow(), cx = f.x + f.facing * 46, cy = f.y + 100;
+    for (let i = 0; i < 3 + Math.round(k * 5); i++) {
+      const a = fxRng.range(0, 6.283), r = fxRng.range(30, 50);
+      this.addPart(cx + Math.cos(a) * r, cy + Math.sin(a) * r, -Math.cos(a) * 2, -Math.sin(a) * 2, 16, 2 + k * 2.5, c, 0, 0);
+    }
+    if (k >= 1) { this.addText('MAX', cx, cy + 70, '#ffe94d', 16, 30, 0.6, 'en'); this.addRing(cx, cy, 8, 60, 12, '#ffe94d', 3); }
+  },
+  /* 毒: 体から緑の泡が上がる */
+  poison(f) {
+    for (let i = 0; i < 4; i++) this.addPart(f.x + fxRng.range(-22, 22), f.y + fxRng.range(30, 130), fxRng.range(-0.4, 0.4), fxRng.range(1, 2.2), fxRng.range(20, 34), fxRng.range(2.5, 4.5), '#7cff6b', 0, 0.02);
+  },
   justGuard(x, y, def) {
     this.addRing(x, y, 6, 70, 12, '#ffffff', 4, 'hex');
     this.addText('JUST', x, y + 40, '#ffffff', 20, 34, 0.7, 'en');
@@ -4258,7 +4304,7 @@ function drawProjectiles(ctx, match, alpha) {
   for (let i = 0; i < L.length; i++) {
     const p = L[i];
     if (!p.alive) continue;
-    const d = p.def, lk = d.look, size = lk.size || 1;
+    const d = p.def, lk = d.look, size = (lk.size || 1) * (p.sc || 1);
     const x = Util.lerp(p.px, p.x, alpha), y = Util.lerp(p.py, p.y, alpha);
     const col = LookAdapter.paletteColor(p.owner.rt.ch, p.owner.pup.pal, lk.color) || p.owner.pup.glow();
     ctx.save();
@@ -4313,6 +4359,32 @@ function drawProjectiles(ctx, match, alpha) {
         const gr2 = ctx.createLinearGradient(0, 0, len, 0);
         gr2.addColorStop(0, 'rgba(255,255,255,0.9)'); gr2.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.fillStyle = gr2; ctx.fillRect(0, -hgt * 0.14, len * 0.9, hgt * 0.28);
+        break;
+      }
+      /* 鬼火: しずく形の炎がゆらめく（ため撃ちほど大きい） */
+      case 'flame': {
+        ctx.translate(x, -y); ctx.scale(p.dir, 1);
+        const r = 15 * size, wob = Math.sin(p.age * 0.6) * 0.12;
+        ctx.globalCompositeOperation = 'lighter';
+        for (let k = 3; k >= 1; k--) {
+          ctx.fillStyle = rgba(col, 0.1 * (4 - k));
+          ctx.beginPath(); ctx.moveTo(-r * (1.6 + k * 0.5), -wob * r * 4);
+          ctx.quadraticCurveTo(-r * 0.2, -r * (0.9 + k * 0.35), r * (0.6 + k * 0.25), 0);
+          ctx.quadraticCurveTo(-r * 0.2, r * (0.9 + k * 0.35), -r * (1.6 + k * 0.5), wob * r * 4); ctx.fill();
+        }
+        ctx.fillStyle = '#f4f7ff'; ctx.beginPath(); ctx.ellipse(r * 0.1, 0, r * 0.5, r * 0.38, 0, 0, 6.283); ctx.fill();
+        break;
+      }
+      /* 水たまり（罠）: 床に平たい楕円と、ときどき波紋 */
+      case 'puddle': {
+        ctx.translate(x, -y);
+        const w = 44 * size, fade = Math.min(1, p.life / 30, p.age / 8) * (d.armAt && p.age < d.armAt ? 0.35 + 0.25 * Math.sin(p.age * 0.5) : 1);
+        ctx.globalAlpha = fade;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = rgba(col, 0.22); ctx.beginPath(); ctx.ellipse(0, -3, w, 8, 0, 0, 6.283); ctx.fill();
+        ctx.strokeStyle = rgba(col, 0.9); ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, -3, w, 8, 0, 0, 6.283); ctx.stroke();
+        const ph = (p.age % 50) / 50;
+        ctx.strokeStyle = rgba(col, 0.5 * (1 - ph)); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(0, -3, w * ph, 8 * ph, 0, 0, 6.283); ctx.stroke();
         break;
       }
       case 'ghost': {
@@ -5038,6 +5110,8 @@ const SPECIAL_DESC = {
   fox:     { sp1: '分身が前に飛ぶ（2ヒット）', sp2: '相手の後ろへ瞬間移動', sp3: '弾の下を滑る下段', super: '大祓ゲージ満タンで使える' },
   tengu:   { sp1: '風の刃を飛ばす', sp2: '出始め無敵の対空', sp3: '弾を飛び越えて上から襲う（立ちガード）', super: '進む竜巻（6ヒット）' },
   maneki:  { sp1: '遠くの相手を引き寄せる。当たったら 強 でつながる', sp2: 'ガードできない掴み', sp3: '弾を受け流して突っ込む', super: 'ガードできない大投げ。密着で' },
+  chochin: { sp1: '押しっぱなしでためる鬼火。満タンで相手が転ぶ', sp2: '出始め無敵の対空', sp3: '転がって弾をすり抜ける', super: 'ゆっくり進む大きな鬼火（6ヒット）' },
+  kappa:   { sp1: '前の床に水たまり（罠）。踏むとガードできず転んで毒', sp2: '出始め無敵の対空', sp3: '弾の下をすべる下段', super: '進む大波（5ヒット＋毒）' },
 };
 /* キャラだけの仕組み（技一覧の最後の行） */
 const UNIQUE_ROW = {
@@ -5046,6 +5120,8 @@ const UNIQUE_ROW = {
   fox:     ['急降下蹴り', 'ジャンプ中に 必殺', '同じ', '斜め下へ蹴る。立ちガードのみ'],
   tengu:   ['空風（空中静止）', 'ジャンプ中に 必殺', '同じ', '空中で止まり、斜め下へ風を撃つ。1回のジャンプに1回'],
   maneki:  ['手招きコンボ', '手招きが当たったら 強', '同じ', '引き寄せて、そのまま連続技に'],
+  chochin: ['ため撃ち', '必殺技のボタンを押しっぱなし', '同じ', '最大約0.8秒。ためるほど速く大きく重い'],
+  kappa:   ['毒', '水たまり・大祓が当たる', '同じ', 'しばらく体力が減り続ける（毒では倒れない）'],
 };
 function normalDesc(m, base) {
   const h = m.hit || {}, t = [];
@@ -5117,6 +5193,20 @@ COMBO_ROWS.maneki = [
   ['下段から', '↓弱 → 弱 → 強 → ←+必殺', '4ヒット'],
   ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
   ['大祓', '密着で ↓+必殺 (ゲージ満タン)', 'ガードできない大投げ']
+];
+COMBO_ROWS.chochin = [
+  ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。鬼火で締める'],
+  ['下段から', '↓弱 → 弱 → 強 → 必殺', '4ヒット'],
+  ['密着', '弱 → 弱 → 強 → →+必殺', '4ヒット。昇り提灯で締める（密着のみ）'],
+  ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
+  ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '6ヒット']
+];
+COMBO_ROWS.kappa = [
+  ['基本コンボ', '弱 → 弱 → 強 → ←+必殺', '4ヒット。甲羅すべりで締める'],
+  ['下段から', '↓弱 → 弱 → 強 → ←+必殺', '4ヒット'],
+  ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
+  ['罠', '強 → 必殺（水たまり）', '当たったら足元に罠。すぐ動かないと転んで毒'],
+  ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '6ヒット＋毒']
 ];
 const SYSTEM_ROWS = [
   ['守り', 'ガード中に →+強 = ガードキャンセル（ゲージ半分） / 弱+強 = 押し返し'],
@@ -5853,6 +5943,32 @@ const VS_LINES = {
   'maneki>oni404':  ['大きなお客様、いらっしゃいませ', '…客ではない'],
   'maneki>fox':     ['狐さま、お代はいただきます', 'ツケにしといて'],
   'maneki>tengu':   ['天狗さま、こちらへどうぞ', '招かれても降りぬ'],
+  'miko>chochin': ['提灯さん、夜道の明かりありがとうございます', 'ぼうっ。祓われる前に燃やしちゃうよ'],
+  'chochin>miko': ['巫女さん、肝試しの時間だよ', '肝は試しません。お祓いします'],
+  'komainu>chochin': ['火の用心。境内で火遊びはさせぬ', 'ぼうっ。消せるもんなら消してみて'],
+  'chochin>komainu': ['ワンちゃん、お化けはこわくない？', '狛犬は、何も恐れぬ'],
+  'oni404>chochin': ['…明かり、消す', '消えないよ。何度でも灯る'],
+  'chochin>oni404': ['鬼さん、暗いところは好き？', 'ここは…404だ'],
+  'fox>chochin': ['提灯ちゃん、狐火と勝負しよ？', 'どっちの火が熱いか、くらべっこ！'],
+  'chochin>fox': ['狐さん、その火、本物？', '本物かどうか、ためしてみる？'],
+  'tengu>chochin': ['提灯ごとき、風でひと吹きよ', '風が強いほど、よく燃えるんだ'],
+  'chochin>tengu': ['天狗さん、明かりを探してるの？', '我に明かりは要らぬ'],
+  'maneki>chochin': ['提灯さま、店先を照らしていただけますか', 'ぼうっ。照らすのは、きみの負け顔'],
+  'chochin>maneki': ['招き猫さん、お化けもお客さん？', 'もちろん。いらっしゃいませ'],
+  'miko>kappa': ['河童さん、ウイルスは駆除対象です', 'ワクチンは、きゅうりで足りる？'],
+  'kappa>miko': ['巫女さん、足元の水たまりに気をつけて', '罠ごと祓います'],
+  'komainu>kappa': ['河童、境内の池を汚すな', '水はきれいだよ。ウイルス入りだけど'],
+  'kappa>komainu': ['ワンちゃん、相撲とろうよ', '受けて立つ。阿！'],
+  'oni404>kappa': ['…河童、皿、割る', 'やめて、皿だけは！'],
+  'kappa>oni404': ['大きいね。相撲なら負けないよ', 'リクエスト、拒否'],
+  'fox>kappa': ['河童くん、きゅうり無限にあげよっか', 'それは…ちょっと迷う'],
+  'kappa>fox': ['狐さん、化けても水たまりは踏むよ', '踏まないように化けるよ'],
+  'tengu>kappa': ['河童よ、空までは水は届かんぞ', '降りてきたら、すべらせてあげる'],
+  'kappa>tengu': ['天狗さん、下駄で水たまりはすべるよ', '我は飛ぶ。足元など知らぬ'],
+  'maneki>kappa': ['河童さま、きゅうりのご用意がございます', 'えっ、本当？ …あ、罠だ'],
+  'kappa>maneki': ['招き猫さん、小判よりきゅうりがいい', '当店、きゅうりは扱っておりません'],
+  'chochin>kappa': ['河童くん、水はかけないでね', '火には水。相性ばっちりだね'],
+  'kappa>chochin': ['提灯さん、湿気には弱いでしょ', 'ぼうっ。乾かしてあげる'],
   'mirror':         ['偽物め', 'それはこちらの台詞']
 };
 function vsLines(a, b) { return VS_LINES[a === b ? 'mirror' : a + '>' + b] || null; }
@@ -5873,6 +5989,32 @@ const WIN_LINES = {
   'tengu>maneki': '招かれても降りぬと言ったろう',         'maneki>miko': 'ご注文、確かに承りました',
   'maneki>komainu': '門番さまも、ようこそいらっしゃいませ', 'maneki>oni404': '大きなお客様、お帰りはあちらです',
   'maneki>fox': 'ツケは、ここで払っていただきました',     'maneki>tengu': 'ほら、降りていらっしゃいました',
+  'chochin>miko': '肝試し、合格だよ',
+  'chochin>komainu': 'ワンちゃん、明かりは消せなかったね',
+  'chochin>oni404': '暗い所でも、明かりはつくよ',
+  'chochin>fox': '狐火より、提灯の火',
+  'chochin>tengu': '風、ありがと。よく燃えたよ',
+  'chochin>maneki': 'お化けのお客、満足しました',
+  'chochin>kappa': '水たまり、乾かしておいたよ',
+  'kappa>miko': '感染、祓えなかったね',
+  'kappa>komainu': '相撲は河童の勝ち',
+  'kappa>oni404': '皿、割られずにすんだ',
+  'kappa>fox': 'ほら、足元すべったでしょ',
+  'kappa>tengu': '降りてきたね。ようこそ水たまりへ',
+  'kappa>maneki': 'お代はきゅうりでいいよ',
+  'kappa>chochin': '火には水。ね？',
+  'miko>chochin': '提灯さん、灯りは消しておきます',
+  'miko>kappa': 'ウイルス、駆除完了です',
+  'komainu>chochin': '火の用心、完了',
+  'komainu>kappa': '相撲でも、境内は守る',
+  'oni404>chochin': '明かり…見つからない',
+  'oni404>kappa': '皿、404',
+  'fox>chochin': '狐火の勝ち。また遊ぼ',
+  'fox>kappa': 'きゅうり、無限にあげたのに',
+  'tengu>chochin': 'ひと吹きで十分だったな',
+  'tengu>kappa': '空に水たまりはない',
+  'maneki>chochin': 'お化けのお客さま、またのお越しを',
+  'maneki>kappa': 'きゅうりは、またの機会に',
   'mirror': '本物は、ひとりで十分'
 };
 function winLine(w, l) { return WIN_LINES[w === l ? 'mirror' : w + '>' + l] || null; }
@@ -6452,7 +6594,9 @@ Game.scenes.fight = {
     oni404:  [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'jL', 'jH'], ['5H', 'super']],
     fox:     [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'jL', 'jH'], ['5H', 'super']],
     tengu:   [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'sp2'], ['5H', 'super']],
-    maneki:  [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['sp1', '5H', 'sp3'], ['sp1', '5L', '5L', '5H', 'sp3']]
+    maneki:  [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['sp1', '5H', 'sp3'], ['sp1', '5L', '5L', '5H', 'sp3']],
+    chochin: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'jL', 'jH'], ['5H', 'super']],
+    kappa:   [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['2H', 'jL', 'jH'], ['5H', 'super']]
   },
   STEP_LABEL: { '5L': '弱', '2L': '↓弱', '5H': '強', '2H': '↓強', jL: 'J弱', jH: 'J強', jS: 'J必殺', sp1: '必殺', sp2: '→+必殺', sp3: '←+必殺', super: '↓+必殺', throw: '投げ' },
   /* かんたん操作でないときの必殺技の表記 */
@@ -7362,7 +7506,11 @@ const CPU_CHAR = {
   fox:     { aa: '5H', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['5H', 'sp1']], punish: ['5L', '5H', 'sp1'] },
   tengu:   { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'sp2'], ['5H', 'sp1']], punish: ['5H', 'sp2'] },
   /* 招き猫: 遠くでは歩いて近づき、中くらいの距離で手招き → 強 → 小判タックル */
-  maneki:  { aa: '5H', zone: null, mid: ['sp1', '5H', 'sp3'], routes: [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['5H', 'sp3']], punish: ['5H', 'sp3'], closeGrab: 'sp2' }
+  maneki:  { aa: '5H', zone: null, mid: ['sp1', '5H', 'sp3'], routes: [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['5H', 'sp3']], punish: ['5H', 'sp3'], closeGrab: 'sp2' },
+  /* 提灯: 遠くでは鬼火をためて撃つ */
+  chochin: { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'sp2'], ['5H', 'sp1']], punish: ['5H', 'sp1'] },
+  /* 河童: 遠くでは水たまりを置いて待つ */
+  kappa:   { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['2H', 'sp2'], ['5H', 'sp3']], punish: ['5H', 'sp3'] }
 };
 class CpuPolicy {
   /* mode: 'test' = ランダムに全技を踏む / 'dummy' = 立ち・ガード固定の練習相手 / 'cpu' = 対戦用（level: easy|normal|hard） */
@@ -7551,7 +7699,12 @@ class CpuPolicy {
     const routes = C.routes.slice(0, L.routeN).map(r => r.slice(0, L.routeLen));
     if (dist > 360) {
       const r = rng.next();
-      if (r < L.fireball && C.zone) this.q = this.pressFor(C.zone, me);
+      if (r < L.fireball && C.zone) {
+        this.q = this.pressFor(C.zone, me);
+        /* ため撃ちの技は、しばらく押しっぱなしにしてためる */
+        const zm = me.ch.moves[C.zone];
+        if (zm && zm.charge && dist > 420) { this.q = [B_S]; this.rep(B_S, 12 + rng.int(Math.round(zm.charge.max * 0.6)), this.q); this.q.push(0); }
+      }
       else if (r < L.fireball + L.jumpIn) { this.q = []; this.rep(B_UP | F, 3, this.q); this.rep(F, 12, this.q); this.q.push(F | (me.ch.moves.jS && rng.chance(0.6) ? B_S : B_H)); this.rep(F, 30, this.q); }
       else if (r < L.fireball + L.jumpIn + L.dash) {
         this.q = [F, 0, F];

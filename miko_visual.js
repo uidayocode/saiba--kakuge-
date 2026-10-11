@@ -418,7 +418,72 @@ function costumeManeki(j, ch) {
   arm(J.EF, J.HF, "front", false);
   return parts;
 }
-const COSTUMES = { miko: costumeMiko, komainu: costumeKomainu, oni404: costumeOni, fox: costumeFox, tengu: costumeTengu, maneki: costumeManeki };
+/* 提灯お化け: 縦長の提灯の体（上下に口金）、大きな一つ目、口から伸びる長い舌（= 手前の腕）、
+ * 後ろの手は小さな鬼火、下は地面へ流れる火の尾（宙に浮いて見える）。脚は描かない */
+function costumeChochin(j, ch) {
+  const { P, pel, head, tUp, back, fwd, down, parts, put } = bodyFrame(j);
+  const bot = add(pel, tUp, -2), top = add(head, tUp, 6);
+  const axis = sub(top, bot), len = Math.hypot(axis[0], axis[1]) || 1, u = unit(axis), n = perpL(u);
+  const c = lerp(bot, top, 0.5), R = 36;
+  /* 火の尾（提灯の下から地面へ、後ろへ流れる） */
+  put(plume(add(bot, u, 4), unit(add(down, back, 0.35)), Math.max(24, -bot[1] + 4), 0.25, 26, 2));
+  /* 後ろの手: 小さな鬼火 */
+  put(plume(P(J.EB), unit(sub(P(J.HB), P(J.EB))), 30, 0.3, 16, 2));
+  /* 提灯の体（ふくらんだ俵形） */
+  /* 輪郭を骨（竹ひご）の間で少しふくらませて、提灯らしい段にする */
+  const W = t => R * (0.62 + 0.38 * Math.sin(Math.PI * t)) * (1 + 0.05 * Math.cos(Math.PI * 2 * 5 * t));
+  const pts = [];
+  for (let k = 0; k <= 30; k++) { const t = k / 30; pts.push(add(add(bot, u, len * t), n, W(t))); }
+  for (let k = 30; k >= 0; k--) { const t = k / 30; pts.push(add(add(bot, u, len * t), n, -W(t))); }
+  put(polyPath(pts));
+  /* 上下の口金（黒い輪）と、上のつり手 */
+  const cap = (at, w, h) => put(polyPath([add(add(at, n, w), u, -h), add(add(at, n, w), u, h), add(add(at, n, -w), u, h), add(add(at, n, -w), u, -h)]));
+  cap(bot, R * 0.74, 6); cap(top, R * 0.74, 6);
+  put(capsule(add(top, u, 5), add(add(top, u, 16), fwd, 4), 2.5, 2.5));
+  /* 一つ目（大きく、少し前寄り）と口 */
+  const eyeC = add(add(c, u, len * 0.18), fwd, R * 0.38);
+  put(ell(eyeC, 8.5, 10.5), "main", true);
+  const mouth = add(add(c, u, -len * 0.16), fwd, R * 0.7);
+  /* 舌: 口から手前の手の位置まで伸びる（先は丸く二股） */
+  const hf = P(J.HF), td = unit(sub(hf, mouth)), tn = perpL(td);
+  put(capsule(mouth, hf, 6, 5), "front");
+  put(polyPath([add(hf, tn, 6), add(add(hf, td, 10), tn, 7), add(hf, td, 4), add(add(hf, td, 10), tn, -7), add(hf, tn, -6)]), "front");
+  return parts;
+}
+/* 河童: 前かがみ、背中の甲羅、頭の皿とまわりの髪、くちばし、水かきの手足 */
+function costumeKappa(j, ch) {
+  const { P, pel, neck, head, sh, tUp, back, fwd, down, parts, put } = bodyFrame(j);
+  const r = 15;
+  /* 甲羅（背中の大きな楕円） */
+  const mid = lerp(pel, neck, 0.5);
+  put(smooth([add(add(mid, back, 30), tUp, -14), add(add(mid, back, 32), tUp, 12), add(add(neck, back, 18), tUp, 2), add(neck, fwd, 2), add(pel, fwd, 2), add(add(pel, back, 18), down, 4)]));
+  /* 脚と水かきの足 */
+  const leg = (K, A, T) => {
+    put(capsule(pel, P(K), 8, 7)); put(capsule(P(K), P(A), 6.5, 5));
+    const fd = unit(sub(P(T), P(A))), fn = perpL(fd);
+    put(polyPath([add(P(A), fn, 4), add(add(P(T), fd, 6), fn, 6), add(P(T), fd, 9), add(add(P(T), fd, 6), fn, -6), add(P(A), fn, -4)]));
+  };
+  leg(J.KB, J.AB, J.TB); leg(J.KF, J.AF, J.TF);
+  const arm = (E, H, layer) => {
+    put(capsule(sh, P(E), 6.5, 5.5), layer); put(capsule(P(E), P(H), 5.5, 4.5), layer);
+    const hd = unit(sub(P(H), P(E))), hn = perpL(hd);
+    put(polyPath([add(P(H), hn, 4), add(add(P(H), hd, 9), hn, 8), add(P(H), hd, 12), add(add(P(H), hd, 9), hn, -8), add(P(H), hn, -4)]), layer);
+  };
+  arm(J.EB, J.HB);
+  /* 胴 */
+  put(smooth([add(pel, back, 11), add(lerp(pel, neck, 0.5), back, 12), add(neck, back, 9), add(neck, fwd, 9), add(lerp(pel, neck, 0.5), fwd, 13), add(pel, fwd, 11)]));
+  /* 頭・髪（皿のまわりのざんばら）・くちばし */
+  put(circle(head, r));
+  const hair = [];
+  for (let k = 0; k <= 10; k++) { const t = Math.PI * (1.0 + k / 10), rr = k % 2 ? r * 1.12 : r * 1.32; hair.push(add(head, [Math.cos(t) * rr, Math.sin(t) * rr * 0.75 + r * 0.05])); }
+  put(polyPath(hair));
+  put(polyPath([add(add(head, fwd, r * 0.7), [0, r * 0.05]), add(add(head, fwd, r * 1.8), [0, r * 0.3]), add(add(head, fwd, r * 0.7), [0, r * 0.55])]));
+  put(ell(add(head, [0, -r * 1.02]), r * 0.95, r * 0.28));                 /* 皿 */
+  put(ell(add(add(head, fwd, r * 0.42), [0, -r * 0.18]), 3.2, 3.6), "main", true);   /* 目 */
+  arm(J.EF, J.HF, "front");
+  return parts;
+}
+const COSTUMES = { miko: costumeMiko, komainu: costumeKomainu, oni404: costumeOni, fox: costumeFox, tengu: costumeTengu, maneki: costumeManeki, chochin: costumeChochin, kappa: costumeKappa };
 function costume(j, ch, id, o) { return (COSTUMES[id] || costumeMiko)(j, ch, o); }
 
 function rgba(h, a) { const n = parseInt(h.slice(1), 16); return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")"; }
