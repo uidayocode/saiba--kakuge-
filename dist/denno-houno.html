@@ -2655,7 +2655,7 @@ const CFG = {
   CAM_FOLLOW_X: 0.18, CAM_FOLLOW_Z: 0.10,
   GAUGE_MAX: 1000, SUPER_COST: 1000, JG_WINDOW: 5, JG_LOCK: 20, JG_STUN_CUT: 5, JG_GAUGE: 40, OTG_SCALE: 0.6, GC_COST: 500, PUSHBLOCK_DIST: 90,
   /* ガードの耐久（スマブラのシールド風）: ガードボタンを押している間とガードするたびに減り、離すと回復。0 でガードブレイク */
-  SHIELD_MAX: 100, SHIELD_DRAIN: 0.12, SHIELD_REGEN: 0.25, SHIELD_HIT: 0.14, SHIELD_HIT_MIN: 3, BREAK_STUN: 80, BREAK_REFILL: 45, COUNTER_DMG: 1.1, COUNTER_STUN: 6,
+  SHIELD_MAX: 100, SHIELD_DRAIN: 0.12, SHIELD_REGEN: 0.25, SHIELD_HIT: 0.14, SHIELD_HIT_MIN: 3, BREAK_STUN: 80, BREAK_REFILL: 45, COUNTER_DMG: 1.1, COUNTER_STUN: 6, CMD_DMG: 1.075,
   /* ヒットストップ: 当たったときは衝撃の強さ（impact 1〜4）で伸ばす、ガードされたときは短く */
   HITSTOP_HIT: [1.0, 1.15, 1.4, 1.55], HITSTOP_BLOCK: 0.75, HITSTOP_COUNTER: 6, HITSTOP_DOWN: 3, HITSTOP_MAX: 24, AIR_TECH_AFTER: 20, AIR_TECH_INV: 12, GAUGE_GAIN: 1.4, GAUGE_COMEBACK: 2.0, PROJ_GUARD_GAUGE: 25,
   DOWN_FRAMES: 28, WAKEUP_FRAMES: 18, WAKEUP_QUICK: 14, QUICK_WINDOW: 6, WAKE_DELAY: 22, ROLL_FRAMES: 20, ROLL_SPEED: 6, WAKE_THROW_INV: 6,
@@ -4349,6 +4349,7 @@ const CommandParser = {
   /* 必殺ボタンの押下フレーム pf で評価。戻り値: 'super'|'sp1'|'sp2'|'sp3'|'' (空=不発)
    * sp1 = ↓↘→ / sp2 = ↓↙← / sp3 = →↓↘ 。かんたん操作: 必殺だけ=sp1 / →=sp2 / ←=sp3 / ↓=super */
   parse(buf, pf, gauge, easy) {
+    this.byCmd = true;
     const s16 = this.dirString(buf, pf, CFG.CMD_WINDOW);
     const s36 = this.dirString(buf, pf, CFG.CMD_WINDOW_SUPER);
     if (gauge >= CFG.SUPER_COST && (/2(3)?6.*2(3)?6/.test(s36) || /2(3)?6.*23$/.test(s36))) return 'super';
@@ -4361,6 +4362,7 @@ const CommandParser = {
     if (e236 >= 0 || e214 >= 0) return e236 >= e214 ? 'sp1' : 'sp2';
     if (!easy) return '';
     /* 簡易操作: Sを押した瞬間(猶予2F)の方向 */
+    this.byCmd = false;
     let n = 5;
     for (let k = 0; k <= 2; k++) {
       const fr = pf - k;
@@ -4415,7 +4417,7 @@ class Fighter {
     this.state = 'IDLE'; this.stateT = 0; this.mv = null;
     this.hitstop = 0; this.hitstopTotal = 0; this.hitstopHit = false;
     this.stunLeft = 0; this.blockCrouch = false; this.hitCrouch = false;
-    this.shield = CFG.SHIELD_MAX; this.shieldHeld = false; this.breakPending = false; this.brokenT = 0; this.poison = null;
+    this.shield = CFG.SHIELD_MAX; this.shieldHeld = false; this.breakPending = false; this.brokenT = 0; this.poison = null; this.chargeStock = 0;
     this.kb = { total: 0, dir: 1, i: 10 }; this.kbSrc = null;
     this.combo = { techs: 0, hits: 0, dmg: 0, serial: -1 }; this.comboShow = { hits: 0, dmg: 0, t: 0 };
     this.usedInCombo = {}; this.juggle = 0; this.ko = false;
@@ -4550,8 +4552,11 @@ class Fighter {
     const b = this.buf;
     const ok = id => (!allowed || (allowed.has(id) && (this.usedInCombo[id] || 0) < 2));
     let r = null;
+    this.cmdId = null;
     if (!air && b.has('S')) {
       r = CommandParser.parse(b, b.pf.S, this.gauge, this.easy);
+      /* コマンド入力で出した必殺技・超必殺は威力 CFG.CMD_DMG 倍（startMove で mv.cmd に移す） */
+      this.cmdId = r && CommandParser.byCmd ? r : null;
       if (r === 'super' && ok('super')) { b.use('S'); return 'super'; }
       if (r === '') {
         if (!allowed) { b.use('S'); this.fx.sfx('error', this.x); }
@@ -4587,9 +4592,13 @@ class Fighter {
     const total = m.startup + m.active + m.recovery;
     const trig = (id === '5L' || id === '2L') ? 'L' : ((id === '5H' || id === '2H') ? 'H' : null);
     this.mv = {
+      charge: m.charge ? (this.chargeStock || 0) : 0,
       id: id, m: m, n: 0, total: total, contact: null, cancelLeft: 0, hitCount: 0, nextHitN: 0, hitDone: false,
-      serial: ++this.match.serial, trigBtn: trig, trigFrame: trig ? this.buf.pf[trig] : -999, thrown: false
+      serial: ++this.match.serial, trigBtn: trig, trigFrame: trig ? this.buf.pf[trig] : -999, thrown: false,
+      cmd: !!this.cmdId && this.cmdId === id
     };
+    this.cmdId = null;
+    if (m.charge) this.chargeStock = 0;
     this.setState('ATTACK', m.clip || id, null);
     this.match.front = this.slot;
     this.usedInCombo[id] = (this.usedInCombo[id] || 0) + 1;
@@ -4605,6 +4614,13 @@ class Fighter {
     const mv = this.mv, m = mv.m, st = this.st;
     /* ため（charge: {at, max}）: その フレームで必殺ボタンを押している間は止まって力をためる */
     if (m.charge && mv.n === m.charge.at && !mv.chargeDone) {
+      /* ため保持: ためている途中に ← かガードボタンを押すと、撃たずにやめて、ためた分を次の同じ技まで持ち越す */
+      const b = this.buf, backNow = b.horiz(0) * this.facing < 0 && b.horiz(1) * this.facing >= 0;
+      if ((mv.charge || 0) > 0 && (backNow || (b.cur & B_G))) {
+        this.chargeStock = Math.min(m.charge.max, mv.charge); this.pup.cp.speed = 1;
+        this.fx.chargeStock(this, this.chargeStock / m.charge.max);
+        return this.endMove();
+      }
       if ((this.buf.cur & B_S) && (mv.charge || 0) < m.charge.max) {
         mv.charge = (mv.charge || 0) + 1; this.pup.cp.speed = 0;
         if (mv.charge % 10 === 1) this.fx.charge(this, mv.charge / m.charge.max);
@@ -4764,6 +4780,7 @@ class Fighter {
         this.hp -= d; this.dmgRound += d; this.fx.poison(this);
       }
     }
+    if (this.chargeStock > 0 && this.match.frame % 24 === 0) this.fx.chargeKeep(this, this.chargeStock / (this.ch.moves.sp1.charge ? this.ch.moves.sp1.charge.max : 1));
     if (this.breakPending) { this.breakPending = false; this.guardBreak(); return; }
     /* ガードの耐久: ボタンで構えている間は減り、構えていない間は回復 */
     const ready = this.state === 'IDLE' || this.state === 'CROUCH' || this.state === 'BLOCKSTUN' || this.state === 'WALK_F' || this.state === 'WALK_B';
@@ -5041,7 +5058,7 @@ class Projectiles {
     p.x = owner.x + dir * s.x; p.y = def.ground ? 0 : owner.y + s.y;
     p.px = p.x; p.py = p.y; p.vx = def.vx * dir; p.vy = def.vy;
     p.life = def.life; p.maxLife = def.life; p.age = 0; p.hitsLeft = def.hits; p.hitTimer = 0;
-    p.serial = ++this.m.serial; p.clash = 0; p.srcMove = owner.mv ? owner.mv.id : null;
+    p.serial = ++this.m.serial; p.clash = 0; p.srcMove = owner.mv ? owner.mv.id : null; p.cmd = !!(owner.mv && owner.mv.cmd);
     /* ため撃ち（def.chargeScale）: ためた量 k(0〜1) で速さ・大きさ・威力・ヒット数が増える */
     p.sc = 1; p.hit = null;
     const cs = def.chargeScale, mv = owner.mv;
@@ -5235,9 +5252,10 @@ class Combat {
     const dir = D.x > s.ax ? 1 : (D.x < s.ax ? -1 : A.facing);
     const mvn = s.n;
     const isSuperHit = !isProj && mv && mv.m.kind === 'super';
+    const byCmd = isProj ? !!(s.proj && s.proj.cmd) : !!(mv && mv.cmd);
     if (D.state === 'DOWN') {
       /* ダウン追い打ち（ガード不能・1回のダウンにつき1回。少し威力を下げる） */
-      const dmg = Math.max(1, Math.round(hit.damage * CFG.OTG_SCALE * (A.st.dmgMul || 1)));
+      const dmg = Math.max(1, Math.round(hit.damage * CFG.OTG_SCALE * (A.st.dmgMul || 1) * (byCmd ? CFG.CMD_DMG : 1)));
       D.hp = Math.max(0, D.hp - dmg); D.dmgRound += dmg; D.otgUsed = true;
       D.combo.hits++; D.combo.dmg += dmg; m.noteCombo(A.slot, D.combo.hits);
       if (D.hp <= 0) D.ko = true;
@@ -5300,6 +5318,7 @@ class Combat {
       if (isSuperHit) scale = Math.max(scale, 0.4);
       if (counter) scale *= CFG.COUNTER_DMG;
       if (mv && mv.gc) scale *= 0.6;
+      if (byCmd) scale *= CFG.CMD_DMG;
       /* stats.dmgMul = キャラ全体の攻撃力の倍率（調整用。既定 1） */
       const dmg = Math.max(1, Math.round(hit.damage * scale * (A.st.dmgMul || 1)));
       D.hp = Math.max(0, D.hp - dmg); D.dmgRound += dmg;
@@ -6248,6 +6267,16 @@ const FX = {
       this.addPart(cx + Math.cos(a) * r, cy + Math.sin(a) * r, -Math.cos(a) * 2, -Math.sin(a) * 2, 16, 2 + k * 2.5, c, 0, 0);
     }
     if (k >= 1) { this.addText('MAX', cx, cy + 70, '#ffe94d', 16, 30, 0.6, 'en'); this.addRing(cx, cy, 8, 60, 12, '#ffe94d', 3); }
+  },
+  /* ため保持: やめた瞬間に「保持」、持っている間は体のまわりに小さな火の粉 */
+  chargeStock(f, k) {
+    const c = f.pup.glow();
+    this.addText(k >= 1 ? '保持 MAX' : '保持', f.x, f.y + 190, k >= 1 ? '#ffe94d' : c, 14, 30, 0.6, 'jp');
+    this.addRing(f.x, f.y + 100, 10, 50, 12, c, 2);
+  },
+  chargeKeep(f, k) {
+    const c = k >= 1 ? '#ffe94d' : f.pup.glow();
+    for (let i = 0; i < 1 + Math.round(k * 2); i++) this.addPart(f.x + fxRng.range(-26, 26), f.y + fxRng.range(60, 140), 0, fxRng.range(0.6, 1.4), 22, 2 + k * 1.5, c, 0, 0.01);
   },
   /* 毒: 体から緑の泡が上がる */
   poison(f) {
@@ -7715,7 +7744,7 @@ const SPECIAL_DESC = {
   fox:     { sp1: '分身が前に飛ぶ（2ヒット）', sp2: '相手の後ろへ瞬間移動', sp3: '弾の下を滑る下段', super: '大祓ゲージ満タンで使える' },
   tengu:   { sp1: '風の刃を飛ばす', sp2: '出始め無敵の対空', sp3: '弾を飛び越えて上から襲う（立ちガード）', super: '進む竜巻（6ヒット）' },
   maneki:  { sp1: '遠くの相手を引き寄せる。当たったら 強 でつながる', sp2: 'ガードできない掴み', sp3: '弾を受け流して突っ込む', super: 'ガードできない大投げ。密着で' },
-  chochin: { sp1: '押しっぱなしでためる鬼火。満タンで相手が転ぶ', sp2: '出始め無敵の対空', sp3: '転がって弾をすり抜ける', super: 'ゆっくり進む大きな鬼火（6ヒット）' },
+  chochin: { sp1: '押しっぱなしでためる鬼火。← かガードでため保持。満タンで転ぶ', sp2: '出始め無敵の対空', sp3: '転がって弾をすり抜ける', super: 'ゆっくり進む大きな鬼火（6ヒット）' },
   kappa:   { sp1: '前の床に水たまり（罠）。踏むとガードできず転んで毒', sp2: '出始め無敵の対空', sp3: '弾の下をすべる下段', super: '進む大波（5ヒット＋毒）' },
 };
 /* キャラだけの仕組み（技一覧の最後の行） */
@@ -7725,7 +7754,7 @@ const UNIQUE_ROW = {
   fox:     ['急降下蹴り', 'ジャンプ中に 必殺', '同じ', '斜め下へ蹴る。立ちガードのみ'],
   tengu:   ['空風（空中静止）', 'ジャンプ中に 必殺', '同じ', '空中で止まり、斜め下へ風を撃つ。1回のジャンプに1回'],
   maneki:  ['手招きコンボ', '手招きが当たったら 強', '同じ', '引き寄せて、そのまま連続技に'],
-  chochin: ['ため撃ち', '必殺技のボタンを押しっぱなし', '同じ', '最大約0.8秒。ためるほど速く大きく重い'],
+  chochin: ['ため撃ち', '必殺技のボタンを押しっぱなし', '同じ', '最大約0.6秒。ため中に ← かガードで保持できる'],
   kappa:   ['毒', '水たまり・大祓が当たる', '同じ', 'しばらく体力が減り続ける（毒では倒れない）'],
 };
 function normalDesc(m, base) {
