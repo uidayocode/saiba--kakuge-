@@ -7052,6 +7052,7 @@ Game.scenes.fight = {
     if (this.pauseWhy === 'disconnect') return ['キーボードで継続', 'タイトルへ'];
     const a = (Settings.data.lock && !Game.staff) ? ['再開', '技一覧', 'キャラ選択へ', 'タイトルへ'] : ['再開', '技一覧', '入力設定', 'キャラ選択へ', 'タイトルへ'];
     if (this.practice()) a.splice(1, 0, '練習台の動き: ' + this.DUMMY_LABEL[Game.dummyMode || 'stand'], 'コンボチャレンジ: ' + (Settings.data.challenge === false ? 'OFF' : 'ON'));
+    if (this.training && !Game.tutorial) a.splice(1, 0, '判定表示: ' + (Game.showBoxes ? 'ON' : 'OFF'));
     return a;
   },
   openPause(why) {
@@ -7185,6 +7186,7 @@ Game.scenes.fight = {
       Audio.play('menuOk');
       if (it === '再開') { this.paused = false; Input.lockFor(10); }
       else if (it.indexOf('コンボチャレンジ') === 0) { Settings.data.challenge = Settings.data.challenge === false; }
+      else if (it.indexOf('判定表示') === 0) { Game.showBoxes = !Game.showBoxes; }
       else if (it.indexOf('練習台の動き') === 0) { const M = this.DUMMY_MODES; Game.dummyMode = M[(M.indexOf(Game.dummyMode || 'stand') + 1) % M.length]; }
       else if (it === '技一覧') this.showMoves = true;
       else if (it === 'キーボードで継続') {
@@ -7208,7 +7210,9 @@ Game.scenes.fight = {
     }
     const m = this.match;
     if (!m) return;
-    const dbg = Debug.on ? (c, mm) => Debug.world(c, mm) : null;
+    /* 判定表示: デバッグ時か、練習中にポーズで ON にしたとき */
+    const showBox = Debug.on || (this.training && !Game.tutorial && Game.showBoxes);
+    const dbg = showBox ? (c, mm) => Debug.world(c, mm, !Debug.on) : null;
     renderFightWorld(ctx, m, this.paused ? 1 : alpha, { debugWorld: dbg });
     drawCutin(ctx, m, this);
     if (!PerfOff.hud) drawHUD(ctx, m, this.hud, Game.t);
@@ -7224,6 +7228,7 @@ Game.scenes.fight = {
       drawText(ctx, '10秒後にタイトルへ戻ります', 480, 150, { size: 20, align: 'center', color: '#ffb347', alpha: 0.6 + 0.4 * Math.sin(Game.t * 8) });
     }
     if (Debug.on) Debug.hud(ctx, m);
+    else if (showBox && !this.paused) Debug.legend(ctx);
     if (FX.flashA > 0) { ctx.fillStyle = rgba(FX.flashColor, Math.min(1, FX.flashA)); ctx.fillRect(0, 0, CFG.W, CFG.H); }
     if (this.challenger) this.drawChallenger(ctx);
     if (this.paused) this.renderPause(ctx);
@@ -7243,7 +7248,9 @@ Game.scenes.fight = {
       drawText(ctx, 'P' + n + ' コントローラー切断', 480, 150, { size: 30, align: 'center', color: '#ff6b8b', glow: '#ff3b5c' });
       drawText(ctx, '再接続するか、キーボードのEnterで継続（P' + n + 'はキーボードに切替）', 480, 188, { size: 15, align: 'center', color: '#e6f1ff' });
     } else drawText(ctx, 'PAUSE', 480, 150, { size: 44, font: 'en', align: 'center', color: '#ffffff', glow: '#19f3ff' });
-    drawMenuList(ctx, items, this.pauseSel, 480, 250, 46);
+    /* 項目が多いとき（練習中）は間隔を詰めて画面に収める */
+    const gap = Math.min(46, Math.floor(300 / Math.max(1, items.length - 1)));
+    drawMenuList(ctx, items, this.pauseSel, 480, items.length > 6 ? 215 : 250, gap);
     drawConn(ctx);
   }
 };
@@ -8562,8 +8569,12 @@ const Debug = {
     this._fc++; this._sc += steps;
     if (now - this._t0 >= 1000) { this.fps = this._fc * 1000 / (now - this._t0); this.sps = this._sc * 1000 / (now - this._t0); this._fc = 0; this._sc = 0; this._t0 = now; }
   },
-  world(ctx, m) {
-    const R = (b, col) => { ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.strokeRect(b[0], -b[3], b[2] - b[0], b[3] - b[1]); };
+  /* 判定の枠。nice = 練習用（半透明の塗り＋枠）: 緑=やられ / 赤=攻撃 / 黄=投げ / 橙=飛び道具 / 青=押し合い */
+  world(ctx, m, nice) {
+    const R = (b, col) => {
+      if (nice) { ctx.fillStyle = rgba(col, 0.2); ctx.fillRect(b[0], -b[3], b[2] - b[0], b[3] - b[1]); }
+      ctx.strokeStyle = col; ctx.lineWidth = nice ? 2 : 1.5; ctx.strokeRect(b[0], -b[3], b[2] - b[0], b[3] - b[1]);
+    };
     for (let i = 0; i < 2; i++) {
       const f = m.fighters[i];
       const hb = f.hurtBoxes();
@@ -8575,6 +8586,13 @@ const Debug = {
       if (f.mv && f.mv.m.throw && f.mv.n > f.mv.m.startup && f.mv.n <= f.mv.m.startup + f.mv.m.active) R(f.boxWorld(f.mv.m.throw.box), '#ffe94d');
     }
     m.projs.list.forEach(p => { if (p.alive && p.def.box) R(m.projs.boxWorld(p), '#ffa13c'); });
+  },
+  /* 練習の判定表示の凡例（画面下） */
+  legend(ctx) {
+    const L = [['やられ', '#7cff6b'], ['攻撃', '#ff3b5c'], ['投げ', '#ffe94d'], ['飛び道具', '#ffa13c'], ['押し合い', '#4d7cff']];
+    let x = 300;
+    ctx.save(); ctx.fillStyle = 'rgba(3,3,10,0.6)'; fillRR(ctx, 290, 476, 380, 20, 6); ctx.fill(); ctx.restore();
+    for (const [t, c] of L) { ctx.fillStyle = rgba(c, 0.35); ctx.fillRect(x, 481, 10, 10); ctx.strokeStyle = c; ctx.lineWidth = 1.5; ctx.strokeRect(x, 481, 10, 10); drawText(ctx, t, x + 14, 486, { size: 11, color: '#e6f1ff', base: 'middle' }); x += 14 + t.length * 11 + 16; }
   },
   hud(ctx, m) {
     ctx.save();
