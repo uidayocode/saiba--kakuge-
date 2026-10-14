@@ -50,7 +50,7 @@ const CFG = {
   CAM_FOLLOW_X: 0.18, CAM_FOLLOW_Z: 0.10,
   GAUGE_MAX: 1000, SUPER_COST: 1000, JG_WINDOW: 5, JG_LOCK: 20, JG_STUN_CUT: 5, JG_GAUGE: 40, OTG_SCALE: 0.6, GC_COST: 500, PUSHBLOCK_DIST: 90,
   /* ガードの耐久（スマブラのシールド風）: ガードボタンを押している間とガードするたびに減り、離すと回復。0 でガードブレイク */
-  SHIELD_MAX: 100, SHIELD_DRAIN: 0.12, SHIELD_REGEN: 0.25, SHIELD_HIT: 0.14, SHIELD_HIT_MIN: 3, BREAK_STUN: 80, BREAK_REFILL: 45, COUNTER_DMG: 1.1, COUNTER_STUN: 6, CMD_DMG: 1.075,
+  SHIELD_MAX: 100, SHIELD_DRAIN: 0.12, SHIELD_REGEN: 0.25, SHIELD_HIT: 0.14, SHIELD_HIT_MIN: 3, BREAK_STUN: 80, BREAK_REFILL: 45, COUNTER_DMG: 1.1, COUNTER_STUN: 6, CMD_DMG: 1.075, CHIP_MUL: 1.6, HP_MUL: 1.2,
   /* ヒットストップ: 当たったときは衝撃の強さ（impact 1〜4）で伸ばす、ガードされたときは短く */
   HITSTOP_HIT: [1.0, 1.15, 1.4, 1.55], HITSTOP_BLOCK: 0.75, HITSTOP_COUNTER: 6, HITSTOP_DOWN: 3, HITSTOP_MAX: 24, AIR_TECH_AFTER: 20, AIR_TECH_INV: 12, GAUGE_GAIN: 1.4, GAUGE_COMEBACK: 2.0, PROJ_GUARD_GAUGE: 25,
   DOWN_FRAMES: 28, WAKEUP_FRAMES: 18, WAKEUP_QUICK: 14, QUICK_WINDOW: 6, WAKE_DELAY: 22, ROLL_FRAMES: 20, ROLL_SPEED: 6, WAKE_THROW_INV: 6,
@@ -1800,7 +1800,8 @@ class Fighter {
     this.pup = new Puppet(rt, pal2);
     this.buf = new InputBuf();
     this.easy = !!easy;
-    this.maxHp = this.st.hp;
+    /* 全キャラ共通で体力を CFG.HP_MUL 倍（データの hp は相対値として使う） */
+    this.maxHp = Math.round(this.st.hp * CFG.HP_MUL);
     this.gauge = 0; this.wins = 0;
     this.usedMoves = {}; this.hitMoves = {};
     this.resetRound(false);
@@ -2440,7 +2441,13 @@ class Projectiles {
     if (!def) return false;
     let cnt = 0;
     for (let i = 0; i < this.list.length; i++) { const p = this.list[i]; if (p.alive && p.owner === owner && p.id === s.projectile) cnt++; }
-    if (cnt >= def.maxActive) return false;
+    if (cnt >= def.maxActive) {
+      /* replaceOld: 上限まで置いてあれば一番古いものを消して置き直す（河童の水たまり） */
+      if (!def.replaceOld) return false;
+      let old = null;
+      for (let i = 0; i < this.list.length; i++) { const p = this.list[i]; if (p.alive && p.owner === owner && p.id === s.projectile && (!old || p.serial < old.serial)) old = p; }
+      if (old) old.alive = false;
+    }
     let slot = null;
     for (let i = 0; i < this.list.length; i++) if (!this.list[i].alive) { slot = this.list[i]; break; }
     let alive = 0;
@@ -2684,7 +2691,8 @@ class Combat {
       hs = Math.max(8, hit.hitstop);
     } else if (guarded) {
       hs = Math.max(4, Math.round(hit.hitstop * CFG.HITSTOP_BLOCK));
-      const chip = just ? 0 : Math.max(0, Math.min(hit.chip, D.hp - 1));
+      /* 削り: データの chip × CFG.CHIP_MUL。削りでは倒れない */
+      const chip = just ? 0 : Math.max(0, Math.min(Math.round((hit.chip || 0) * CFG.CHIP_MUL), D.hp - 1));
       D.hp -= chip; D.dmgRound += chip;
       if (!isSuperHit) { this.addGauge(A, hit.gauge.block); this.addGauge(D, Math.floor(chip * 0.6) + (isProj ? CFG.PROJ_GUARD_GAUGE : 0)); }
       D.mv = null; D.vx = 0;
@@ -5149,7 +5157,7 @@ const UNIQUE_ROW = {
   fox:     ['急降下蹴り', 'ジャンプ中に 必殺', '同じ', '斜め下へ蹴る。立ちガードのみ'],
   tengu:   ['空風（空中静止）', 'ジャンプ中に 必殺', '同じ', '空中で止まり、斜め下へ風を撃つ。1回のジャンプに1回'],
   maneki:  ['手招きコンボ', '手招きが当たったら 強', '同じ', '引き寄せて、そのまま連続技に'],
-  chochin: ['ため撃ち', '必殺技のボタンを押しっぱなし', '同じ', '最大約0.6秒。ため中に ← かガードで保持できる'],
+  chochin: ['ため撃ち', '必殺技のボタンを押しっぱなし', '同じ', '最大約0.5秒。ため中に ← かガードで保持できる'],
   kappa:   ['毒', '水たまり・大祓が当たる', '同じ', 'しばらく体力が減り続ける（毒では倒れない）'],
 };
 function normalDesc(m, base) {

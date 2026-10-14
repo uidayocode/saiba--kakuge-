@@ -221,7 +221,7 @@ window.GAME_DATA = {
             launch: { vx: 3, vy: 7 }, hitstop: 12, impact: 3, gauge: { hit: 40 } },
           sfx: "grab" },
         sp1: { kind: "special", name: "護符弾", stance: "stand", startup: 13, active: 1, recovery: 34, boxes: [], hit: null,
-          spawn: [ { at: 14, projectile: "fuda", x: 56, y: 104 } ], sfx: "cast" },
+          spawn: [ { at: 14, projectile: "fuda", x: 56, y: 66 } ], sfx: "cast" },
         sp2: { kind: "special", name: "昇り鈴", stance: "stand", startup: 6, active: 7, recovery: 28, landLag: 6,
           boxes: [ { f0: 7, f1: 13, x: 12, y: 30, w: 53, h: 140 } ],
           hit: { damage: 78, chip: 6, level: "mid", hitstun: 0, blockstun: 22, hitstop: 10, knock: { hit: 0, block: 14 }, effect: "launch", launch: { vx: 2.5, vy: 10 }, juggle: 3, gauge: { hit: 60, block: 30 }, impact: 3 },
@@ -451,7 +451,7 @@ window.GAME_DATA = {
           invuln: [ { f0: 1, f1: 8, type: "strike" } ],
           sfx: "rise" },
         super: { kind: "super", name: "大祓「阿吽・無限突進」", stance: "stand", startup: 12, active: 30, recovery: 34, cost: 1000, flash: 40,
-          boxes: [ { f0: 13, f1: 42, x: 20, y: 0, w: 240, h: 160 } ],
+          boxes: [ { f0: 13, f1: 42, x: 20, y: 0, w: 120, h: 130 } ],
           motion: [ { f0: 13, f1: 40, vx: 6 } ],
           hit: { damage: 40, chip: 8, level: "mid", hitstun: 18, blockstun: 18, hitstop: 4, knock: { hit: 2, block: 6 }, effect: "stun", gauge: { hit: 0, block: 0 }, impact: 2 },
           multi: { count: 6, every: 5, final: { damage: 110, chip: 14, level: "mid", hitstun: 0, blockstun: 24, hitstop: 18, knock: { hit: 0, block: 30 }, effect: "launch", launch: { vx: 4, vy: 9 }, juggle: 0, gauge: { hit: 0, block: 0 }, impact: 4 } },
@@ -472,7 +472,7 @@ window.GAME_DATA = {
       blurb: "巨体と金棒の大振りで一撃が重い。動きは遅いが、404で場を制圧する。",
       ratings: { power: 5, speed: 1, range: 3, defense: 4 },
       stats: {
-        dmgMul: 0.72, hp: 1100, walkF: 2.6, walkB: 2.2, jumpVy: 13.5, jumpVx: 2.8, gravity: 0.78,
+        dmgMul: 0.79, hp: 1100, walkF: 2.6, walkB: 2.2, jumpVy: 13.5, jumpVx: 2.8, gravity: 0.78,
         airJumps: 0, prejump: 5, landLag: 4,
         dashF: { frames: 22, speed: 6.3 }, dashB: { frames: 22, speed: 4.0, invuln: 4 },
         gaugeMul: 0.9
@@ -951,7 +951,7 @@ window.GAME_DATA = {
         jL: { kind: "normal", name: "ジャンプ弱", stance: "air", startup: 4, active: 9, recovery: 5, landLag: 3, boxes: [ { f0: 5, f1: 13, x: 20, y: 40, w: 80, h: 48 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 1, damage: 26, hitstun: 16, blockstun: 12, hitstop: 6, knock: { hit: 6, block: 8 }, gauge: { hit: 25, block: 12 } }, cancel: { into: [ "jH", "jS" ], frames: 12 }, sfx: "swingL" },
         jH: { kind: "normal", name: "ジャンプ強（翼打ち）", stance: "air", startup: 8, active: 6, recovery: 10, landLag: 4, boxes: [ { f0: 9, f1: 14, x: 10, y: -6, w: 72, h: 80 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 3, damage: 58, hitstun: 22, blockstun: 16, hitstop: 10, knock: { hit: 10, block: 14 }, gauge: { hit: 45, block: 22 } }, trail: { from: "handF", color: "glow", width: 14, frames: 8 }, sfx: "swingH" },
         throw: { kind: "throw", name: "投げ", stance: "stand", startup: 5, active: 2, recovery: 20, boxes: [], hit: null, throw: { box: { x: 10, y: 20, w: 64, h: 100 }, techable: true, damage: 120, grabFrames: 30, afterRecovery: 18, attackerClip: "throwHit", hold: [ { f: 0, x: 50, y: 60, rot: -10 }, { f: 12, ease: "inOutCubic", x: 24, y: 170, rot: -100 }, { f: 26, ease: "outExpo", x: 70, y: 30, rot: -150 }, { f: 30, ease: "linear", x: 76, y: 20, rot: -160 } ], launch: { vx: 3, vy: 7 }, hitstop: 12, impact: 3, gauge: { hit: 40 } }, sfx: "grab" },
-        sp1: { kind: "special", name: "かまいたち", stance: "stand", startup: 14, active: 1, recovery: 32, boxes: [], hit: null, spawn: [ { at: 15, projectile: "kaze", x: 60, y: 96 } ], sfx: "wind" },
+        sp1: { kind: "special", name: "かまいたち", stance: "stand", startup: 14, active: 1, recovery: 32, boxes: [], hit: null, spawn: [ { at: 15, projectile: "kaze", x: 60, y: 64 } ], sfx: "wind" },
         sp2: { kind: "special", name: "突風昇り", stance: "stand", startup: 6, active: 7, recovery: 28, landLag: 6, boxes: [ { f0: 7, f1: 13, x: 10, y: 30, w: 48, h: 140 } ], hit: { chip: 6, level: "mid", effect: "launch", impact: 3, damage: 74, hitstun: 0, blockstun: 22, hitstop: 10, knock: { hit: 0, block: 14 }, launch: { vx: 2.5, vy: 10 }, juggle: 3, gauge: { hit: 60, block: 30 } }, motion: [ { f0: 7, f1: 7, vx: 2.5, vy: 11 } ], invuln: [ { f0: 1, f1: 9, type: "strike" } ], sfx: "rise" },
         sp3: { kind: "special", name: "烏落とし", stance: "stand", startup: 16, active: 8, recovery: 12, landLag: 10, boxes: [ { f0: 17, f1: 24, x: 20, y: 50, w: 66, h: 60 } ], hit: { chip: 5, level: "high", effect: "stun", impact: 3, damage: 70, hitstun: 22, blockstun: 16, hitstop: 10, knock: { hit: 12, block: 16 }, gauge: { hit: 50, block: 25 } }, motion: [ { f0: 5, f1: 5, vx: 7.5, vy: 11 } ], invuln: [ { f0: 1, f1: 20, type: "proj" } ], trail: { from: "handF", color: "glow", width: 12, frames: 8 }, sfx: "swingH" },
         jS: { kind: "special", name: "空風（からかぜ）", stance: "air", airOnce: true, startup: 13, active: 1, recovery: 18, landLag: 14, boxes: [], hit: null, hover: { f0: 1, f1: 29 }, spawn: [ { at: 14, projectile: "kazeDown", x: 40, y: 70 } ], sfx: "wind" },
@@ -1084,7 +1084,7 @@ window.GAME_DATA = {
         jL: { kind: "normal", name: "ジャンプ弱", stance: "air", startup: 5, active: 9, recovery: 5, landLag: 3, boxes: [ { f0: 6, f1: 14, x: 20, y: 40, w: 76, h: 46 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 1, damage: 26, hitstun: 16, blockstun: 12, hitstop: 6, knock: { hit: 6, block: 8 }, gauge: { hit: 25, block: 12 } }, cancel: { into: [ "jH" ], frames: 12 }, sfx: "swingL" },
         jH: { kind: "normal", name: "ジャンプ強（提灯落とし）", stance: "air", startup: 9, active: 6, recovery: 10, landLag: 4, boxes: [ { f0: 10, f1: 15, x: -10, y: -16, w: 92, h: 76 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 3, damage: 62, hitstun: 22, blockstun: 16, hitstop: 10, knock: { hit: 10, block: 14 }, gauge: { hit: 45, block: 22 } }, sfx: "swingH" },
         throw: { kind: "throw", name: "投げ", stance: "stand", startup: 5, active: 2, recovery: 20, boxes: [], hit: null, throw: { box: { x: 10, y: 20, w: 64, h: 100 }, techable: true, damage: 115, grabFrames: 30, afterRecovery: 22, attackerClip: "throwHit", hold: [ { f: 0, x: 50, y: 60, rot: -10 }, { f: 12, ease: "inOutCubic", x: 24, y: 170, rot: -100 }, { f: 26, ease: "outExpo", x: 70, y: 30, rot: -150 }, { f: 30, ease: "linear", x: 76, y: 20, rot: -160 } ], launch: { vx: 3, vy: 7 }, hitstop: 12, impact: 3, gauge: { hit: 40 } }, sfx: "grab" },
-        sp1: { kind: "special", name: "鬼火（ため撃ち）", stance: "stand", startup: 10, active: 1, recovery: 16, boxes: [], hit: null, charge: { at: 10, max: 36 }, spawn: [ { at: 11, projectile: "onibi", x: 56, y: 100 } ], sfx: "cast" },
+        sp1: { kind: "special", name: "鬼火（ため撃ち）", stance: "stand", startup: 10, active: 1, recovery: 16, boxes: [], hit: null, charge: { at: 10, max: 28 }, spawn: [ { at: 11, projectile: "onibi", x: 56, y: 64 } ], sfx: "cast" },
         sp2: { kind: "special", name: "昇り提灯", stance: "stand", startup: 6, active: 7, recovery: 28, landLag: 6, boxes: [ { f0: 7, f1: 13, x: 6, y: 30, w: 50, h: 140 } ], hit: { chip: 6, level: "mid", effect: "launch", impact: 3, damage: 72, hitstun: 0, blockstun: 22, hitstop: 10, knock: { hit: 0, block: 14 }, launch: { vx: 2.5, vy: 10 }, juggle: 0, gauge: { hit: 60, block: 30 } }, motion: [ { f0: 7, f1: 7, vx: 2, vy: 10.5 } ], invuln: [ { f0: 1, f1: 9, type: "strike" } ], sfx: "rise" },
         sp3: { kind: "special", name: "ころがり提灯", stance: "stand", startup: 11, active: 10, recovery: 18, boxes: [ { f0: 12, f1: 21, x: 20, y: 10, w: 79, h: 70 } ], hit: { chip: 6, level: "mid", effect: "launch", impact: 3, damage: 68, hitstun: 0, blockstun: 16, hitstop: 11, knock: { hit: 0, block: 22 }, launch: { vx: 3.5, vy: 6 }, juggle: 0, gauge: { hit: 50, block: 25 } }, motion: [ { f0: 3, f1: 21, vx: 7.5 } ], invuln: [ { f0: 1, f1: 21, type: "proj" } ], sfx: "swingH" },
         super: { kind: "super", name: "大祓「百鬼夜行」", stance: "stand", startup: 10, active: 1, recovery: 48, cost: 1000, flash: 40, boxes: [], hit: null, invuln: [ { f0: 1, f1: 12, type: "all" } ], spawn: [ { at: 11, projectile: "hyakki", x: 70, y: 90 } ], sfx: "super" }
@@ -1155,7 +1155,7 @@ window.GAME_DATA = {
         super: { kind: "super", name: "大祓「大洪水」", stance: "stand", startup: 10, active: 1, recovery: 48, cost: 1000, flash: 40, boxes: [], hit: null, invuln: [ { f0: 1, f1: 12, type: "all" } ], spawn: [ { at: 11, projectile: "nami", x: 70, y: 0 } ], sfx: "super" }
       },
       projectiles: {
-        mizu: { life: 420, armAt: 45, vx: 0, vy: 0, ground: true, box: { x: -44, y: 0, w: 88, h: 14 }, hits: 1, maxActive: 1, priority: 0, hit: { chip: 0, level: "mid", effect: "launch", impact: 1, damage: 20, unblockable: true, hitstun: 0, blockstun: 0, hitstop: 6, knock: { hit: 0, block: 0 }, launch: { vx: 0.5, vy: 4.5 }, juggle: 0, gauge: { hit: 30, block: 0 }, poison: { every: 30, ticks: 6, dmg: 6 } }, look: { style: "puddle", color: "accent", size: 1 } },
+        mizu: { life: 420, armAt: 45, vx: 0, vy: 0, ground: true, box: { x: -44, y: 0, w: 88, h: 14 }, hits: 1, maxActive: 2, replaceOld: true, priority: 0, hit: { chip: 0, level: "mid", effect: "launch", impact: 1, damage: 20, unblockable: true, hitstun: 0, blockstun: 0, hitstop: 6, knock: { hit: 0, block: 0 }, launch: { vx: 0.5, vy: 4.5 }, juggle: 0, gauge: { hit: 30, block: 0 }, poison: { every: 30, ticks: 6, dmg: 6 } }, look: { style: "puddle", color: "accent", size: 1 } },
         nami: { life: 100, vx: 5, vy: 0, ground: true, box: { x: -50, y: 0, w: 100, h: 120 }, hits: 5, hitEvery: 7, maxActive: 1, priority: 3, hit: { chip: 8, level: "mid", effect: "launch", impact: 3, damage: 46, hitstun: 0, blockstun: 12, hitstop: 5, knock: { hit: 0, block: 4 }, launch: { vx: 0.6, vy: 6.5 }, juggle: 8, gauge: { hit: 0, block: 0 }, poison: { every: 30, ticks: 8, dmg: 6 } }, look: { style: "shock", color: "accent", size: 2.4 } }
       },
       quotes: { select: "きゅうりは持ってきた？", intro: [ "河童ウイルス、感染開始。" ], win: [ "足元、気をつけて。", "感染、完了です。" ], lose: [ "皿が…乾く…" ] }
