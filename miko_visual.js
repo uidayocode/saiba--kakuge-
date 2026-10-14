@@ -483,8 +483,9 @@ function costumeKappa(j, ch) {
   arm(J.EF, J.HF, "front");
   return parts;
 }
-/* 陰陽玉: 狩衣（袖の広い衣）の人影で、頭が回る太極図。陰のときは頭がほぼ黒になり白い点（目）だけが光り、頭のまわりにとげとげの光輪が出る。
- * o.mode = 'yin' で陰。o.clipT で太極図がゆっくり回る */
+/* 陰陽獏: 白黒の獏（バク）の獣人。長い鼻、小さな丸い耳、ずんぐりした体。胴の真ん中に白い帯（マレーバクの模様 = 陽）。
+ * 手前の手に小さな太極図の玉を浮かべる。陰（o.mode = 'yin'）では白い帯が消えて全身まっ黒、目だけ白く光り、
+ * 玉は黒くなって、まわりにとげとげの黒い光輪。o.clipT で玉がゆっくり回る */
 function taiji(c, R, ang, dark) {
   const cs = Math.cos(ang), sn = Math.sin(ang), at = (x, y) => [c[0] + x * cs - y * sn, c[1] + x * sn + y * cs];
   if (dark) return [circle(at(0, -R * 0.42), R * 0.24)];
@@ -503,31 +504,37 @@ function costumeOnmyo(j, ch, o) {
   o = o || {};
   const yin = o.mode === 'yin';
   const { P, pel, neck, head, sh, tUp, back, fwd, down, parts, put } = bodyFrame(j);
-  const R = 18;
-  /* 脚（指貫袴: ふくらんだ袴、足首でしぼる） */
+  /* 脚（太く短い。先は丸いひづめ） */
   for (const [K, A, T] of [[J.KB, J.AB, J.TB], [J.KF, J.AF, J.TF]]) {
-    put(capsule(pel, P(K), 13, 13)); put(capsule(P(K), P(A), 13, 7)); put(capsule(P(A), P(T), 4.5, 3.5));
+    put(capsule(pel, P(K), 15, 13)); put(capsule(P(K), P(A), 13, 10)); put(ell(lerp(P(A), P(T), 0.55), 11, 7));
   }
-  /* 袖の広い腕（狩衣） */
-  const arm = (E, H, layer) => {
-    put(polyPath(hull([add(sh, back, 4), add(sh, fwd, 6), P(E), P(H), add(P(H), down, 20), add(P(E), down, 26), add(lerp(sh, P(E), 0.5), down, 16)])), layer);
-    put(circle(P(H), 5), layer);
-  };
+  const arm = (E, H, layer) => { put(capsule(sh, P(E), 11, 10), layer); put(capsule(P(E), P(H), 10, 8), layer); put(circle(P(H), 8), layer); };
   arm(J.EB, J.HB, "main");
-  /* 胴（裾が広がる） */
-  put(polyPath(hull([add(neck, back, 11), add(neck, fwd, 11), add(sh, fwd, 13), add(add(pel, back, 22), down, 22), add(add(pel, fwd, 20), down, 22), add(pel, back, 16)])));
-  /* 頭 = 太極図の玉 */
-  const hc = add(head, tUp, 2);
-  /* 陰: 頭のまわりにとげとげの黒い光輪（ゆっくり回る） */
-  if (yin) {
-    const sp = [], rot = (o.clipT || 0) * 0.01;
-    for (let k = 0; k < 24; k++) { const a = rot + k / 24 * Math.PI * 2, rr = k % 2 ? R + 3 : R + 12; sp.push(add(hc, [Math.cos(a) * rr, Math.sin(a) * rr])); }
-    put(polyPath(sp));
+  /* ずんぐりした胴 */
+  const mid = lerp(pel, neck, 0.5);
+  const torso = [add(add(pel, back, 22), down, 6), add(mid, back, 27), add(neck, back, 18), add(neck, fwd, 15), add(mid, fwd, 25), add(add(pel, fwd, 22), down, 6)];
+  put(smooth(torso));
+  /* 頭: 横長の丸。前へ長い鼻が垂れて先が少し上に巻く。小さな丸い耳 */
+  const hc = add(head, fwd, 3);
+  put(ell(hc, 19, 15));
+  put(plume(add(add(hc, fwd, 13), down, 1), unit(add(fwd, down, 0.45)), 30, 0.45, 12, 7));
+  put(circle(add(add(hc, back, 8), [0, -13]), 5.5));
+  put(ell(add(add(hc, fwd, 5), [0, -4]), 2.6, 2.2), "main", true);                       /* 目 */
+  /* 陽: 胴の真ん中の白い帯（マレーバクの模様） */
+  if (!yin) {
+    const b0 = lerp(pel, neck, 0.28), b1 = lerp(pel, neck, 0.52);
+    put(smooth([add(b0, back, 23), add(b1, back, 25), add(b1, fwd, 20), add(b0, fwd, 21)]), "main", true);
   }
-  put(circle(hc, R));
-  const ang = (o.clipT || 0) * (yin ? 0.02 : 0.035);
-  for (const g of taiji(hc, R - 2.5, ang, yin)) put(g, "main", true);
+  /* 手前の腕と、手の先に浮かぶ太極図の玉 */
   arm(J.EF, J.HF, "front");
+  const hf = P(J.HF), ad = unit(sub(hf, P(J.EF))), oc = add(add(hf, ad, 16), [0, -6]), R = 11;
+  if (yin) {
+    const sp = [], rot = (o.clipT || 0) * 0.02;
+    for (let k = 0; k < 18; k++) { const a = rot + k / 18 * Math.PI * 2, rr = k % 2 ? R + 2 : R + 9; sp.push(add(oc, [Math.cos(a) * rr, Math.sin(a) * rr])); }
+    put(polyPath(sp), "front");
+  }
+  put(circle(oc, R), "front");
+  for (const g of taiji(oc, R - 2, (o.clipT || 0) * 0.05, yin)) put(g, "front", true);
   return parts;
 }
 const COSTUMES = { miko: costumeMiko, komainu: costumeKomainu, oni404: costumeOni, fox: costumeFox, tengu: costumeTengu, maneki: costumeManeki, chochin: costumeChochin, kappa: costumeKappa, onmyo: costumeOnmyo };
