@@ -50,7 +50,7 @@ const CFG = {
   CAM_FOLLOW_X: 0.18, CAM_FOLLOW_Z: 0.10,
   GAUGE_MAX: 1000, SUPER_COST: 1000, JG_WINDOW: 5, JG_LOCK: 20, JG_STUN_CUT: 5, JG_GAUGE: 40, OTG_SCALE: 0.6, GC_COST: 500, PUSHBLOCK_DIST: 90,
   /* ガードの耐久（スマブラのシールド風）: ガードボタンを押している間とガードするたびに減り、離すと回復。0 でガードブレイク */
-  SHIELD_MAX: 100, SHIELD_DRAIN: 0.12, SHIELD_REGEN: 0.25, SHIELD_HIT: 0.224, SHIELD_HIT_MIN: 5, BREAK_STUN: 80, BREAK_REFILL: 45, COUNTER_DMG: 1.1, COUNTER_STUN: 6, CMD_DMG: 1.075, CHIP_MUL: 1.0, HP_MUL: 1.2,
+  SHIELD_MAX: 100, SHIELD_DRAIN: 0.12, SHIELD_REGEN: 0.25, SHIELD_HIT: 0.224, SHIELD_HIT_MIN: 5, BREAK_STUN: 80, BREAK_REFILL: 45, COUNTER_DMG: 1.1, COUNTER_STUN: 6, CMD_DMG: 1.075, MARK_LIFE: 420, CHIP_MUL: 1.0, HP_MUL: 1.2,
   /* ヒットストップ: 当たったときは衝撃の強さ（impact 1〜4）で伸ばす、ガードされたときは短く */
   HITSTOP_HIT: [1.0, 1.15, 1.4, 1.55], HITSTOP_BLOCK: 0.75, HITSTOP_COUNTER: 6, HITSTOP_DOWN: 3, HITSTOP_MAX: 24, AIR_TECH_AFTER: 20, AIR_TECH_INV: 12, GAUGE_GAIN: 1.4, GAUGE_COMEBACK: 2.0, PROJ_GUARD_GAUGE: 25,
   DOWN_FRAMES: 28, WAKEUP_FRAMES: 18, WAKEUP_QUICK: 14, QUICK_WINDOW: 6, WAKE_DELAY: 22, ROLL_FRAMES: 20, ROLL_SPEED: 6, WAKE_THROW_INV: 6,
@@ -1840,7 +1840,7 @@ class Fighter {
     this.state = 'IDLE'; this.stateT = 0; this.mv = null;
     this.hitstop = 0; this.hitstopTotal = 0; this.hitstopHit = false;
     this.stunLeft = 0; this.blockCrouch = false; this.hitCrouch = false;
-    this.shield = CFG.SHIELD_MAX; this.shieldHeld = false; this.breakPending = false; this.brokenT = 0; this.poison = null; this.chargeStock = 0; this.modeGauge = false; this.burstPending = false; this.empowered = false;
+    this.shield = CFG.SHIELD_MAX; this.shieldHeld = false; this.breakPending = false; this.brokenT = 0; this.poison = null; this.chargeStock = 0; this.modeGauge = false; this.burstPending = false; this.empowered = false; this.marks = 0; this.markT = 0;
     this.kb = { total: 0, dir: 1, i: 10 }; this.kbSrc = null;
     this.combo = { techs: 0, hits: 0, dmg: 0, serial: -1 }; this.comboShow = { hits: 0, dmg: 0, t: 0 };
     this.usedInCombo = {}; this.juggle = 0; this.ko = false;
@@ -2225,6 +2225,7 @@ class Fighter {
       return;
     }
     if (this.empowered && this.match.frame % 14 === 0) this.fx.chargeKeep(this, 1);
+    if (this.marks > 0) { if (--this.markT <= 0) this.marks = 0; else if (this.match.frame % 20 === 0) this.fx.markKeep(this, this.marks); }
     if (this.chargeStock > 0 && this.match.frame % 24 === 0) this.fx.chargeKeep(this, this.chargeStock / (this.ch.moves.sp1.charge ? this.ch.moves.sp1.charge.max : 1));
     if (this.breakPending) { this.breakPending = false; this.guardBreak(); return; }
     /* ガードの耐久: ボタンで構えている間は減り、構えていない間は回復 */
@@ -2700,7 +2701,8 @@ class Combat {
     if (before < CFG.GAUGE_MAX && f.gauge >= CFG.GAUGE_MAX) this.m.fx.gaugeFull(f);
   }
   applyStrike(s) {
-    const m = this.m, A = s.att, D = s.def, hit = s.hit, isProj = s.src === 'proj';
+    const m = this.m, A = s.att, D = s.def, isProj = s.src === 'proj';
+    let hit = s.hit;
     const mv = s.mv, fx = m.fx;
     const dir = D.x > s.ax ? 1 : (D.x < s.ax ? -1 : A.facing);
     const mvn = s.n;
@@ -2720,6 +2722,9 @@ class Combat {
       mv.hitCount++; mv.hitDone = true; mv.contact = 'hit';
       return;
     }
+    /* 狩り（技の hunt: { need, hit }）: 相手の爪痕が need 以上なら、その技の当たりを hunt.hit で上書き（ガード不能の大技など）。爪痕は使い切る */
+    let hunted = false;
+    if (!isProj && mv && mv.m.hunt && (D.marks || 0) >= mv.m.hunt.need) { hit = Object.assign({}, hit, mv.m.hunt.hit); s.hit = hit; hunted = true; D.marks = 0; D.markT = 0; fx.hunt(s.px, s.py, A); }
     /* 当て身（技の parry: {f0, f1, counter}）: 構えている間に打撃（弾・投げ・大祓・ガード不能以外）を受けると、
      * ダメージなしで受け止めて counter の技に移る（白虎の虎返し） */
     const pmv = D.state === 'ATTACK' ? D.mv : null, pr = pmv && pmv.m.parry;
@@ -2798,6 +2803,8 @@ class Combat {
       D.hp = Math.max(0, D.hp - dmg); D.dmgRound += dmg;
       c.hits++; c.dmg += dmg;
       this.drain(A, dmg);
+      /* 爪痕（hit.mark）: 当てると相手に爪痕が1つ（最大3。7秒つけ足さないと消える） */
+      if (hit.mark && !hunted && D.hp > 0) { D.marks = Math.min(3, (D.marks || 0) + hit.mark); D.markT = CFG.MARK_LIFE; fx.mark(D, D.marks); }
       /* 毒（hit.poison: {every, ticks, dmg}）: しばらく少しずつ体力が減る（毒では倒れない） */
       if (hit.poison && D.hp > 0) D.poison = { left: hit.poison.ticks, every: hit.poison.every, dmg: Math.max(1, Math.round(hit.poison.dmg * (A.st.dmgMul || 1))), t: 0 };
       m.noteCombo(A.slot, c.hits);
@@ -3760,6 +3767,21 @@ const FX = {
       this.addPart(cx + Math.cos(a) * r, cy + Math.sin(a) * r, -Math.cos(a) * 2, -Math.sin(a) * 2, 16, 2 + k * 2.5, c, 0, 0);
     }
     if (k >= 1) { this.addText('MAX', cx, cy + 70, '#ffe94d', 16, 30, 0.6, 'en'); this.addRing(cx, cy, 8, 60, 12, '#ffe94d', 3); }
+  },
+  /* 爪痕: 3本の金の引っかき傷が光る。3つたまると「狩り」の合図 */
+  mark(f, n) {
+    const x = f.x, y = f.y + 110;
+    for (let k = 0; k < 3; k++) for (let i = 0; i < 4; i++) this.addPart(x - 12 + k * 12 + i * 4, y + 18 - i * 9, 0.3, 0.2, 18, 2.6, '#ffd166', 0, 0);
+    this.addText(n >= 3 ? '狩りどき！' : '爪痕 ' + n, x, y + 70, '#ffd166', n >= 3 ? 18 : 13, 34, 0.7, 'jp');
+  },
+  markKeep(f, n) {
+    for (let i = 0; i < n; i++) this.addPart(f.x + fxRng.range(-24, 24), f.y + fxRng.range(50, 140), fxRng.range(-0.3, 0.3), fxRng.range(0.4, 1.0), 16, 2, '#ffd166', 0, 0);
+  },
+  hunt(x, y, f) {
+    this.addRing(x, y, 10, 130, 20, '#ffd166', 5);
+    this.addText('狩り！', x, y + 70, '#ffd166', 26, 50, 0.9, 'jp');
+    this.flash(0.25, '#ffd166', 8);
+    this.shake(7, 12);
   },
   /* 当て身: 受け止めた所に白い輪と「見切り」 */
   parry(x, y, f) {
@@ -5294,7 +5316,7 @@ const SPECIAL_DESC = {
   chochin: { sp1: '押しっぱなしでためる鬼火。← かガードでため保持。満タンで転ぶ', sp2: '出始め無敵の対空', sp3: '転がって弾をすり抜ける', super: 'ゆっくり進む大きな鬼火（6ヒット）' },
   kappa:   { sp1: '前の床に水たまり（罠）。踏むとガードできず転んで毒', sp2: '出始め無敵の対空', sp3: '弾の下をすべる下段', super: '進む大波（5ヒット＋毒）' },
   onmyo:   { sp1: '鶴: 羽根を3枚、扇に飛ばす / 烏: 遅く重い陰玉（2ヒット・弾に勝つ）', sp2: '鶴: 出始め無敵の対空 / 烏: 遠くの相手を引き寄せる', sp3: '鶴: 低く滑って弾をすり抜ける / 烏: 跳んで急降下でつかむ（ガード不能）', super: '鶴: 進む大きな玉（6ヒット） / 烏: 突進の連撃' },
-  byakko:  { sp1: '短く飛ぶ3本爪の斬撃', sp2: '構えて、打撃を受けたら受け止めて反撃（当て身）。空振りはスキ大', sp3: '近くを怯ませる咆哮。ガードされても耐久を大きく削る・弾を消す', super: '爪の連撃（7ヒット）' },
+  byakko:  { sp1: '短く飛ぶ3本爪の斬撃（爪痕）', sp2: '前へ跳んで爪で襲う（立ちガード）。爪痕3つでガード不能の「狩り」', sp3: '近くを怯ませる咆哮。ガードされても耐久を大きく削る・弾を消す', super: '爪の連撃（7ヒット）' },
 };
 /* キャラだけの仕組み（技一覧の最後の行） */
 const UNIQUE_ROW = {
@@ -5306,7 +5328,7 @@ const UNIQUE_ROW = {
   chochin: ['ため撃ち', '必殺技のボタンを押しっぱなし', '同じ', '最大約0.5秒。ため中に ← かガードで保持できる'],
   kappa:   ['毒', '水たまり・大祓が当たる', '同じ', 'しばらく体力が減り続ける（毒では倒れない）'],
   onmyo:   ['八咫烏（変化）', '体力が半分を切ると自動で', '同じ', '変わる瞬間に無敵の衝撃波（のけぞり中でも出る）。烏は体力が減るほど攻撃力アップ（最大1.4倍）。打たれ弱い'],
-  byakko:  ['虎視眈々', 'ジャストガードか当て身を決める', '同じ', '次に当てた1発が1.3倍（体のまわりに金の火の粉）'],
+  byakko:  ['爪痕と狩り / 虎視眈々', '強・J強・虎爪を当てる / ジャストガード', '同じ', '爪痕3つで飛びかかりが狩りの一撃（ガード不能・大ダメージ）。ジャストガード後の1発は1.3倍'],
 };
 function normalDesc(m, base) {
   const h = m.hit || {}, t = [];
@@ -5401,9 +5423,9 @@ COMBO_ROWS.onmyo = [
   ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '鶴は千羽鶴、烏は黒天']
 ];
 COMBO_ROWS.byakko = [
-  ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。虎爪で締める'],
+  ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。強と虎爪で爪痕2つ'],
   ['崩し', '↓弱 → 弱 → 強 → ←+必殺', '咆哮で締める。ガードされても耐久を削る'],
-  ['見切り', '相手の攻撃に合わせて →+必殺', '受け止めて反撃。次の1発が1.3倍'],
+  ['狩り', '爪痕3つ → →+必殺', 'ガード不能の飛びかかり。大ダメージ'],
   ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
   ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '8ヒット']
 ];
@@ -6184,24 +6206,24 @@ const VS_LINES = {
   'chochin>onmyo': ['鶴さん、夜になると黒くなるの？', '夜ではなく、体力が半分を切るとです'],
   'onmyo>kappa':   ['河童さん、水辺は鶴の場所です', 'じゃあ、きゅうりと交換ね'],
   'kappa>onmyo':   ['鶴さん、白い羽から感染させるね', '黒い羽は、もっとしつこいですよ'],
-  'byakko>miko':    ['巫女殿、打ってこい。全部受ける', 'では、遠慮なくお祓いします'],
-  'miko>byakko':    ['白虎さん、西の守りの方ですね', '守りは、攻めを受けてこそだ'],
-  'byakko>komainu': ['狛犬。突っ込んでくるなら好都合だ', '構えたまま朽ちるがいい'],
-  'komainu>byakko': ['虎よ、待つだけでは門は守れぬ', '待つのも、守りのうちだ'],
-  'byakko>oni404':  ['重い拳だ。受けがいがある', '…受けられるか、試す'],
-  'oni404>byakko':  ['…白い虎、消す', '消せるなら、とっくに消えている'],
-  'byakko>fox':     ['狐。化かしても、拳の筋は見える', 'じゃあ無限に化かしてみよっか'],
-  'fox>byakko':     ['虎さん、動かないの？ つまんない', '動くのは、お前が来たときだ'],
-  'byakko>tengu':   ['天狗。降りてきたところを返す', '降りぬ。風で斬る'],
-  'tengu>byakko':   ['地を這う獣が、空に届くか', '届かせる必要はない。来るのを待つ'],
-  'byakko>maneki':  ['招き猫。同じ猫でも、こちらは虎だ', 'まあ、大きなお客様'],
-  'maneki>byakko':  ['いらっしゃいませ。どっしりしたお客様', '座って待つのは、得意だ'],
-  'byakko>chochin': ['提灯。火の玉は爪で裂く', 'ぼうっ。ためたら裂けないよ'],
-  'chochin>byakko': ['虎さん、夜の神社はこわくない？', '虎が、こわがられる側だ'],
-  'byakko>kappa':   ['河童。足元の罠は見えている', '見えてても、踏んじゃうんだよね'],
-  'kappa>byakko':   ['虎さん、毒は受け止められないよ', '…それは困る'],
-  'byakko>onmyo':   ['鶴か。羽根ごと受け止める', '黒くなっても、受けられますか'],
-  'onmyo>byakko':   ['白虎さん、白どうしですね', '黒くなる前に、終わらせる'],
+  'byakko>miko':   ['巫女殿、背中を見せたら終わりだ', '見せません。正面からお祓いします'],
+  'miko>byakko':   ['白虎さん、西の守り神ですよね', '守りより、狩りのほうが得意だ'],
+  'byakko>komainu': ['犬か。いい獲物だ', '狛犬は、狩られる側ではない'],
+  'komainu>byakko': ['虎よ、境内で狩りは許さぬ', '門番ごと、狩らせてもらう'],
+  'byakko>oni404': ['大きな獲物だ。爪の通りがいい', '…爪、404'],
+  'oni404>byakko': ['…白い虎、消す', '消える前に、爪痕を三つ'],
+  'byakko>fox':    ['すばしこい獲物ほど、狩りがいがある', '捕まえられるかな？ 無限に逃げるよ'],
+  'fox>byakko':    ['虎さん、追いかけっこしよ！', 'いいだろう。三つ数える前に捕まえる'],
+  'byakko>tengu':  ['降りてこい。地に落ちた鳥は獲物だ', '降りぬ。風の上からは届くまい'],
+  'tengu>byakko':  ['地を這う獣が、空に届くか', '跳べば、届く'],
+  'byakko>maneki': ['同じ猫でも、こちらは狩る側だ', 'まあ、怖いお客様'],
+  'maneki>byakko': ['いらっしゃいませ。大きな猫のお客様', '虎だ。覚えておけ'],
+  'byakko>chochin': ['火の玉か。爪で裂く', 'ぼうっ。ためたら裂けないよ'],
+  'chochin>byakko': ['虎さん、夜の神社はこわくない？', '夜は、狩りの時間だ'],
+  'byakko>kappa':  ['河童。水辺は虎の狩り場だ', 'じゃあ足元、気をつけてね'],
+  'kappa>byakko':  ['虎さん、毒は爪じゃ裂けないよ', '裂けなくとも、先に倒す'],
+  'byakko>onmyo':  ['鶴か。飛ぶ獲物は、跳んで捕る', '黒くなっても、捕まえられますか'],
+  'onmyo>byakko':  ['白虎さん、白どうしですね', '白い獲物は、目立つ'],
   'mirror':         ['偽物め', 'それはこちらの台詞']
 };
 function vsLines(a, b) { return VS_LINES[a === b ? 'mirror' : a + '>' + b] || null; }
@@ -6264,24 +6286,24 @@ const WIN_LINES = {
   'maneki>onmyo': '鳥のお客様、毎度ありがとうございました',
   'chochin>onmyo': '黒い羽も、照らしちゃった',
   'kappa>onmyo': '白も黒も、感染完了',
-  'byakko>miko': '祓いの一手、見切った',
-  'byakko>komainu': '突っ込んできたのが、運の尽きだ',
-  'byakko>oni404': '重い拳ほど、返しがいがある',
-  'byakko>fox': '化かしも、拳の筋は同じだ',
-  'byakko>tengu': '降りてきたな。そこまでだ',
+  'byakko>miko': '背中、見せたな',
+  'byakko>komainu': '門番も、獲物のうちだ',
+  'byakko>oni404': '大きな獲物ほど、倒れる音がいい',
+  'byakko>fox': '三つ数える前に、捕まえた',
+  'byakko>tengu': '地に落ちた鳥は、獲物だ',
   'byakko>maneki': '猫と虎、格の違いだ',
   'byakko>chochin': '火の玉、裂いておいた',
-  'byakko>kappa': '罠ごと、踏み越えた',
-  'byakko>onmyo': '白も黒も、受け止めた',
-  'miko>byakko': '受け止めきれない祓いもあるんですよ',
-  'komainu>byakko': '待つだけの虎に、門は守れぬ',
-  'oni404>byakko': '受けても、404',
-  'fox>byakko': '虎さん、動いたら負けだったね',
-  'tengu>byakko': '空からでは、返せまい',
+  'byakko>kappa': '水辺は、虎の狩り場だ',
+  'byakko>onmyo': '白い羽も黒い羽も、爪痕だらけだ',
+  'miko>byakko': '狩られる前に、祓わせていただきました',
+  'komainu>byakko': '境内で狩りは許さぬと言った',
+  'oni404>byakko': '爪痕、404',
+  'fox>byakko': '追いかけっこ、狐の勝ち',
+  'tengu>byakko': '跳んでも、風の上には届かぬ',
   'maneki>byakko': '大きなお客様、毎度ありがとうございました',
   'chochin>byakko': 'ためた火は、裂けなかったね',
-  'kappa>byakko': '毒は受け止められなかったね',
-  'onmyo>byakko': '黒い羽は、見切れませんでしたね',
+  'kappa>byakko': '毒は爪じゃ裂けなかったね',
+  'onmyo>byakko': '黒い羽は、捕まえられませんでしたね',
   'mirror': '本物は、ひとりで十分'
 };
 function winLine(w, l) { return WIN_LINES[w === l ? 'mirror' : w + '>' + l] || null; }
@@ -6703,6 +6725,13 @@ function drawHUD(ctx, m, hud, t) {
       ctx.fillStyle = g; ctx.fill(); ctx.restore();
       drawText(ctx, 'P' + (i + 1), nx + dir * 8, y0 + 12, { size: 12, font: 'en', color: '#ffffff', align: a, base: 'middle' });
       drawText(ctx, f.ch.name, nx + dir * 34, y0 + 12, { size: 15, color: '#ffffff', align: a, base: 'middle', glow: col });
+      /* 爪痕（白虎に付けられた傷）: 名前の札の先に3本線の印を最大3つ */
+      if (f.marks > 0) for (let k = 0; k < 3; k++) {
+        const cx = nx + dir * (w + 14 + k * 18), on = k < f.marks;
+        ctx.strokeStyle = on ? '#ffd166' : 'rgba(255,255,255,0.15)'; ctx.lineWidth = 2; ctx.beginPath();
+        for (let q = -1; q <= 1; q++) { ctx.moveTo(cx + q * 4 + 3, y0 + 4); ctx.lineTo(cx + q * 4 - 3, y0 + 19); }
+        ctx.stroke();
+      }
     }
     /* 取ったラウンド: お札の形（ひし形） */
     for (let p = 0; p < m.need; p++) {
@@ -7786,7 +7815,7 @@ const CPU_CHAR = {
   onmyo:   { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp3'], ['2H', 'sp2'], ['5H', 'sp1']], punish: ['5H', 'sp3'] },
   'onmyo:2': { aa: '5H', zone: 'sp1', mid: ['sp3'], routes: [['5L', '5L', '5H', 'sp2'], ['2L', '5L', '5H', 'sp2'], ['sp2', '5H', 'sp1']], punish: ['5H', 'sp2'] },
   /* 白虎: 跳び込みは虎返しで受ける。近くでは咆哮でガードを崩す */
-  byakko:  { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp3'], ['2H', 'sp1'], ['5H', 'sp3']], punish: ['5H', 'sp1'] }
+  byakko:  { aa: '5H', zone: 'sp1', mid: ['sp2'], routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'sp1'], ['5H', 'sp2']], punish: ['5H', 'sp1'] }
 };
 class CpuPolicy {
   /* mode: 'test' = ランダムに全技を踏む / 'dummy' = 立ち・ガード固定の練習相手 / 'cpu' = 対戦用（level: easy|normal|hard） */

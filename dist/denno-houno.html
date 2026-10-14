@@ -1270,11 +1270,11 @@ window.GAME_DATA = {
       id: "byakko",
       name: "白虎",
       nameEn: "BYAKKO",
-      title: "当て身・待ち型",
-      blurb: "構えて待つ虎の拳法家。攻撃を受け止めて返し、見切ると次の一撃が重い。",
+      title: "狩り・追い込み型",
+      blurb: "爪で傷をつけて追い込む虎。爪痕が3つで、飛びかかりが狩りの一撃になる。",
       passive: { empower: 1.3 },
-      ratings: { power: 4, speed: 2, range: 3, defense: 4 },
-      stats: { dmgMul: 1, hp: 1150, walkF: 2.9, walkB: 2.6, jumpVy: 14.5, jumpVx: 3.2, gravity: 0.78, airJumps: 0, prejump: 5, landLag: 4, dashF: { frames: 18, speed: 7.4 }, dashB: { frames: 18, speed: 5.2, invuln: 6 }, gaugeMul: 1 },
+      ratings: { power: 4, speed: 3, range: 3, defense: 3 },
+      stats: { dmgMul: 0.85, hp: 1100, walkF: 3.4, walkB: 2.8, jumpVy: 14.5, jumpVx: 3.4, gravity: 0.78, airJumps: 0, prejump: 4, landLag: 4, dashF: { frames: 18, speed: 8.6 }, dashB: { frames: 18, speed: 5.6, invuln: 6 }, gaugeMul: 1 },
       boxes: { push: { stand: { w: 52, h: 100 }, crouch: { w: 56, h: 70 }, air: { w: 44, h: 100 } }, hurt: { stand: [ { x: -9, y: 139, w: 32, h: 32 }, { x: -26, y: 60, w: 54, h: 82 }, { x: -24, y: 0, w: 48, h: 64 } ], crouch: [ { x: 17, y: 92, w: 32, h: 32 }, { x: -28, y: 0, w: 58, h: 74 } ], air: [ { x: -24, y: 20, w: 50, h: 149 }, { x: -12, y: 137, w: 32, h: 32 } ] } },
       look: { palette: { skin: "#ffe0cc", hair: "#1a1033", primary: "#f4f7ff", secondary: "#ff3b5c", accent: "#ffd166", glow: "#19f3ff", outline: "#0a0620", eye: "#19f3ff" }, paletteP2: { skin: "#ffe0cc", hair: "#2b1033", primary: "#e8ddff", secondary: "#a56bff", accent: "#ffd166", glow: "#ff4fa3", outline: "#0a0620", eye: "#ff4fa3" }, body: { torsoLen: 54, torsoWTop: 30, torsoWBottom: 24, neckLen: 8, headR: 16, shoulderDrop: 6, uArmLen: 32, fArmLen: 30, handR: 6, thighLen: 40, shinLen: 38, footLen: 20, footH: 8, limbW: { uArm: [ 11, 9 ], fArm: [ 9, 7 ], thigh: [ 16, 13 ], shin: [ 12, 9 ] } }, colors: { head: "skin", neck: "skin", torso: "primary", uArm: "primary", fArm: "primary", hand: "skin", thigh: "secondary", shin: "secondary", foot: "accent" }, prop: { kind: "gohei", len: 46, thick: 4, angle: 0, color: "accent" }, neon: { tubeW: 3, glowW: 8, glowAlpha: 0.24, coreW: 1, fill: 0.9 }, decor: [], chains: [] },
       feel: { breath: { amp: 0.012, period: 90 }, jump: { sx: 0.94, sy: 1.08, frames: 4 }, land: { sx: 1.1, sy: 0.88, frames: 6 }, dash: { sx: 1.06, sy: 0.97, frames: 5 }, hitShake: { amp: [ 1, 2, 3, 3.5 ] }, recoil: { x: [ 3, 6, 10, 14 ], rot: [ 2, 4, 7, 10 ], frames: 4 }, squashHit: { sx: 1.06, sy: 0.94, frames: 3 } },
@@ -1308,8 +1308,7 @@ window.GAME_DATA = {
         jH: { length: 26, plant: "root", blend: 3, base: "jumpFall", keys: [ { f: 5, ease: "outQuad", p: { torso: -20, uarmF: 175, farmF: 20, uarmB: 170 } }, { f: 9, ease: "outExpo", p: { torso: 46, head: 20, uarmF: 60, farmF: 0, uarmB: 50, thighF: 30, shinF: 80 } }, { f: 15, ease: "linear", p: { torso: 46, head: 20, uarmF: 60, farmF: 0, uarmB: 50, thighF: 30, shinF: 80 } }, { f: 26, ease: "inOutQuad", p: "base" } ] },
         throw: { length: 27, plant: "feet", blend: 3, keys: [ { f: 3, ease: "outQuad", p: { uarmF: 60, farmF: 60, uarmB: 50, farmB: 60 } }, { f: 5, ease: "outExpo", p: { torso: 20, uarmF: 80, farmF: 30, uarmB: 80, farmB: 30, rootX: 10 } }, { f: 7, ease: "linear", p: { torso: 20, uarmF: 80, farmF: 30, uarmB: 80, farmB: 30, rootX: 10 } }, { f: 27, ease: "inOutQuad", p: "base" } ] },
         sp1: { length: 38, plant: "feet", blend: 3, keys: [ { f: 7, ease: "outQuad", p: { torso: -14, uarmF: 175, farmF: 30, rootX: -4 } }, { f: 13, ease: "outExpo", p: { torso: 30, head: 6, uarmF: 70, farmF: -10, rootX: 14, thighF: 50, shinF: 50 } }, { f: 20, ease: "linear", p: { torso: 30, head: 6, uarmF: 70, farmF: -10, rootX: 14, thighF: 50, shinF: 50 } }, { f: 38, ease: "inOutQuad", p: "base" } ] },
-        sp2: { length: 46, plant: "feet", blend: 3, keys: [ { f: 1, ease: "outQuad", p: { torso: -6, uarmF: 100, farmF: 120, uarmB: 60, farmB: 120 } }, { f: 2, ease: "outExpo", p: { torso: -4, head: -8, uarmF: 110, farmF: 120, uarmB: 40, farmB: 130, rootY: -10, thighF: 44, shinF: 64 } }, { f: 38, ease: "linear", p: { torso: -4, head: -8, uarmF: 110, farmF: 120, uarmB: 40, farmB: 130, rootY: -10, thighF: 44, shinF: 64 } }, { f: 46, ease: "inOutQuad", p: "base" } ] },
-        kaeshi: { length: 30, plant: "feet", blend: 3, keys: [ { f: 2, ease: "outQuad", p: { torso: -10, uarmF: 150, farmF: 30 } }, { f: 3, ease: "outExpo", p: { torso: 30, head: -10, uarmF: 160, farmF: 0, uarmB: 20, rootX: 18, thighF: 50, shinF: 40, thighB: -40 } }, { f: 14, ease: "linear", p: { torso: 30, head: -10, uarmF: 160, farmF: 0, uarmB: 20, rootX: 18, thighF: 50, shinF: 40, thighB: -40 } }, { f: 30, ease: "inOutQuad", p: "base" } ] },
+        sp2: { length: 41, plant: "feet", blend: 3, keys: [ { f: 8, ease: "outQuad", p: { torso: 30, head: -10, uarmF: 170, farmF: 20, uarmB: 160, farmB: 20, thighF: 70, shinF: 110, rootY: -10 } }, { f: 15, ease: "outExpo", p: { torso: 60, head: 10, uarmF: 100, farmF: -10, uarmB: 90, farmB: 0, rootX: 14, thighF: 40, shinF: 70, thighB: -10, shinB: 90 } }, { f: 29, ease: "linear", p: { torso: 60, head: 10, uarmF: 100, farmF: -10, uarmB: 90, farmB: 0, rootX: 14, thighF: 40, shinF: 70, thighB: -10, shinB: 90 } }, { f: 41, ease: "inOutQuad", p: "base" } ] },
         sp3: { length: 44, plant: "feet", blend: 3, keys: [ { f: 7, ease: "outQuad", p: { torso: -16, head: -20, uarmF: 30, farmF: 80, uarmB: 30, farmB: 80 } }, { f: 12, ease: "outExpo", p: { torso: 20, head: 20, uarmF: 120, farmF: 20, uarmB: 120, farmB: 20, rootX: 6, thighF: 40, shinF: 40 } }, { f: 30, ease: "linear", p: { torso: 20, head: 20, uarmF: 120, farmF: 20, uarmB: 120, farmB: 20, rootX: 6, thighF: 40, shinF: 40 } }, { f: 44, ease: "inOutQuad", p: "base" } ] },
         super: { length: 72, plant: "feet", blend: 3, keys: [ { f: 4, ease: "outQuad", p: { torso: -16, head: -12, uarmF: 170, farmF: 10, uarmB: 170, farmB: 10, rootY: 6 } }, { f: 8, ease: "outExpo", p: { torso: 30, head: 6, uarmF: 96, farmF: 0, uarmB: 90, farmB: 0, rootX: 14, thighF: 50, shinF: 50 } }, { f: 62, ease: "linear", p: { torso: 30, head: 6, uarmF: 96, farmF: 0, uarmB: 90, farmB: 0, rootX: 14, thighF: 50, shinF: 50 } }, { f: 72, ease: "inOutQuad", p: "base" } ] }
       },
@@ -1317,21 +1316,20 @@ window.GAME_DATA = {
       moves: {
         "5L": { kind: "normal", name: "立ち弱（掌底）", stance: "stand", startup: 5, active: 3, recovery: 9, boxes: [ { f0: 6, f1: 8, x: 30, y: 84, w: 66, h: 28 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 1, damage: 30, hitstun: 19, blockstun: 11, hitstop: 6, knock: { hit: 8, block: 10 }, gauge: { hit: 25, block: 12 } }, cancel: { into: [ "5L", "2L", "5H", "2H", "sp1", "sp2", "super" ], frames: 14 }, sfx: "swingL" },
         "2L": { kind: "normal", otg: true, name: "しゃがみ弱（下段爪）", stance: "crouch", startup: 5, active: 3, recovery: 10, boxes: [ { f0: 6, f1: 8, x: 28, y: 10, w: 74, h: 24 } ], hit: { chip: 0, level: "low", effect: "stun", impact: 1, damage: 26, hitstun: 20, blockstun: 12, hitstop: 6, knock: { hit: 8, block: 10 }, gauge: { hit: 25, block: 12 } }, cancel: { into: [ "5L", "2L", "5H", "2H", "sp1", "sp2", "super" ], frames: 14 }, sfx: "swingL" },
-        "5H": { kind: "normal", name: "立ち強（虎爪打ち）", stance: "stand", startup: 12, active: 4, recovery: 19, boxes: [ { f0: 13, f1: 16, x: 24, y: 50, w: 90, h: 70 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 3, damage: 84, hitstun: 24, blockstun: 16, hitstop: 11, knock: { hit: 16, block: 20 }, gauge: { hit: 45, block: 22 } }, cancel: { into: [ "sp1", "sp3", "super" ], frames: 16 }, trail: { from: "handF", color: "accent", width: 16, frames: 8 }, sfx: "swingH" },
+        "5H": { kind: "normal", name: "立ち強（虎爪打ち）", stance: "stand", startup: 12, active: 4, recovery: 19, boxes: [ { f0: 13, f1: 16, x: 24, y: 50, w: 90, h: 70 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 3, damage: 84, hitstun: 24, blockstun: 16, hitstop: 11, knock: { hit: 16, block: 20 }, gauge: { hit: 45, block: 22 }, mark: 1 }, cancel: { into: [ "sp1", "sp2", "sp3", "super" ], frames: 16 }, trail: { from: "handF", color: "accent", width: 16, frames: 8 }, sfx: "swingH" },
         "2H": { kind: "normal", name: "しゃがみ強（尾払い）", stance: "crouch", startup: 10, active: 4, recovery: 22, boxes: [ { f0: 11, f1: 14, x: 26, y: 0, w: 84, h: 26 } ], hit: { chip: 0, level: "low", effect: "launch", impact: 3, damage: 60, hitstun: 0, blockstun: 12, hitstop: 10, knock: { hit: 0, block: 18 }, launch: { vx: 1.5, vy: 9.5 }, juggle: 3, gauge: { hit: 40, block: 20 } }, cancel: { into: [ "sp1", "super", "jump" ], frames: 14 }, sfx: "swingH" },
         jL: { kind: "normal", name: "ジャンプ弱", stance: "air", startup: 5, active: 8, recovery: 6, landLag: 3, boxes: [ { f0: 6, f1: 13, x: 18, y: 30, w: 74, h: 48 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 1, damage: 30, hitstun: 17, blockstun: 12, hitstop: 7, knock: { hit: 6, block: 8 }, gauge: { hit: 25, block: 12 } }, cancel: { into: [ "jH" ], frames: 12 }, sfx: "swingL" },
-        jH: { kind: "normal", name: "ジャンプ強（爪落とし）", stance: "air", startup: 9, active: 6, recovery: 11, landLag: 5, boxes: [ { f0: 10, f1: 15, x: 4, y: -14, w: 88, h: 80 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 3, damage: 70, hitstun: 23, blockstun: 16, hitstop: 11, knock: { hit: 10, block: 14 }, gauge: { hit: 45, block: 22 } }, sfx: "swingH" },
+        jH: { kind: "normal", name: "ジャンプ強（爪落とし）", stance: "air", startup: 9, active: 6, recovery: 11, landLag: 5, boxes: [ { f0: 10, f1: 15, x: 4, y: -14, w: 88, h: 80 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 3, damage: 70, hitstun: 23, blockstun: 16, hitstop: 11, knock: { hit: 10, block: 14 }, gauge: { hit: 45, block: 22 }, mark: 1 }, sfx: "swingH" },
         throw: { kind: "throw", name: "投げ（虎投げ）", stance: "stand", startup: 5, active: 2, recovery: 20, boxes: [], hit: null, throw: { box: { x: 10, y: 20, w: 70, h: 110 }, techable: true, damage: 130, grabFrames: 30, afterRecovery: 18, attackerClip: "throwHit", hold: [ { f: 0, x: 50, y: 60, rot: -10 }, { f: 12, ease: "inOutCubic", x: 24, y: 170, rot: -100 }, { f: 26, ease: "outExpo", x: 70, y: 30, rot: -150 }, { f: 30, ease: "linear", x: 76, y: 20, rot: -160 } ], launch: { vx: 3, vy: 7 }, hitstop: 12, impact: 3, gauge: { hit: 40 } }, sfx: "grab" },
         sp1: { kind: "special", name: "虎爪", stance: "stand", startup: 13, active: 1, recovery: 24, boxes: [], hit: null, spawn: [ { at: 14, projectile: "tsume", x: 60, y: 70 } ], sfx: "swingH" },
-        sp2: { kind: "special", name: "虎返し", stance: "stand", startup: 2, active: 22, recovery: 22, boxes: [], hit: null, parry: { f0: 2, f1: 22, counter: "kaeshi" }, sfx: "swingL" },
-        kaeshi: { kind: "special", name: "虎返し（反撃）", keepEmpower: true, stance: "stand", startup: 3, active: 5, recovery: 22, boxes: [ { f0: 4, f1: 8, x: 6, y: 20, w: 100, h: 130 } ], hit: { chip: 0, level: "mid", effect: "launch", impact: 4, damage: 90, hitstun: 0, blockstun: 20, hitstop: 14, knock: { hit: 0, block: 24 }, launch: { vx: 4, vy: 9 }, juggle: 0, gauge: { hit: 60, block: 30 } }, motion: [ { f0: 1, f1: 6, vx: 6 } ], invuln: [ { f0: 1, f1: 12, type: "all" } ], trail: { from: "handF", color: "accent", width: 18, frames: 10 }, sfx: "swingH" },
+        sp2: { kind: "special", name: "飛びかかり", stance: "stand", startup: 15, active: 8, recovery: 18, landLag: 8, boxes: [ { f0: 16, f1: 23, x: 20, y: 40, w: 84, h: 80 } ], hit: { chip: 6, level: "high", effect: "stun", impact: 3, damage: 66, hitstun: 22, blockstun: 16, hitstop: 10, knock: { hit: 14, block: 18 }, gauge: { hit: 45, block: 22 } }, hunt: { need: 3, hit: { damage: 180, unblockable: true, hitstun: 0, effect: "launch", launch: { vx: 4.5, vy: 10.5 }, juggle: 0, hitstop: 22, impact: 4, knock: { hit: 0, block: 0 } } }, motion: [ { f0: 5, f1: 5, vx: 7.5, vy: 9.5 } ], invuln: [ { f0: 1, f1: 14, type: "proj" } ], trail: { from: "handF", color: "accent", width: 18, frames: 10 }, sfx: "swingH" },
         sp3: { kind: "special", name: "咆哮", stance: "stand", startup: 12, active: 8, recovery: 24, boxes: [ { f0: 13, f1: 20, x: 10, y: 10, w: 150, h: 160 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 3, damage: 34, hitstun: 26, blockstun: 18, hitstop: 10, knock: { hit: 40, block: 46 }, gauge: { hit: 40, block: 20 }, shieldMul: 7 }, invuln: [ { f0: 6, f1: 20, type: "proj" } ], sfx: "guardBreak" },
         super: { kind: "super", name: "大祓「白虎の牙」", stance: "stand", startup: 8, active: 30, recovery: 34, cost: 1000, flash: 40, boxes: [ { f0: 9, f1: 38, x: 20, y: 10, w: 104, h: 150 } ], motion: [ { f0: 9, f1: 36, vx: 3.4 } ], hit: { chip: 8, level: "mid", effect: "stun", impact: 2, damage: 34, hitstun: 18, blockstun: 18, hitstop: 4, knock: { hit: 2, block: 6 }, gauge: { hit: 0, block: 0 } }, multi: { count: 7, every: 4, final: { chip: 14, level: "mid", effect: "launch", impact: 4, damage: 130, hitstun: 0, blockstun: 24, hitstop: 18, knock: { hit: 0, block: 30 }, launch: { vx: 3, vy: 10 }, juggle: 0, gauge: { hit: 0, block: 0 } } }, invuln: [ { f0: 1, f1: 9, type: "all" } ], trail: { from: "handF", color: "accent", width: 20, frames: 10 }, sfx: "super" }
       },
       projectiles: {
-        tsume: { life: 28, vx: 9.5, vy: 0, box: { x: -30, y: -34, w: 60, h: 68 }, hits: 1, maxActive: 1, priority: 1, hit: { chip: 5, level: "mid", effect: "stun", impact: 2, damage: 50, hitstun: 20, blockstun: 14, hitstop: 8, knock: { hit: 12, block: 12 }, gauge: { hit: 30, block: 15 } }, look: { style: "slash", color: "accent", size: 0.9 } }
+        tsume: { life: 28, vx: 9.5, vy: 0, box: { x: -30, y: -34, w: 60, h: 68 }, hits: 1, maxActive: 1, priority: 1, hit: { chip: 5, level: "mid", effect: "stun", impact: 2, damage: 50, hitstun: 20, blockstun: 14, hitstop: 8, knock: { hit: 12, block: 12 }, gauge: { hit: 30, block: 15 }, mark: 1 }, look: { style: "slash", color: "accent", size: 0.9 } }
       },
-      quotes: { select: "来い。全部、受けてやる。", intro: [ "白虎、構える。" ], win: [ "見切った。", "虎は、待つのが仕事だ。" ], lose: [ "読み…違えた…" ] }
+      quotes: { select: "獲物は、逃がさない。", intro: [ "白虎、狩りを始める。" ], win: [ "狩り、完了。", "爪痕は、勲章にしておけ。" ], lose: [ "獲物に…逃げられた…" ] }
     }
   }
 };
@@ -2918,7 +2916,7 @@ const CFG = {
   CAM_FOLLOW_X: 0.18, CAM_FOLLOW_Z: 0.10,
   GAUGE_MAX: 1000, SUPER_COST: 1000, JG_WINDOW: 5, JG_LOCK: 20, JG_STUN_CUT: 5, JG_GAUGE: 40, OTG_SCALE: 0.6, GC_COST: 500, PUSHBLOCK_DIST: 90,
   /* ガードの耐久（スマブラのシールド風）: ガードボタンを押している間とガードするたびに減り、離すと回復。0 でガードブレイク */
-  SHIELD_MAX: 100, SHIELD_DRAIN: 0.12, SHIELD_REGEN: 0.25, SHIELD_HIT: 0.224, SHIELD_HIT_MIN: 5, BREAK_STUN: 80, BREAK_REFILL: 45, COUNTER_DMG: 1.1, COUNTER_STUN: 6, CMD_DMG: 1.075, CHIP_MUL: 1.0, HP_MUL: 1.2,
+  SHIELD_MAX: 100, SHIELD_DRAIN: 0.12, SHIELD_REGEN: 0.25, SHIELD_HIT: 0.224, SHIELD_HIT_MIN: 5, BREAK_STUN: 80, BREAK_REFILL: 45, COUNTER_DMG: 1.1, COUNTER_STUN: 6, CMD_DMG: 1.075, MARK_LIFE: 420, CHIP_MUL: 1.0, HP_MUL: 1.2,
   /* ヒットストップ: 当たったときは衝撃の強さ（impact 1〜4）で伸ばす、ガードされたときは短く */
   HITSTOP_HIT: [1.0, 1.15, 1.4, 1.55], HITSTOP_BLOCK: 0.75, HITSTOP_COUNTER: 6, HITSTOP_DOWN: 3, HITSTOP_MAX: 24, AIR_TECH_AFTER: 20, AIR_TECH_INV: 12, GAUGE_GAIN: 1.4, GAUGE_COMEBACK: 2.0, PROJ_GUARD_GAUGE: 25,
   DOWN_FRAMES: 28, WAKEUP_FRAMES: 18, WAKEUP_QUICK: 14, QUICK_WINDOW: 6, WAKE_DELAY: 22, ROLL_FRAMES: 20, ROLL_SPEED: 6, WAKE_THROW_INV: 6,
@@ -4708,7 +4706,7 @@ class Fighter {
     this.state = 'IDLE'; this.stateT = 0; this.mv = null;
     this.hitstop = 0; this.hitstopTotal = 0; this.hitstopHit = false;
     this.stunLeft = 0; this.blockCrouch = false; this.hitCrouch = false;
-    this.shield = CFG.SHIELD_MAX; this.shieldHeld = false; this.breakPending = false; this.brokenT = 0; this.poison = null; this.chargeStock = 0; this.modeGauge = false; this.burstPending = false; this.empowered = false;
+    this.shield = CFG.SHIELD_MAX; this.shieldHeld = false; this.breakPending = false; this.brokenT = 0; this.poison = null; this.chargeStock = 0; this.modeGauge = false; this.burstPending = false; this.empowered = false; this.marks = 0; this.markT = 0;
     this.kb = { total: 0, dir: 1, i: 10 }; this.kbSrc = null;
     this.combo = { techs: 0, hits: 0, dmg: 0, serial: -1 }; this.comboShow = { hits: 0, dmg: 0, t: 0 };
     this.usedInCombo = {}; this.juggle = 0; this.ko = false;
@@ -5093,6 +5091,7 @@ class Fighter {
       return;
     }
     if (this.empowered && this.match.frame % 14 === 0) this.fx.chargeKeep(this, 1);
+    if (this.marks > 0) { if (--this.markT <= 0) this.marks = 0; else if (this.match.frame % 20 === 0) this.fx.markKeep(this, this.marks); }
     if (this.chargeStock > 0 && this.match.frame % 24 === 0) this.fx.chargeKeep(this, this.chargeStock / (this.ch.moves.sp1.charge ? this.ch.moves.sp1.charge.max : 1));
     if (this.breakPending) { this.breakPending = false; this.guardBreak(); return; }
     /* ガードの耐久: ボタンで構えている間は減り、構えていない間は回復 */
@@ -5568,7 +5567,8 @@ class Combat {
     if (before < CFG.GAUGE_MAX && f.gauge >= CFG.GAUGE_MAX) this.m.fx.gaugeFull(f);
   }
   applyStrike(s) {
-    const m = this.m, A = s.att, D = s.def, hit = s.hit, isProj = s.src === 'proj';
+    const m = this.m, A = s.att, D = s.def, isProj = s.src === 'proj';
+    let hit = s.hit;
     const mv = s.mv, fx = m.fx;
     const dir = D.x > s.ax ? 1 : (D.x < s.ax ? -1 : A.facing);
     const mvn = s.n;
@@ -5588,6 +5588,9 @@ class Combat {
       mv.hitCount++; mv.hitDone = true; mv.contact = 'hit';
       return;
     }
+    /* 狩り（技の hunt: { need, hit }）: 相手の爪痕が need 以上なら、その技の当たりを hunt.hit で上書き（ガード不能の大技など）。爪痕は使い切る */
+    let hunted = false;
+    if (!isProj && mv && mv.m.hunt && (D.marks || 0) >= mv.m.hunt.need) { hit = Object.assign({}, hit, mv.m.hunt.hit); s.hit = hit; hunted = true; D.marks = 0; D.markT = 0; fx.hunt(s.px, s.py, A); }
     /* 当て身（技の parry: {f0, f1, counter}）: 構えている間に打撃（弾・投げ・大祓・ガード不能以外）を受けると、
      * ダメージなしで受け止めて counter の技に移る（白虎の虎返し） */
     const pmv = D.state === 'ATTACK' ? D.mv : null, pr = pmv && pmv.m.parry;
@@ -5666,6 +5669,8 @@ class Combat {
       D.hp = Math.max(0, D.hp - dmg); D.dmgRound += dmg;
       c.hits++; c.dmg += dmg;
       this.drain(A, dmg);
+      /* 爪痕（hit.mark）: 当てると相手に爪痕が1つ（最大3。7秒つけ足さないと消える） */
+      if (hit.mark && !hunted && D.hp > 0) { D.marks = Math.min(3, (D.marks || 0) + hit.mark); D.markT = CFG.MARK_LIFE; fx.mark(D, D.marks); }
       /* 毒（hit.poison: {every, ticks, dmg}）: しばらく少しずつ体力が減る（毒では倒れない） */
       if (hit.poison && D.hp > 0) D.poison = { left: hit.poison.ticks, every: hit.poison.every, dmg: Math.max(1, Math.round(hit.poison.dmg * (A.st.dmgMul || 1))), t: 0 };
       m.noteCombo(A.slot, c.hits);
@@ -6628,6 +6633,21 @@ const FX = {
       this.addPart(cx + Math.cos(a) * r, cy + Math.sin(a) * r, -Math.cos(a) * 2, -Math.sin(a) * 2, 16, 2 + k * 2.5, c, 0, 0);
     }
     if (k >= 1) { this.addText('MAX', cx, cy + 70, '#ffe94d', 16, 30, 0.6, 'en'); this.addRing(cx, cy, 8, 60, 12, '#ffe94d', 3); }
+  },
+  /* 爪痕: 3本の金の引っかき傷が光る。3つたまると「狩り」の合図 */
+  mark(f, n) {
+    const x = f.x, y = f.y + 110;
+    for (let k = 0; k < 3; k++) for (let i = 0; i < 4; i++) this.addPart(x - 12 + k * 12 + i * 4, y + 18 - i * 9, 0.3, 0.2, 18, 2.6, '#ffd166', 0, 0);
+    this.addText(n >= 3 ? '狩りどき！' : '爪痕 ' + n, x, y + 70, '#ffd166', n >= 3 ? 18 : 13, 34, 0.7, 'jp');
+  },
+  markKeep(f, n) {
+    for (let i = 0; i < n; i++) this.addPart(f.x + fxRng.range(-24, 24), f.y + fxRng.range(50, 140), fxRng.range(-0.3, 0.3), fxRng.range(0.4, 1.0), 16, 2, '#ffd166', 0, 0);
+  },
+  hunt(x, y, f) {
+    this.addRing(x, y, 10, 130, 20, '#ffd166', 5);
+    this.addText('狩り！', x, y + 70, '#ffd166', 26, 50, 0.9, 'jp');
+    this.flash(0.25, '#ffd166', 8);
+    this.shake(7, 12);
   },
   /* 当て身: 受け止めた所に白い輪と「見切り」 */
   parry(x, y, f) {
@@ -8162,7 +8182,7 @@ const SPECIAL_DESC = {
   chochin: { sp1: '押しっぱなしでためる鬼火。← かガードでため保持。満タンで転ぶ', sp2: '出始め無敵の対空', sp3: '転がって弾をすり抜ける', super: 'ゆっくり進む大きな鬼火（6ヒット）' },
   kappa:   { sp1: '前の床に水たまり（罠）。踏むとガードできず転んで毒', sp2: '出始め無敵の対空', sp3: '弾の下をすべる下段', super: '進む大波（5ヒット＋毒）' },
   onmyo:   { sp1: '鶴: 羽根を3枚、扇に飛ばす / 烏: 遅く重い陰玉（2ヒット・弾に勝つ）', sp2: '鶴: 出始め無敵の対空 / 烏: 遠くの相手を引き寄せる', sp3: '鶴: 低く滑って弾をすり抜ける / 烏: 跳んで急降下でつかむ（ガード不能）', super: '鶴: 進む大きな玉（6ヒット） / 烏: 突進の連撃' },
-  byakko:  { sp1: '短く飛ぶ3本爪の斬撃', sp2: '構えて、打撃を受けたら受け止めて反撃（当て身）。空振りはスキ大', sp3: '近くを怯ませる咆哮。ガードされても耐久を大きく削る・弾を消す', super: '爪の連撃（7ヒット）' },
+  byakko:  { sp1: '短く飛ぶ3本爪の斬撃（爪痕）', sp2: '前へ跳んで爪で襲う（立ちガード）。爪痕3つでガード不能の「狩り」', sp3: '近くを怯ませる咆哮。ガードされても耐久を大きく削る・弾を消す', super: '爪の連撃（7ヒット）' },
 };
 /* キャラだけの仕組み（技一覧の最後の行） */
 const UNIQUE_ROW = {
@@ -8174,7 +8194,7 @@ const UNIQUE_ROW = {
   chochin: ['ため撃ち', '必殺技のボタンを押しっぱなし', '同じ', '最大約0.5秒。ため中に ← かガードで保持できる'],
   kappa:   ['毒', '水たまり・大祓が当たる', '同じ', 'しばらく体力が減り続ける（毒では倒れない）'],
   onmyo:   ['八咫烏（変化）', '体力が半分を切ると自動で', '同じ', '変わる瞬間に無敵の衝撃波（のけぞり中でも出る）。烏は体力が減るほど攻撃力アップ（最大1.4倍）。打たれ弱い'],
-  byakko:  ['虎視眈々', 'ジャストガードか当て身を決める', '同じ', '次に当てた1発が1.3倍（体のまわりに金の火の粉）'],
+  byakko:  ['爪痕と狩り / 虎視眈々', '強・J強・虎爪を当てる / ジャストガード', '同じ', '爪痕3つで飛びかかりが狩りの一撃（ガード不能・大ダメージ）。ジャストガード後の1発は1.3倍'],
 };
 function normalDesc(m, base) {
   const h = m.hit || {}, t = [];
@@ -8269,9 +8289,9 @@ COMBO_ROWS.onmyo = [
   ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '鶴は千羽鶴、烏は黒天']
 ];
 COMBO_ROWS.byakko = [
-  ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。虎爪で締める'],
+  ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。強と虎爪で爪痕2つ'],
   ['崩し', '↓弱 → 弱 → 強 → ←+必殺', '咆哮で締める。ガードされても耐久を削る'],
-  ['見切り', '相手の攻撃に合わせて →+必殺', '受け止めて反撃。次の1発が1.3倍'],
+  ['狩り', '爪痕3つ → →+必殺', 'ガード不能の飛びかかり。大ダメージ'],
   ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
   ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '8ヒット']
 ];
@@ -9052,24 +9072,24 @@ const VS_LINES = {
   'chochin>onmyo': ['鶴さん、夜になると黒くなるの？', '夜ではなく、体力が半分を切るとです'],
   'onmyo>kappa':   ['河童さん、水辺は鶴の場所です', 'じゃあ、きゅうりと交換ね'],
   'kappa>onmyo':   ['鶴さん、白い羽から感染させるね', '黒い羽は、もっとしつこいですよ'],
-  'byakko>miko':    ['巫女殿、打ってこい。全部受ける', 'では、遠慮なくお祓いします'],
-  'miko>byakko':    ['白虎さん、西の守りの方ですね', '守りは、攻めを受けてこそだ'],
-  'byakko>komainu': ['狛犬。突っ込んでくるなら好都合だ', '構えたまま朽ちるがいい'],
-  'komainu>byakko': ['虎よ、待つだけでは門は守れぬ', '待つのも、守りのうちだ'],
-  'byakko>oni404':  ['重い拳だ。受けがいがある', '…受けられるか、試す'],
-  'oni404>byakko':  ['…白い虎、消す', '消せるなら、とっくに消えている'],
-  'byakko>fox':     ['狐。化かしても、拳の筋は見える', 'じゃあ無限に化かしてみよっか'],
-  'fox>byakko':     ['虎さん、動かないの？ つまんない', '動くのは、お前が来たときだ'],
-  'byakko>tengu':   ['天狗。降りてきたところを返す', '降りぬ。風で斬る'],
-  'tengu>byakko':   ['地を這う獣が、空に届くか', '届かせる必要はない。来るのを待つ'],
-  'byakko>maneki':  ['招き猫。同じ猫でも、こちらは虎だ', 'まあ、大きなお客様'],
-  'maneki>byakko':  ['いらっしゃいませ。どっしりしたお客様', '座って待つのは、得意だ'],
-  'byakko>chochin': ['提灯。火の玉は爪で裂く', 'ぼうっ。ためたら裂けないよ'],
-  'chochin>byakko': ['虎さん、夜の神社はこわくない？', '虎が、こわがられる側だ'],
-  'byakko>kappa':   ['河童。足元の罠は見えている', '見えてても、踏んじゃうんだよね'],
-  'kappa>byakko':   ['虎さん、毒は受け止められないよ', '…それは困る'],
-  'byakko>onmyo':   ['鶴か。羽根ごと受け止める', '黒くなっても、受けられますか'],
-  'onmyo>byakko':   ['白虎さん、白どうしですね', '黒くなる前に、終わらせる'],
+  'byakko>miko':   ['巫女殿、背中を見せたら終わりだ', '見せません。正面からお祓いします'],
+  'miko>byakko':   ['白虎さん、西の守り神ですよね', '守りより、狩りのほうが得意だ'],
+  'byakko>komainu': ['犬か。いい獲物だ', '狛犬は、狩られる側ではない'],
+  'komainu>byakko': ['虎よ、境内で狩りは許さぬ', '門番ごと、狩らせてもらう'],
+  'byakko>oni404': ['大きな獲物だ。爪の通りがいい', '…爪、404'],
+  'oni404>byakko': ['…白い虎、消す', '消える前に、爪痕を三つ'],
+  'byakko>fox':    ['すばしこい獲物ほど、狩りがいがある', '捕まえられるかな？ 無限に逃げるよ'],
+  'fox>byakko':    ['虎さん、追いかけっこしよ！', 'いいだろう。三つ数える前に捕まえる'],
+  'byakko>tengu':  ['降りてこい。地に落ちた鳥は獲物だ', '降りぬ。風の上からは届くまい'],
+  'tengu>byakko':  ['地を這う獣が、空に届くか', '跳べば、届く'],
+  'byakko>maneki': ['同じ猫でも、こちらは狩る側だ', 'まあ、怖いお客様'],
+  'maneki>byakko': ['いらっしゃいませ。大きな猫のお客様', '虎だ。覚えておけ'],
+  'byakko>chochin': ['火の玉か。爪で裂く', 'ぼうっ。ためたら裂けないよ'],
+  'chochin>byakko': ['虎さん、夜の神社はこわくない？', '夜は、狩りの時間だ'],
+  'byakko>kappa':  ['河童。水辺は虎の狩り場だ', 'じゃあ足元、気をつけてね'],
+  'kappa>byakko':  ['虎さん、毒は爪じゃ裂けないよ', '裂けなくとも、先に倒す'],
+  'byakko>onmyo':  ['鶴か。飛ぶ獲物は、跳んで捕る', '黒くなっても、捕まえられますか'],
+  'onmyo>byakko':  ['白虎さん、白どうしですね', '白い獲物は、目立つ'],
   'mirror':         ['偽物め', 'それはこちらの台詞']
 };
 function vsLines(a, b) { return VS_LINES[a === b ? 'mirror' : a + '>' + b] || null; }
@@ -9132,24 +9152,24 @@ const WIN_LINES = {
   'maneki>onmyo': '鳥のお客様、毎度ありがとうございました',
   'chochin>onmyo': '黒い羽も、照らしちゃった',
   'kappa>onmyo': '白も黒も、感染完了',
-  'byakko>miko': '祓いの一手、見切った',
-  'byakko>komainu': '突っ込んできたのが、運の尽きだ',
-  'byakko>oni404': '重い拳ほど、返しがいがある',
-  'byakko>fox': '化かしも、拳の筋は同じだ',
-  'byakko>tengu': '降りてきたな。そこまでだ',
+  'byakko>miko': '背中、見せたな',
+  'byakko>komainu': '門番も、獲物のうちだ',
+  'byakko>oni404': '大きな獲物ほど、倒れる音がいい',
+  'byakko>fox': '三つ数える前に、捕まえた',
+  'byakko>tengu': '地に落ちた鳥は、獲物だ',
   'byakko>maneki': '猫と虎、格の違いだ',
   'byakko>chochin': '火の玉、裂いておいた',
-  'byakko>kappa': '罠ごと、踏み越えた',
-  'byakko>onmyo': '白も黒も、受け止めた',
-  'miko>byakko': '受け止めきれない祓いもあるんですよ',
-  'komainu>byakko': '待つだけの虎に、門は守れぬ',
-  'oni404>byakko': '受けても、404',
-  'fox>byakko': '虎さん、動いたら負けだったね',
-  'tengu>byakko': '空からでは、返せまい',
+  'byakko>kappa': '水辺は、虎の狩り場だ',
+  'byakko>onmyo': '白い羽も黒い羽も、爪痕だらけだ',
+  'miko>byakko': '狩られる前に、祓わせていただきました',
+  'komainu>byakko': '境内で狩りは許さぬと言った',
+  'oni404>byakko': '爪痕、404',
+  'fox>byakko': '追いかけっこ、狐の勝ち',
+  'tengu>byakko': '跳んでも、風の上には届かぬ',
   'maneki>byakko': '大きなお客様、毎度ありがとうございました',
   'chochin>byakko': 'ためた火は、裂けなかったね',
-  'kappa>byakko': '毒は受け止められなかったね',
-  'onmyo>byakko': '黒い羽は、見切れませんでしたね',
+  'kappa>byakko': '毒は爪じゃ裂けなかったね',
+  'onmyo>byakko': '黒い羽は、捕まえられませんでしたね',
   'mirror': '本物は、ひとりで十分'
 };
 function winLine(w, l) { return WIN_LINES[w === l ? 'mirror' : w + '>' + l] || null; }
@@ -9571,6 +9591,13 @@ function drawHUD(ctx, m, hud, t) {
       ctx.fillStyle = g; ctx.fill(); ctx.restore();
       drawText(ctx, 'P' + (i + 1), nx + dir * 8, y0 + 12, { size: 12, font: 'en', color: '#ffffff', align: a, base: 'middle' });
       drawText(ctx, f.ch.name, nx + dir * 34, y0 + 12, { size: 15, color: '#ffffff', align: a, base: 'middle', glow: col });
+      /* 爪痕（白虎に付けられた傷）: 名前の札の先に3本線の印を最大3つ */
+      if (f.marks > 0) for (let k = 0; k < 3; k++) {
+        const cx = nx + dir * (w + 14 + k * 18), on = k < f.marks;
+        ctx.strokeStyle = on ? '#ffd166' : 'rgba(255,255,255,0.15)'; ctx.lineWidth = 2; ctx.beginPath();
+        for (let q = -1; q <= 1; q++) { ctx.moveTo(cx + q * 4 + 3, y0 + 4); ctx.lineTo(cx + q * 4 - 3, y0 + 19); }
+        ctx.stroke();
+      }
     }
     /* 取ったラウンド: お札の形（ひし形） */
     for (let p = 0; p < m.need; p++) {
@@ -10654,7 +10681,7 @@ const CPU_CHAR = {
   onmyo:   { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp3'], ['2H', 'sp2'], ['5H', 'sp1']], punish: ['5H', 'sp3'] },
   'onmyo:2': { aa: '5H', zone: 'sp1', mid: ['sp3'], routes: [['5L', '5L', '5H', 'sp2'], ['2L', '5L', '5H', 'sp2'], ['sp2', '5H', 'sp1']], punish: ['5H', 'sp2'] },
   /* 白虎: 跳び込みは虎返しで受ける。近くでは咆哮でガードを崩す */
-  byakko:  { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp3'], ['2H', 'sp1'], ['5H', 'sp3']], punish: ['5H', 'sp1'] }
+  byakko:  { aa: '5H', zone: 'sp1', mid: ['sp2'], routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'sp1'], ['5H', 'sp2']], punish: ['5H', 'sp1'] }
 };
 class CpuPolicy {
   /* mode: 'test' = ランダムに全技を踏む / 'dummy' = 立ち・ガード固定の練習相手 / 'cpu' = 対戦用（level: easy|normal|hard） */
