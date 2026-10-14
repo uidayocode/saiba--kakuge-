@@ -1309,7 +1309,7 @@ window.GAME_DATA = {
         throw: { length: 27, plant: "feet", blend: 3, keys: [ { f: 3, ease: "outQuad", p: { uarmF: 60, farmF: 60, uarmB: 50, farmB: 60 } }, { f: 5, ease: "outExpo", p: { torso: 20, uarmF: 80, farmF: 30, uarmB: 80, farmB: 30, rootX: 10 } }, { f: 7, ease: "linear", p: { torso: 20, uarmF: 80, farmF: 30, uarmB: 80, farmB: 30, rootX: 10 } }, { f: 27, ease: "inOutQuad", p: "base" } ] },
         sp1: { length: 38, plant: "feet", blend: 3, keys: [ { f: 7, ease: "outQuad", p: { torso: -14, uarmF: 175, farmF: 30, rootX: -4 } }, { f: 13, ease: "outExpo", p: { torso: 30, head: 6, uarmF: 70, farmF: -10, rootX: 14, thighF: 50, shinF: 50 } }, { f: 20, ease: "linear", p: { torso: 30, head: 6, uarmF: 70, farmF: -10, rootX: 14, thighF: 50, shinF: 50 } }, { f: 38, ease: "inOutQuad", p: "base" } ] },
         sp2: { length: 41, plant: "feet", blend: 3, keys: [ { f: 8, ease: "outQuad", p: { torso: 30, head: -10, uarmF: 170, farmF: 20, uarmB: 160, farmB: 20, thighF: 70, shinF: 110, rootY: -10 } }, { f: 15, ease: "outExpo", p: { torso: 60, head: 10, uarmF: 100, farmF: -10, uarmB: 90, farmB: 0, rootX: 14, thighF: 40, shinF: 70, thighB: -10, shinB: 90 } }, { f: 29, ease: "linear", p: { torso: 60, head: 10, uarmF: 100, farmF: -10, uarmB: 90, farmB: 0, rootX: 14, thighF: 40, shinF: 70, thighB: -10, shinB: 90 } }, { f: 41, ease: "inOutQuad", p: "base" } ] },
-        sp3: { length: 44, plant: "feet", blend: 3, keys: [ { f: 7, ease: "outQuad", p: { torso: -16, head: -20, uarmF: 30, farmF: 80, uarmB: 30, farmB: 80 } }, { f: 12, ease: "outExpo", p: { torso: 20, head: 20, uarmF: 120, farmF: 20, uarmB: 120, farmB: 20, rootX: 6, thighF: 40, shinF: 40 } }, { f: 30, ease: "linear", p: { torso: 20, head: 20, uarmF: 120, farmF: 20, uarmB: 120, farmB: 20, rootX: 6, thighF: 40, shinF: 40 } }, { f: 44, ease: "inOutQuad", p: "base" } ] },
+        sp3: { length: 42, plant: "feet", blend: 3, keys: [ { f: 7, ease: "outQuad", p: { torso: -16, head: -20, uarmF: 30, farmF: 80, uarmB: 30, farmB: 80 } }, { f: 12, ease: "outExpo", p: { torso: 20, head: 20, uarmF: 120, farmF: 20, uarmB: 120, farmB: 20, rootX: 6, thighF: 40, shinF: 40 } }, { f: 28, ease: "linear", p: { torso: 20, head: 20, uarmF: 120, farmF: 20, uarmB: 120, farmB: 20, rootX: 6, thighF: 40, shinF: 40 } }, { f: 42, ease: "inOutQuad", p: "base" } ] },
         super: { length: 72, plant: "feet", blend: 3, keys: [ { f: 4, ease: "outQuad", p: { torso: -16, head: -12, uarmF: 170, farmF: 10, uarmB: 170, farmB: 10, rootY: 6 } }, { f: 8, ease: "outExpo", p: { torso: 30, head: 6, uarmF: 96, farmF: 0, uarmB: 90, farmB: 0, rootX: 14, thighF: 50, shinF: 50 } }, { f: 62, ease: "linear", p: { torso: 30, head: 6, uarmF: 96, farmF: 0, uarmB: 90, farmB: 0, rootX: 14, thighF: 50, shinF: 50 } }, { f: 72, ease: "inOutQuad", p: "base" } ] }
       },
       basePose: { rootX: 0, rootY: -6, rot: 0, torso: 10, head: -6, uarmF: 50, farmF: 100, uarmB: 30, farmB: 90, thighF: 34, shinF: 52, footF: 14, thighB: -20, shinB: 30, footB: 30 },
@@ -1323,7 +1323,7 @@ window.GAME_DATA = {
         throw: { kind: "throw", name: "投げ（虎投げ）", stance: "stand", startup: 5, active: 2, recovery: 20, boxes: [], hit: null, throw: { box: { x: 10, y: 20, w: 70, h: 110 }, techable: true, damage: 130, grabFrames: 30, afterRecovery: 18, attackerClip: "throwHit", hold: [ { f: 0, x: 50, y: 60, rot: -10 }, { f: 12, ease: "inOutCubic", x: 24, y: 170, rot: -100 }, { f: 26, ease: "outExpo", x: 70, y: 30, rot: -150 }, { f: 30, ease: "linear", x: 76, y: 20, rot: -160 } ], launch: { vx: 3, vy: 7 }, hitstop: 12, impact: 3, gauge: { hit: 40 } }, sfx: "grab" },
         sp1: { kind: "special", name: "虎爪", stance: "stand", startup: 13, active: 1, recovery: 24, boxes: [], hit: null, spawn: [ { at: 14, projectile: "tsume", x: 60, y: 70 } ], sfx: "swingH" },
         sp2: { kind: "special", name: "飛びかかり", stance: "stand", startup: 15, active: 8, recovery: 18, landLag: 8, boxes: [ { f0: 16, f1: 23, x: 20, y: 40, w: 84, h: 80 } ], hit: { chip: 6, level: "high", effect: "stun", impact: 3, damage: 66, hitstun: 22, blockstun: 16, hitstop: 10, knock: { hit: 14, block: 18 }, gauge: { hit: 45, block: 22 } }, hunt: { need: 3, hit: { damage: 180, unblockable: true, hitstun: 0, effect: "launch", launch: { vx: 4.5, vy: 10.5 }, juggle: 0, hitstop: 22, impact: 4, knock: { hit: 0, block: 0 } } }, motion: [ { f0: 5, f1: 5, vx: 7.5, vy: 9.5 } ], invuln: [ { f0: 1, f1: 14, type: "proj" } ], trail: { from: "handF", color: "accent", width: 18, frames: 10 }, sfx: "swingH" },
-        sp3: { kind: "special", name: "咆哮", stance: "stand", startup: 12, active: 8, recovery: 24, boxes: [ { f0: 13, f1: 20, x: 10, y: 10, w: 150, h: 160 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 3, damage: 34, hitstun: 26, blockstun: 18, hitstop: 10, knock: { hit: 40, block: 46 }, gauge: { hit: 40, block: 20 }, shieldMul: 7 }, invuln: [ { f0: 6, f1: 20, type: "proj" } ], sfx: "guardBreak" },
+        sp3: { kind: "special", name: "虎の大爪", stance: "stand", startup: 12, active: 6, recovery: 24, boxes: [ { f0: 13, f1: 18, x: 10, y: 10, w: 98, h: 160 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 4, damage: 72, hitstun: 26, blockstun: 18, hitstop: 12, knock: { hit: 30, block: 40 }, gauge: { hit: 45, block: 22 }, shieldMul: 5, mark: 1 }, invuln: [ { f0: 6, f1: 18, type: "proj" } ], trail: { from: "handF", color: "accent", width: 22, frames: 10 }, sfx: "swingH" },
         super: { kind: "super", name: "大祓「白虎の牙」", stance: "stand", startup: 8, active: 30, recovery: 34, cost: 1000, flash: 40, boxes: [ { f0: 9, f1: 38, x: 20, y: 10, w: 104, h: 150 } ], motion: [ { f0: 9, f1: 36, vx: 3.4 } ], hit: { chip: 8, level: "mid", effect: "stun", impact: 2, damage: 34, hitstun: 18, blockstun: 18, hitstop: 4, knock: { hit: 2, block: 6 }, gauge: { hit: 0, block: 0 } }, multi: { count: 7, every: 4, final: { chip: 14, level: "mid", effect: "launch", impact: 4, damage: 130, hitstun: 0, blockstun: 24, hitstop: 18, knock: { hit: 0, block: 30 }, launch: { vx: 3, vy: 10 }, juggle: 0, gauge: { hit: 0, block: 0 } } }, invuln: [ { f0: 1, f1: 9, type: "all" } ], trail: { from: "handF", color: "accent", width: 20, frames: 10 }, sfx: "super" }
       },
       projectiles: {
@@ -8182,7 +8182,7 @@ const SPECIAL_DESC = {
   chochin: { sp1: '押しっぱなしでためる鬼火。← かガードでため保持。満タンで転ぶ', sp2: '出始め無敵の対空', sp3: '転がって弾をすり抜ける', super: 'ゆっくり進む大きな鬼火（6ヒット）' },
   kappa:   { sp1: '前の床に水たまり（罠）。踏むとガードできず転んで毒', sp2: '出始め無敵の対空', sp3: '弾の下をすべる下段', super: '進む大波（5ヒット＋毒）' },
   onmyo:   { sp1: '鶴: 羽根を3枚、扇に飛ばす / 烏: 遅く重い陰玉（2ヒット・弾に勝つ）', sp2: '鶴: 出始め無敵の対空 / 烏: 遠くの相手を引き寄せる', sp3: '鶴: 低く滑って弾をすり抜ける / 烏: 跳んで急降下でつかむ（ガード不能）', super: '鶴: 進む大きな玉（6ヒット） / 烏: 突進の連撃' },
-  byakko:  { sp1: '短く飛ぶ3本爪の斬撃（爪痕）', sp2: '前へ跳んで爪で襲う（立ちガード）。爪痕3つでガード不能の「狩り」', sp3: '近くを怯ませる咆哮。ガードされても耐久を大きく削る・弾を消す', super: '爪の連撃（7ヒット）' },
+  byakko:  { sp1: '短く飛ぶ3本爪の斬撃（爪痕）', sp2: '前へ跳んで爪で襲う（立ちガード）。爪痕3つでガード不能の「狩り」', sp3: '両腕で大きく裂く大爪（爪痕）。ガードされても耐久を大きく削る・弾を消す', super: '爪の連撃（7ヒット）' },
 };
 /* キャラだけの仕組み（技一覧の最後の行） */
 const UNIQUE_ROW = {
@@ -8194,7 +8194,7 @@ const UNIQUE_ROW = {
   chochin: ['ため撃ち', '必殺技のボタンを押しっぱなし', '同じ', '最大約0.5秒。ため中に ← かガードで保持できる'],
   kappa:   ['毒', '水たまり・大祓が当たる', '同じ', 'しばらく体力が減り続ける（毒では倒れない）'],
   onmyo:   ['八咫烏（変化）', '体力が半分を切ると自動で', '同じ', '変わる瞬間に無敵の衝撃波（のけぞり中でも出る）。烏は体力が減るほど攻撃力アップ（最大1.4倍）。打たれ弱い'],
-  byakko:  ['爪痕と狩り / 虎視眈々', '強・J強・虎爪を当てる / ジャストガード', '同じ', '爪痕3つで飛びかかりが狩りの一撃（ガード不能・大ダメージ）。ジャストガード後の1発は1.3倍'],
+  byakko:  ['爪痕と狩り / 虎視眈々', '強・J強・虎爪・大爪を当てる / ジャストガード', '同じ', '爪痕3つで飛びかかりが狩りの一撃（ガード不能・大ダメージ）。ジャストガード後の1発は1.3倍'],
 };
 function normalDesc(m, base) {
   const h = m.hit || {}, t = [];
@@ -8290,7 +8290,7 @@ COMBO_ROWS.onmyo = [
 ];
 COMBO_ROWS.byakko = [
   ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。強と虎爪で爪痕2つ'],
-  ['崩し', '↓弱 → 弱 → 強 → ←+必殺', '咆哮で締める。ガードされても耐久を削る'],
+  ['大爪で締め', '↓弱 → 弱 → 強 → ←+必殺', '強と大爪で爪痕2つ。ガードされても耐久を削る'],
   ['狩り', '爪痕3つ → →+必殺', 'ガード不能の飛びかかり。大ダメージ'],
   ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
   ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '8ヒット']
