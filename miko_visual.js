@@ -538,7 +538,72 @@ function costumeOnmyo(j, ch, o) {
   wing(J.EF, J.HF, "front");
   return parts;
 }
-const COSTUMES = { miko: costumeMiko, komainu: costumeKomainu, oni404: costumeOni, fox: costumeFox, tengu: costumeTengu, maneki: costumeManeki, chochin: costumeChochin, kappa: costumeKappa, onmyo: costumeOnmyo };
+/* 白虎: 二本足で構える虎の拳法家。広い肩と逆三角の胴、太い腕と大きな3本爪、腰の帯（後ろへ流れる帯の端）、
+ * 丸い耳と頬のふさふさ毛、長くうねる尻尾。縞は背中と腕の外側の小さなギザギザで表す（影絵の輪郭が光る）。 */
+function costumeByakko(j, ch, o) {
+  o = o || {};
+  const { P, pel, neck, head, sh, tUp, back, fwd, down, parts, put } = bodyFrame(j);
+  const t = (o.clipT || 0);
+  /* 尻尾: 腰の後ろから下へ垂れて、先が上に巻く（ゆっくり揺れる） */
+  const sw = Math.sin(t * 0.08) * 0.15;
+  put(plume(add(add(pel, back, 10), tUp, 6), unit(add(back, down, 0.25 + sw)), 70, -0.65, 12, 9));
+  /* 脚: 太もも太く、すねは細め、足は大きな肉球の前足 */
+  for (const [K, A, T] of [[J.KB, J.AB, J.TB], [J.KF, J.AF, J.TF]]) {
+    put(capsule(pel, P(K), 16, 13)); put(capsule(P(K), P(A), 11, 8));
+    put(ell(lerp(P(A), P(T), 0.6), 13, 7.5));
+  }
+  /* 縞のギザギザ: 線分 a→b の外側（n の向き）に小さな三角を並べる */
+  const stripes = (a, b, n, cnt, h, layer) => {
+    for (let k = 0; k < cnt; k++) {
+      const u0 = (k + 0.2) / cnt, u1 = (k + 0.75) / cnt, m = lerp(a, b, (u0 + u1) / 2);
+      put(polyPath([lerp(a, b, u0), add(m, n, h), lerp(a, b, u1)]), layer);
+    }
+  };
+  /* 腕（後ろ） */
+  const arm = (E, H, layer, front) => {
+    put(capsule(sh, P(E), 12, 11), layer); put(capsule(P(E), P(H), 11, 9), layer);
+    const hd = unit(sub(P(H), P(E))), hn = perpL(hd);
+    put(circle(P(H), 10), layer);
+    /* 3本爪（前に向けて少し曲がる） */
+    for (const s of [-1, 0, 1]) {
+      const base = add(add(P(H), hd, 6), hn, s * 5.5), tip = add(add(base, hd, 13 - Math.abs(s) * 2), hn, s * 3 + 3);
+      put(polyPath([add(base, hn, 2.4), tip, add(base, hn, -2.4)]), layer);
+    }
+    if (front) stripes(lerp(sh, P(E), 0.25), P(H), perpL(unit(sub(P(H), sh))), 3, 5, layer);
+  };
+  arm(J.EB, J.HB, "main", false);
+  /* 胴: 逆三角（肩が広く腰が細い）。背中に縞のギザギザ */
+  const shB = add(add(neck, back, 24), down, 4), shF = add(add(neck, fwd, 20), down, 4);
+  const wB = add(add(pel, back, 14), tUp, 14), wF = add(add(pel, fwd, 13), tUp, 14);
+  put(smooth([add(pel, back, 13), wB, add(lerp(pel, neck, 0.6), back, 22), shB, add(neck, back, 8), add(neck, fwd, 8), shF, add(lerp(pel, neck, 0.55), fwd, 19), wF, add(pel, fwd, 12)]));
+  stripes(add(lerp(pel, neck, 0.4), back, 19), add(lerp(pel, neck, 0.85), back, 22), back, 3, 4.5);
+  /* 腰の帯と、後ろへ流れる帯の端（2本） */
+  const belt = lerp(pel, neck, 0.16);
+  put(polyPath([add(add(belt, back, 16), tUp, 5), add(add(belt, fwd, 15), tUp, 5), add(add(belt, fwd, 15), tUp, -5), add(add(belt, back, 16), tUp, -5)]));
+  put(plume(add(belt, back, 14), unit(add(back, down, 1.6 - sw)), 30, 0.2, 7, 3));
+  put(plume(add(belt, back, 14), unit(add(back, down, 0.9 - sw)), 24, 0.25, 6, 2));
+  /* 頭: 丸い頭、横に張り出した頬毛、丸い耳、前に出た口元 */
+  const hc = add(head, fwd, 3), r = 17;
+  /* 頬毛: 顔のまわり（耳の下〜あご）にとがった毛を広げる */
+  { const pts = [];
+    for (let k = 0; k <= 10; k++) { const a = (15 + k * 150 / 10) * Math.PI / 180, rr = k % 2 ? r * 0.95 : r * 1.32;
+      pts.push(add(hc, [Math.cos(a) * rr, Math.sin(a) * rr * 0.9])); }
+    put(polyPath(pts)); }
+  put(ell(hc, r * 1.08, r * 0.95));
+  /* 口元（前に張り出した鼻づら） */
+  put(ell(add(add(hc, fwd, r * 0.85), [0, r * 0.3]), r * 0.58, r * 0.42));
+  /* 耳: 丸みのある三角を頭の上の左右に */
+  for (const sx of [-0.55, 0.5]) {
+    const b0 = add(add(hc, back, -sx * r - 6), [0, -r * 0.62]), b1 = add(add(hc, back, -sx * r + 6), [0, -r * 0.62]), tip = add(add(hc, back, -sx * r * 1.15), [0, -r * 1.45]);
+    put(smooth([b0, lerp(b0, tip, 0.6), tip, lerp(b1, tip, 0.6), b1]));
+  }
+  /* 目: つり上がった細い目（白く光る） */
+  { const e = add(add(hc, fwd, r * 0.42), [0, -r * 0.12]), g = new Path2D();
+    g.moveTo(e[0] - 5.5 * fwd[0], e[1] + 2); g.lineTo(e[0] + 5 * fwd[0], e[1] - 2.5); g.lineTo(e[0] + 1 * fwd[0], e[1] + 2.2); g.closePath(); put(g, "main", true); }
+  arm(J.EF, J.HF, "front", true);
+  return parts;
+}
+const COSTUMES = { miko: costumeMiko, komainu: costumeKomainu, oni404: costumeOni, fox: costumeFox, tengu: costumeTengu, maneki: costumeManeki, chochin: costumeChochin, kappa: costumeKappa, onmyo: costumeOnmyo, byakko: costumeByakko };
 function costume(j, ch, id, o) { return (COSTUMES[id] || costumeMiko)(j, ch, o); }
 
 function rgba(h, a) { const n = parseInt(h.slice(1), 16); return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")"; }
