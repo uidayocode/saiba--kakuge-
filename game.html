@@ -2462,7 +2462,7 @@ class Projectiles {
     p.life = def.life; p.maxLife = def.life; p.age = 0; p.hitsLeft = def.hits; p.hitTimer = 0;
     p.serial = ++this.m.serial; p.clash = 0; p.srcMove = owner.mv ? owner.mv.id : null; p.cmd = !!(owner.mv && owner.mv.cmd);
     /* ため撃ち（def.chargeScale）: ためた量 k(0〜1) で速さ・大きさ・威力・ヒット数が増える */
-    p.sc = 1; p.hit = null;
+    p.sc = 1; p.hit = null; p.pri = def.priority;
     const cs = def.chargeScale, mv = owner.mv;
     if (cs && mv && mv.m.charge) {
       const k = Math.min(1, (mv.charge || 0) / mv.m.charge.max), L = (a) => a[0] + (a[1] - a[0]) * k;
@@ -2471,6 +2471,8 @@ class Projectiles {
       if (cs.size) p.sc = L(cs.size);
       if (cs.hits) p.hitsLeft = Math.round(L(cs.hits));
       if (cs.dmg) { p.hit = Object.assign({}, def.hit, { damage: Math.round(def.hit.damage * L(cs.dmg)), chip: Math.round((def.hit.chip || 0) * L(cs.dmg)) }); }
+      /* chargeScale.beat {k, priority}: k 以上ためると相殺の強さが上がる（提灯: ためた鬼火は普通の弾に勝って進む） */
+      if (cs.beat && k >= cs.beat.k) p.pri = cs.beat.priority;
       if (k >= 1 && cs.full) p.hit = Object.assign({}, p.hit || def.hit, cs.full);
     }
     if (!slot) this.list.push(p);
@@ -2507,16 +2509,16 @@ class Projectiles {
     /* 飛び道具同士の相殺 */
     for (let i = 0; i < L.length; i++) {
       const a = L[i];
-      if (!a.alive || !a.def.box || a.def.priority <= 0) continue;
+      if (!a.alive || !a.def.box || a.pri <= 0) continue;
       for (let j = i + 1; j < L.length; j++) {
         const b = L[j];
-        if (!b.alive || !b.def.box || b.def.priority <= 0 || b.owner === a.owner) continue;
+        if (!b.alive || !b.def.box || b.pri <= 0 || b.owner === a.owner) continue;
         const ra = this.boxWorld(a), rb = this.boxWorld(b);
         if (!rectOv(ra, rb)) continue;
         const c = rectCenter(ra, rb);
         this.m.fx.clash(c[0], c[1]);
-        if (a.def.priority > b.def.priority) b.alive = false;
-        else if (a.def.priority < b.def.priority) a.alive = false;
+        if (a.pri > b.pri) b.alive = false;
+        else if (a.pri < b.pri) a.alive = false;
         else { a.alive = false; b.alive = false; }
         if (!a.alive) break;
       }

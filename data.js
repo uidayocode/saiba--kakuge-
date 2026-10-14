@@ -472,7 +472,7 @@ window.GAME_DATA = {
       blurb: "巨体と金棒の大振りで一撃が重い。動きは遅いが、404で場を制圧する。",
       ratings: { power: 5, speed: 1, range: 3, defense: 4 },
       stats: {
-        dmgMul: 0.79, hp: 1100, walkF: 2.6, walkB: 2.2, jumpVy: 13.5, jumpVx: 2.8, gravity: 0.78,
+        dmgMul: 0.76, hp: 1100, walkF: 2.6, walkB: 2.2, jumpVy: 13.5, jumpVx: 2.8, gravity: 0.78,
         airJumps: 0, prejump: 5, landLag: 4,
         dashF: { frames: 22, speed: 6.3 }, dashB: { frames: 22, speed: 4.0, invuln: 4 },
         gaugeMul: 0.9
@@ -1090,7 +1090,7 @@ window.GAME_DATA = {
         super: { kind: "super", name: "大祓「百鬼夜行」", stance: "stand", startup: 10, active: 1, recovery: 48, cost: 1000, flash: 40, boxes: [], hit: null, invuln: [ { f0: 1, f1: 12, type: "all" } ], spawn: [ { at: 11, projectile: "hyakki", x: 70, y: 90 } ], sfx: "super" }
       },
       projectiles: {
-        onibi: { life: 110, vx: 6, vy: 0, box: { x: -16, y: -16, w: 32, h: 32 }, hits: 1, maxActive: 1, priority: 1, hit: { chip: 5, level: "mid", effect: "stun", impact: 2, damage: 48, hitstun: 18, blockstun: 14, hitstop: 8, knock: { hit: 10, block: 12 }, gauge: { hit: 30, block: 15 } }, chargeScale: { vx: [ 6, 9.5 ], size: [ 0.85, 1.9 ], dmg: [ 0.9, 1.9 ], full: { hitstun: 0, effect: "launch", launch: { vx: 3, vy: 7 }, juggle: 0, impact: 3, blockstun: 20 } }, look: { style: "flame", color: "glow", size: 1 } },
+        onibi: { life: 110, vx: 6, vy: 0, box: { x: -16, y: -16, w: 32, h: 32 }, hits: 1, maxActive: 1, priority: 1, hit: { chip: 5, level: "mid", effect: "stun", impact: 2, damage: 48, hitstun: 18, blockstun: 14, hitstop: 8, knock: { hit: 10, block: 12 }, gauge: { hit: 30, block: 15 } }, chargeScale: { vx: [ 6, 9.5 ], size: [ 0.85, 1.9 ], dmg: [ 0.9, 1.9 ], beat: { k: 0.35, priority: 2 }, full: { hitstun: 0, effect: "launch", launch: { vx: 3, vy: 7 }, juggle: 0, impact: 3, blockstun: 20 } }, look: { style: "flame", color: "glow", size: 1 } },
         hyakki: { life: 110, vx: 4.5, vy: 0, box: { x: -46, y: -50, w: 92, h: 100 }, hits: 6, hitEvery: 7, maxActive: 1, priority: 3, hit: { chip: 8, level: "mid", effect: "launch", impact: 3, damage: 42, hitstun: 0, blockstun: 12, hitstop: 5, knock: { hit: 0, block: 4 }, launch: { vx: 0.6, vy: 6.5 }, juggle: 8, gauge: { hit: 0, block: 0 } }, look: { style: "flame", color: "accent", size: 2.6 } }
       },
       quotes: { select: "ぼうっ。", intro: [ "提灯お化け、灯ります！" ], win: [ "燃え尽きたかい？", "ためて、ためて…どーん。" ], lose: [ "火が…消える…" ] }
