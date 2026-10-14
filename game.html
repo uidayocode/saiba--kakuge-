@@ -1927,8 +1927,9 @@ class Fighter {
     if (this.invulnerable('throw')) s.push('T');
     return s.join('');
   }
-  canBeThrown() {
-    if (!THROWABLE_ST[this.state]) return false;
+  /* combo: のけぞり中（地上）でもつかめる投げ（throw.combo。招き猫の大祓はコンボから出せる） */
+  canBeThrown(combo) {
+    if (!THROWABLE_ST[this.state] && !(combo && this.state === 'HITSTUN')) return false;
     if (this.y > 0.001) return false;
     return !this.invulnerable('throw');
   }
@@ -2577,7 +2578,7 @@ class Combat {
     }
     if (m.throw && !mv.thrown && mv.n >= m.startup + 1 && mv.n <= m.startup + m.active) {
       const tb = A.boxWorld(m.throw.box);
-      if (D.canBeThrown()) {
+      if (D.canBeThrown(m.throw.combo)) {
         const pd = D.pushDims();
         const body = [D.x - pd.w / 2, D.y - 10, D.x + pd.w / 2, D.y + pd.h + 10];
         if (rectOv(tb, body)) throws.push({ att: A, def: D, mv: mv, tdef: m.throw });
@@ -2797,7 +2798,8 @@ class Combat {
     const A = t.att, D = t.def, def = t.tdef;
     if (A.state !== 'ATTACK' || A.mv !== t.mv || t.mv.thrown) return;
     if (struck[A.slot]) return;
-    if (!D.canBeThrown()) return;
+    if (!D.canBeThrown(def.combo)) return;
+    const comboed = D.state === 'HITSTUN';
     const tech = def.techable && (
       (D.buf.frame - D.throwInputFrame() <= CFG.THROW_TECH) ||
       (D.state === 'ATTACK' && D.mv && D.mv.m.throw && D.mv.n <= D.mv.m.startup + D.mv.m.active));
@@ -2807,7 +2809,7 @@ class Combat {
     A.mv = null; A.vx = 0;
     A.setState('GRAB', def.attackerClip, 1, true);
     /* 後ろ投げ: 通常投げを ← を押しながら出すと、相手を頭の上を越えて背中側へ投げる（位置を入れ替えて画面端へ追い込める） */
-    A.grab = { def: def, target: D, g: 0, back: !!t.mv.backThrow };
+    A.grab = { def: def, target: D, g: 0, back: !!t.mv.backThrow, comboed: comboed };
     A.usedInCombo = {};
     A.usedMoves.throwHit = (A.usedMoves.throwHit || 0) + 1;
     D.mv = null; D.vx = 0; D.kb.i = 10; D.thrownBy = A;
@@ -2844,7 +2846,8 @@ class Combat {
   releaseThrow(A, D, def) {
     const m = this.m;
     D.pup.rotOv = null; D.thrownBy = null;
-    const scale = Math.max(CFG.COMBO_SCALE[0], 0.5);
+    /* コンボの途中でつかんだとき（throw.combo）は威力を comboScale 倍 */
+    const scale = Math.max(CFG.COMBO_SCALE[0], 0.5) * (A.grab && A.grab.comboed ? (def.comboScale || 0.75) : 1);
     const dmg = Math.max(1, Math.round(def.damage * scale * (A.st.dmgMul || 1)));
     D.hp = Math.max(0, D.hp - dmg); D.dmgRound += dmg;
     D.combo.hits = 1; D.combo.dmg = dmg; D.combo.seq = ['throw'];
@@ -5150,7 +5153,7 @@ const SPECIAL_DESC = {
   oni404:  { sp1: '地を這う遅い弾（下段）', sp2: 'ガードできない掴み', sp3: '弾を受け流して突っ込む', super: '一撃が重い。大祓ゲージ満タンで' },
   fox:     { sp1: '分身が前に飛ぶ（2ヒット）', sp2: '相手の後ろへ瞬間移動', sp3: '弾の下を滑る下段', super: '大祓ゲージ満タンで使える' },
   tengu:   { sp1: '風の刃を飛ばす', sp2: '出始め無敵の対空', sp3: '弾を飛び越えて上から襲う（立ちガード）', super: '進む竜巻（6ヒット）' },
-  maneki:  { sp1: '遠くの相手を引き寄せる。当たったら 強 でつながる', sp2: 'ガードできない掴み', sp3: '弾を受け流して突っ込む', super: 'ガードできない大投げ。密着で' },
+  maneki:  { sp1: '遠くの相手を引き寄せる。当たったら 強 でつながる', sp2: 'ガードできない掴み', sp3: '弾を受け流して突っ込む', super: 'ガードできない大投げ。弱・強の後につなげてもつかめる' },
   chochin: { sp1: '押しっぱなしでためる鬼火。← かガードでため保持。満タンで転ぶ', sp2: '出始め無敵の対空', sp3: '転がって弾をすり抜ける', super: 'ゆっくり進む大きな鬼火（6ヒット）' },
   kappa:   { sp1: '前の床に水たまり（罠）。踏むとガードできず転んで毒', sp2: '出始め無敵の対空', sp3: '弾の下をすべる下段', super: '進む大波（5ヒット＋毒）' },
 };
