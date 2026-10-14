@@ -3876,9 +3876,9 @@ function defaultPadProfile(gp, half) {
   else if (/Joy-Con\s*\(R\)/i.test(id)) { prof.stick.rot = 90; face(); prof.binds.start = [btn(9)]; }
   else if (std) {
     /* 標準配置（Pro コン・Joy-Con 2本を1台で使うとき等）: 左=投げ / 右=弱 / 奥=必殺 / 手前=強 / ZR=ガード（ユーザー指定）。
-     * 標準配置の番号は位置で決まる: 0=手前 1=右 2=左 3=奥 7=ZR(右トリガー) */
+     * 実機で弱と投げが逆だったので 弱=2 / 投げ=1（ユーザーの機器では 1 と 2 の左右が W3C の標準と逆）。7=ZR */
     prof.binds.up = [btn(12)]; prof.binds.down = [btn(13)]; prof.binds.left = [btn(14)]; prof.binds.right = [btn(15)];
-    four(1, 0, 3, 2); prof.binds.G = [btn(7)]; prof.binds.start = [btn(9)];
+    four(2, 0, 3, 1); prof.binds.G = [btn(7)]; prof.binds.start = [btn(9)];
   } else { face(); prof.binds.start = [btn(9)]; }
   return prof;
 }
