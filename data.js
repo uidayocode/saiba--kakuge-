@@ -451,7 +451,7 @@ window.GAME_DATA = {
           invuln: [ { f0: 1, f1: 8, type: "strike" } ],
           sfx: "rise" },
         super: { kind: "super", name: "大祓「阿吽・無限突進」", stance: "stand", startup: 12, active: 30, recovery: 34, cost: 1000, flash: 40,
-          boxes: [ { f0: 13, f1: 42, x: 20, y: 0, w: 120, h: 130 } ],
+          boxes: [ { f0: 13, f1: 42, x: 20, y: 0, w: 150, h: 130 } ],
           motion: [ { f0: 13, f1: 40, vx: 6 } ],
           hit: { damage: 40, chip: 8, level: "mid", hitstun: 18, blockstun: 18, hitstop: 4, knock: { hit: 2, block: 6 }, effect: "stun", gauge: { hit: 0, block: 0 }, impact: 2 },
           multi: { count: 6, every: 5, final: { damage: 110, chip: 14, level: "mid", hitstun: 0, blockstun: 24, hitstop: 18, knock: { hit: 0, block: 30 }, effect: "launch", launch: { vx: 4, vy: 9 }, juggle: 0, gauge: { hit: 0, block: 0 }, impact: 4 } },

@@ -1266,12 +1266,14 @@ function defaultPadProfile(gp, half) {
   /* 横持ち: 自分から見て 右=弱 / 手前=強 / 奥=必殺 / 左=投げ（標準配置の番号は縦持ちの位置） */
   /* SL=投げ（追加） / SR=ガード。Chrome の番号は 左の SL/SR = 18/19、右の SL/SR = 20/21 */
   if (half === 'L') { prof.stick.rot = 270; four(13, 14, 15, 12); prof.binds.T.push(btn(18)); prof.binds.G = [btn(19)]; prof.binds.start = [btn(8)]; }
-  else if (half === 'R') { prof.stick.rot = 90; prof.stick.axX = 2; prof.stick.axY = 3; four(0, 2, 1, 3); prof.binds.T.push(btn(20)); prof.binds.G = [btn(21)]; prof.binds.start = [btn(9)]; }
+  else if (half === 'R') { prof.stick.rot = 90; prof.stick.axX = 2; prof.stick.axY = 3; four(0, 2, 1, 3); prof.binds.T.push(btn(20)); prof.binds.G = [btn(21), btn(7)]; prof.binds.start = [btn(9)]; }
   else if (/Joy-Con\s*\(L\)/i.test(id)) { prof.stick.rot = 270; face(); prof.binds.start = [btn(8)]; }
   else if (/Joy-Con\s*\(R\)/i.test(id)) { prof.stick.rot = 90; face(); prof.binds.start = [btn(9)]; }
   else if (std) {
+    /* 標準配置（Pro コン・Joy-Con 2本を1台で使うとき等）: 左=投げ / 右=弱 / 奥=必殺 / 手前=強 / ZR=ガード（ユーザー指定）。
+     * 標準配置の番号は位置で決まる: 0=手前 1=右 2=左 3=奥 7=ZR(右トリガー) */
     prof.binds.up = [btn(12)]; prof.binds.down = [btn(13)]; prof.binds.left = [btn(14)]; prof.binds.right = [btn(15)];
-    face(); prof.binds.start = [btn(9)];
+    four(1, 0, 3, 2); prof.binds.G = [btn(7)]; prof.binds.start = [btn(9)];
   } else { face(); prof.binds.start = [btn(9)]; }
   return prof;
 }
@@ -5420,7 +5422,7 @@ Game.scenes.title = {
         if (R.comboWho) drawText(ctx, '（' + R.comboWho + '）', 926, 394, { size: 10, align: 'right', color: '#8fa3c8' });
       }
     }
-    drawText(ctx, 'メニュー:  ↑↓ で選ぶ   Enter か 弱 で決定', 480, 462, { size: 13, align: 'center', color: '#ffe94d' });
+    drawText(ctx, 'メニュー:  ↑↓ で選ぶ   弱 で決定', 480, 462, { size: 13, align: 'center', color: '#ffe94d' });
     drawText(ctx, keyLegend(0), 480, 490, { size: 13, align: 'center', color: UI_COL.p1 });
     drawText(ctx, keyLegend(1), 480, 510, { size: 13, align: 'center', color: UI_COL.p2 });
     if (Object.keys(Devices.pads).some(k => Devices.pads[k].connected && !Devices.pads[k].configured)) {
@@ -5491,7 +5493,7 @@ Game.scenes.cpuSelect = {
     const desc = k === 'dummy' ? '攻撃してこない。体力とゲージは回復、有利フレームが出る。動き方はポーズで変えられる' : CPU_LEVELS[k].desc;
     panel(ctx, 200, 392, 560, 46, '#19f3ff', 0.8);
     drawText(ctx, desc, 480, 416, { size: 16, align: 'center', base: 'middle', color: '#e6f1ff' });
-    drawText(ctx, '↑↓ で選ぶ   Enter か 弱 で決定   Esc で戻る', 480, 470, { size: 13, align: 'center', color: '#ffe94d' });
+    drawText(ctx, '↑↓ で選ぶ   弱 で決定   強 で戻る', 480, 470, { size: 13, align: 'center', color: '#ffe94d' });
     drawConn(ctx);
   }
 };
@@ -5534,9 +5536,9 @@ Game.scenes.settings = {
       { label: 'かんたん操作 P2', val: () => onoff(s.easy.p2) },
       { label: 'ステージ', val: () => (s.stage === 'random' ? 'ランダム' : ((window.StageVisual && StageVisual.THEMES.find(x => x.id === s.stage)) || { name: '参道' }).name) },
       { label: 'お客さんモード', val: () => (s.lock ? 'ON（設定を隠す）' : 'OFF') },
-      { label: '文化祭プリセット', val: () => '決定で 60秒・1本勝負' },
-      { label: '本日の記録を消す', val: () => '決定で実行' },
-      { label: '設定の初期化', val: () => '決定で実行' },
+      { label: '文化祭プリセット', val: () => '弱で 60秒・1本勝負' },
+      { label: '本日の記録を消す', val: () => '弱で実行' },
+      { label: '設定の初期化', val: () => '弱で実行' },
       { label: '戻る', val: () => '' }
     ];
   },
@@ -5676,12 +5678,12 @@ Game.scenes.online = {
         drawText(ctx, String(this.dig[i]), x, 240, { size: 46, font: 'en', align: 'center', base: 'middle', color: '#ffffff', glow: on ? '#19f3ff' : null });
       }
       sub('↑↓: 数字を変える   ←→: けたを移る   （数字キーでも入れられます）', 320);
-      sub('決定: 入る   強 / Esc: 戻る', 346);
+      sub('弱: 入る   強 / Esc: 戻る', 346);
     } else {
       const st = Net.state, dots = '.'.repeat(1 + Math.floor(Game.t * 2) % 3);
       if (st === 'error' || st === 'closed') {
         drawText(ctx, Net.err || 'つながりませんでした', 480, 220, { size: 18, align: 'center', color: '#ff6b8b' });
-        sub('決定 / 強: 戻る', 270);
+        sub('弱 / 強: 戻る', 270);
       } else if (this.mode === 'host' && st === 'waiting') {
         sub('部屋番号', 150, '#e6f1ff');
         drawText(ctx, Net.code, 480, 215, { size: 72, font: 'en', align: 'center', base: 'middle', color: '#ffffff', glow: '#19f3ff' });
@@ -5916,7 +5918,7 @@ Game.scenes.charSelect = {
       const st = p.decided ? (this.training && i === 1 ? 'CPU' : 'READY')
         : (this.training && i === 1 ? 'CPU ' + (CPU_LEVELS[Game.cpuLevel] ? CPU_LEVELS[Game.cpuLevel].label : '練習台')
         : this.net && i !== this.local ? '相手が選んでいます'
-        : (keyName(ki, 'L') + ': 決定    ' + (this.net ? '' : keyName(ki, 'T') + ': 配色    ') + keyName(ki, 'S') + ': かんたん切替'));
+        : ('弱: 決定    ' + (this.net ? '' : '投げ: 配色    ') + '必殺: かんたん切替'));
       drawText(ctx, st, ix + iw / 2, 494, { size: p.decided ? 18 : 12, font: p.decided ? 'en' : 'jp', align: 'center', color: p.decided ? '#7cff6b' : '#b9c7e6', glow: p.decided ? '#7cff6b' : null, base: 'middle' });
       if (id) {
         ctx.fillStyle = LookAdapter.edge(Game.chars[id].ch, p.pal === 1 ? 'paletteP2' : 'palette'); ctx.fillRect(ix + iw - 50, 352, 12, 12);
@@ -5932,9 +5934,9 @@ Game.scenes.charSelect = {
       else drawText(ctx, 'かんたん: OFF', ix + iw - 20, y2 - 5, { size: 11, color: '#6a7490', align: 'right', base: 'middle' });
     }
     if (this.cd < 0) {
-      const msg = this.net ? '2人とも決めると始まります（あなたの 弱ボタン: ' + keyName(0, 'L') + '）'
-        : this.training ? 'P1 の 弱ボタン（' + keyName(0, 'L') + '）を押すと始まります'
-        : '2人とも 弱ボタンを押すと始まります（P1: ' + keyName(0, 'L') + '   P2: ' + keyName(1, 'L') + '）';
+      const msg = this.net ? '2人とも 弱 で決めると始まります'
+        : this.training ? 'P1 が 弱 で決めると始まります'
+        : '2人とも 弱 で決めると始まります';
       drawText(ctx, msg, 480, 262, { size: 15, align: 'center', color: '#ffe94d', alpha: 0.75 + 0.25 * Math.sin(Game.t * 4) });
       drawText(ctx, this.net ? 'Esc: 切断してタイトルへ' : (Settings.data.lock && !Game.staff) ? 'Esc: 戻る' : 'Tab: 入力設定    Esc: 戻る', 480, 284, { size: 12, align: 'center', color: '#8fa3c8' });
     }
@@ -6785,7 +6787,7 @@ Game.scenes.fight = {
     if (Math.floor(R.t / 20) % 2 === 0) { ctx.fillStyle = '#ff3b5c'; ctx.beginPath(); ctx.arc(34, bar / 2, 7, 0, Math.PI * 2); ctx.fill(); }
     drawText(ctx, 'REPLAY', 50, bar / 2, { size: 20, font: 'en', base: 'middle', color: '#ffffff' });
     drawText(ctx, '決着の一撃', 160, bar / 2, { size: 14, base: 'middle', color: '#8fa3c8' });
-    drawText(ctx, '決定で スキップ', CFG.W - 24, CFG.H - bar / 2, { size: 12, align: 'right', base: 'middle', color: '#8fa3c8' });
+    drawText(ctx, '弱で スキップ', CFG.W - 24, CFG.H - bar / 2, { size: 12, align: 'right', base: 'middle', color: '#8fa3c8' });
   },
   pauseItems() {
     if (this.pauseWhy === 'disconnect') return ['キーボードで継続', 'タイトルへ'];
@@ -6900,7 +6902,7 @@ Game.scenes.fight = {
     if (this.quitAsk) {
       ctx.fillStyle = 'rgba(3,4,12,0.6)'; ctx.fillRect(0, 210, CFG.W, 110);
       drawText(ctx, '対戦をやめて 切断しますか？', 480, 246, { size: 22, align: 'center', base: 'middle', color: '#ffffff' });
-      drawText(ctx, '決定: やめる   強 / Esc: 続ける（試合は止まりません）', 480, 288, { size: 14, align: 'center', base: 'middle', color: '#8fa3c8' });
+      drawText(ctx, '弱: やめる   強 / Esc: 続ける（試合は止まりません）', 480, 288, { size: 14, align: 'center', base: 'middle', color: '#8fa3c8' });
     }
   },
   updatePause() {
@@ -7154,7 +7156,7 @@ Game.scenes.result = {
         if (on) { ctx.fillStyle = 'rgba(25,243,255,0.16)'; fillRR(ctx, x - 80, 478, 160, 34, 5); ctx.fill(); }
         drawText(ctx, this.items[i], x, 496, { size: 18, align: 'center', base: 'middle', color: on ? '#ffffff' : '#8fa3c8', glow: on ? '#19f3ff' : null });
       }
-    } else drawText(ctx, '決定で スキップ', 480, 520, { size: 12, align: 'center', color: '#6a7490' });
+    } else drawText(ctx, '弱で スキップ', 480, 520, { size: 12, align: 'center', color: '#6a7490' });
     if (this.net && t >= T0) {
       const msg = this.wantAgain ? '相手を待っています…' : (this.peerAgain ? '相手は「もう一度」を選びました' : '');
       if (msg) drawText(ctx, msg, 480, 528, { size: 13, align: 'center', color: '#ffe94d' });
@@ -7180,7 +7182,7 @@ Game.scenes.inputConfig = {
   ROT: [0, 90, 180, 270],
   enter(args) {
     this.from = (args && args.from) || 'title';
-    this.sel = 0; this.target = 1; this.cap = null; this.cal = null; this.wiz = null;
+    this.sel = 0; this.target = 1; this.cap = null; this.cal = null; this.wiz = null; this.cool = 0;
     if (Devices.slots[1] && Devices.slots[1].kind === 'kb' && Devices.slots[0] && Devices.slots[0].kind === 'pad') this.target = 0;
     this.keyLog = [];
   },
@@ -7256,7 +7258,7 @@ Game.scenes.inputConfig = {
   },
   afterCapture() {
     const wiz = this.wiz;
-    this.cap = null;
+    this.cap = null; this.cool = 20;
     if (wiz) {
       wiz.i++;
       if (wiz.i < ACTIONS.length) this.startCapture(ACTIONS[wiz.i], true);
@@ -7333,6 +7335,8 @@ Game.scenes.inputConfig = {
     for (let i = 0; i < keys.length; i++) { this.keyLog.push({ c: keys[i], t: Game.t }); if (this.keyLog.length > 8) this.keyLog.shift(); }
     if (this.cap) { this.updateCap(); return; }
     if (this.cal) { this.updateCal(); return; }
+    /* 割り当て直後: 押したままのボタンが新しい役割（強=戻る など）として読まれないよう、少しのあいだ入力を無視 */
+    if (this.cool > 0) { this.cool--; return; }
     const n = Input.nav, rows = this.rows();
     this.sel = menuMove(this.sel, rows.length, n);
     const row = rows[this.sel], dev = this.dev();
@@ -7406,7 +7410,7 @@ Game.scenes.inputConfig = {
       else if (r.t === 'target') { label = '設定対象'; val = 'P' + (this.target + 1) + (dev ? '  ' + dev.name : ''); }
       else if (r.t === 'act') { label = ACT_LABEL[r.a]; val = this.bindText(dev, r.a); }
       else if (r.t === 'stick') { label = 'スティック'; val = dev && dev.kind === 'pad' ? (dev.profile.stick.enabled ? '有効' : '無効') : '---'; }
-      else if (r.t === 'rot') { label = 'スティックの向き'; val = dev && dev.kind === 'pad' ? dev.profile.stick.rot + '°  (決定で自動検出)' : '---'; }
+      else if (r.t === 'rot') { label = 'スティックの向き'; val = dev && dev.kind === 'pad' ? dev.profile.stick.rot + '°  (弱で自動検出)' : '---'; }
       else if (r.t === 'dz') { label = 'デッドゾーン'; val = dev && dev.kind === 'pad' ? dev.profile.stick.deadzone.toFixed(2) : '---'; }
       else if (r.t === 'split') { label = '1台を左右で2人に分ける'; val = dev && dev.kind === 'pad' ? (dev.half ? 'ON (' + (dev.half === 'L' ? '左' : '右') + '半分)' : 'OFF') : '---'; }
       else if (r.t === 'wizard') label = 'ウィザードで一括設定';
