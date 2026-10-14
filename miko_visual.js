@@ -483,58 +483,59 @@ function costumeKappa(j, ch) {
   arm(J.EF, J.HF, "front");
   return parts;
 }
-/* 陰陽獏: 白黒の獏（バク）の獣人。長い鼻、小さな丸い耳、ずんぐりした体。胴の真ん中に白い帯（マレーバクの模様 = 陽）。
- * 手前の手に小さな太極図の玉を浮かべる。陰（o.mode = 'yin'）では白い帯が消えて全身まっ黒、目だけ白く光り、
- * 玉は黒くなって、まわりにとげとげの黒い光輪。o.clipT で玉がゆっくり回る */
-function taiji(c, R, ang, dark) {
-  const cs = Math.cos(ang), sn = Math.sin(ang), at = (x, y) => [c[0] + x * cs - y * sn, c[1] + x * sn + y * cs];
-  if (dark) return [circle(at(0, -R * 0.42), R * 0.24)];
-  const g = new Path2D(), top = at(0, -R);
-  g.moveTo(top[0], top[1]);
-  g.arc(c[0], c[1], R, ang - Math.PI / 2, ang + Math.PI / 2, false);
-  const lo = at(0, R / 2), up = at(0, -R / 2);
-  g.arc(lo[0], lo[1], R / 2, ang + Math.PI / 2, ang + Math.PI * 1.5, false);
-  g.arc(up[0], up[1], R / 2, ang + Math.PI / 2, ang - Math.PI / 2, true);
-  g.closePath();
-  /* 白い側の中の黒い点は逆回りの円で穴にする */
-  g.moveTo(lo[0] + R * 0.17, lo[1]); g.arc(lo[0], lo[1], R * 0.17, 0, -Math.PI * 2, true);
-  return [g, circle(up, R * 0.17)];
-}
+/* 白鶴 → 八咫烏（id onmyo）: 鳥の人影。腕が翼（下に羽が垂れる袖）、細い脚と三本指の足、細長いくちばし、頭の冠羽、
+ * 腰の後ろに尾羽の房。陰（o.mode = 'yin'）では八咫烏になる: くちばしが太く短く、冠羽がとがった羽毛に、
+ * 翼の下の縁がギザギザ、尾羽が何本ものとがった羽に、脚が3本（真ん中にもう1本）。目は白く光る */
 function costumeOnmyo(j, ch, o) {
   o = o || {};
   const yin = o.mode === 'yin';
   const { P, pel, neck, head, sh, tUp, back, fwd, down, parts, put } = bodyFrame(j);
-  /* 脚（太く短い。先は丸いひづめ） */
+  /* 足: 細い脚と、前に3本・後ろに1本の指 */
+  const foot = (A, T) => {
+    const a = P(A), f = unit(sub(P(T), a));
+    put(capsule(a, add(a, f, 15), 2.6, 1.6)); put(capsule(a, add(add(a, f, 13), down, -5), 2.2, 1.4)); put(capsule(a, add(add(a, f, 12), down, 3), 2.2, 1.4));
+    put(capsule(a, add(a, f, -7), 2, 1.4));
+  };
   for (const [K, A, T] of [[J.KB, J.AB, J.TB], [J.KF, J.AF, J.TF]]) {
-    put(capsule(pel, P(K), 15, 13)); put(capsule(P(K), P(A), 13, 10)); put(ell(lerp(P(A), P(T), 0.55), 11, 7));
+    put(capsule(pel, P(K), 9, 6)); put(capsule(P(K), P(A), 4, 3)); foot(A, T);
   }
-  const arm = (E, H, layer) => { put(capsule(sh, P(E), 11, 10), layer); put(capsule(P(E), P(H), 10, 8), layer); put(circle(P(H), 8), layer); };
-  arm(J.EB, J.HB, "main");
-  /* ずんぐりした胴 */
-  const mid = lerp(pel, neck, 0.5);
-  const torso = [add(add(pel, back, 22), down, 6), add(mid, back, 27), add(neck, back, 18), add(neck, fwd, 15), add(mid, fwd, 25), add(add(pel, fwd, 22), down, 6)];
-  put(smooth(torso));
-  /* 頭: 横長の丸。前へ長い鼻が垂れて先が少し上に巻く。小さな丸い耳 */
-  const hc = add(head, fwd, 3);
-  put(ell(hc, 19, 15));
-  put(plume(add(add(hc, fwd, 13), down, 1), unit(add(fwd, down, 0.45)), 30, 0.45, 12, 7));
-  put(circle(add(add(hc, back, 8), [0, -13]), 5.5));
-  put(ell(add(add(hc, fwd, 5), [0, -4]), 2.6, 2.2), "main", true);                       /* 目 */
-  /* 陽: 胴の真ん中の白い帯（マレーバクの模様） */
-  if (!yin) {
-    const b0 = lerp(pel, neck, 0.28), b1 = lerp(pel, neck, 0.52);
-    put(smooth([add(b0, back, 23), add(b1, back, 25), add(b1, fwd, 20), add(b0, fwd, 21)]), "main", true);
-  }
-  /* 手前の腕と、手の先に浮かぶ太極図の玉 */
-  arm(J.EF, J.HF, "front");
-  const hf = P(J.HF), ad = unit(sub(hf, P(J.EF))), oc = add(add(hf, ad, 16), [0, -6]), R = 11;
+  /* 八咫烏の3本目の脚（両足の間） */
   if (yin) {
-    const sp = [], rot = (o.clipT || 0) * 0.02;
-    for (let k = 0; k < 18; k++) { const a = rot + k / 18 * Math.PI * 2, rr = k % 2 ? R + 2 : R + 9; sp.push(add(oc, [Math.cos(a) * rr, Math.sin(a) * rr])); }
-    put(polyPath(sp), "front");
+    const a = lerp(P(J.AF), P(J.AB), 0.5), kk = lerp(pel, a, 0.45);
+    put(capsule(pel, kk, 7, 5)); put(capsule(kk, a, 3.6, 3)); foot(J.AF, J.TF);
+    const f = unit(sub(P(J.TF), P(J.AF)));
+    put(capsule(a, add(a, f, 13), 2.4, 1.5)); put(capsule(a, add(add(a, f, 11), down, -4), 2, 1.3));
   }
-  put(circle(oc, R), "front");
-  for (const g of taiji(oc, R - 2, (o.clipT || 0) * 0.05, yin)) put(g, "front", true);
+  /* 尾羽: 鶴はふんわりした房、八咫烏はとがった羽を何本も */
+  if (!yin) { put(plume(add(pel, back, 8), unit(add(back, down, 1.3)), 34, 0.12, 13, 2)); put(plume(add(pel, back, 8), unit(add(back, down, 0.7)), 30, 0.1, 10, 2)); }
+  else for (const [dy, L] of [[0.15, 44], [0.55, 40], [0.95, 34], [-0.2, 36]]) put(plume(add(pel, back, 10), unit(add(back, down, dy)), L, 0.08, 9, 1));
+  /* 翼（腕＋下に垂れる羽）。陰は下の縁をギザギザに */
+  const wing = (E, H, layer) => {
+    put(capsule(sh, P(E), 7, 6), layer); put(capsule(P(E), P(H), 6, 4.5), layer);
+    const pts = [add(sh, back, 5), P(E), P(H), add(P(H), unit(sub(P(H), P(E))), 10)];
+    const n = 7;
+    for (let k = 0; k <= n; k++) {
+      const t = k / n, base = lerp(add(P(H), unit(sub(P(H), P(E))), 10), add(sh, back, 5), t);
+      const L = (yin ? 30 : 26) * (1 - t * 0.55) + 6;
+      pts.push(add(base, down, k % 2 && yin ? L - 11 : L));
+    }
+    put(polyPath(pts), layer);
+  };
+  wing(J.EB, J.HB, "main");
+  /* 胴（しずく形） */
+  put(smooth([add(add(pel, back, 14), down, 4), add(lerp(pel, neck, 0.5), back, 17), add(neck, back, 8), add(neck, fwd, 9), add(lerp(pel, neck, 0.55), fwd, 18), add(add(pel, fwd, 13), down, 4)]));
+  /* 首と頭 */
+  const hc = add(head, tUp, 2), r = 11;
+  put(capsule(neck, hc, 7, 6));
+  put(circle(hc, r));
+  /* くちばし: 鶴は細く長い、八咫烏は太く短く少し下に曲がる */
+  if (!yin) put(polyPath([add(add(hc, fwd, r * 0.6), [0, -3.5]), add(add(hc, fwd, r + 26), [0, 3]), add(add(hc, fwd, r * 0.6), [0, 4])]));
+  else put(polyPath([add(add(hc, fwd, r * 0.5), [0, -6]), add(add(hc, fwd, r + 12), [0, -2]), add(add(hc, fwd, r + 18), [0, 5]), add(add(hc, fwd, r * 0.5), [0, 6])]));
+  /* 冠羽: 鶴は頭の後ろに流れる2本、八咫烏はとがった羽毛 */
+  if (!yin) { put(plume(add(hc, [0, -r * 0.6]), unit(add(back, [0, -0.6])), 22, 0.3, 6, 1)); put(plume(add(hc, [0, -r * 0.4]), unit(add(back, [0, -0.2])), 16, 0.2, 5, 1)); }
+  else for (const [k, L] of [[0.1, 14], [0.45, 17], [0.85, 13]]) put(plume(add(add(hc, back, r * 0.4), [0, -r * 0.4]), unit(add(back, [0, -k])), L, 0, 5, 1));
+  put(circle(add(add(hc, fwd, r * 0.35), [0, -r * 0.2]), yin ? 2.8 : 2.2), "main", true);    /* 目 */
+  wing(J.EF, J.HF, "front");
   return parts;
 }
 const COSTUMES = { miko: costumeMiko, komainu: costumeKomainu, oni404: costumeOni, fox: costumeFox, tengu: costumeTengu, maneki: costumeManeki, chochin: costumeChochin, kappa: costumeKappa, onmyo: costumeOnmyo };

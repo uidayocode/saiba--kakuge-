@@ -384,7 +384,7 @@ function modeChar(c) {
   const m = c && c.mode2;
   if (!m) return null;
   const a = Object.assign({}, c, {
-    name: c.name + '・' + (m.label || '2'), modeName: m.key || 'mode2',
+    name: m.name || (c.name + '・' + (m.label || '2')), modeName: m.key || 'mode2',
     stats: Object.assign({}, c.stats, m.stats || {}), moves: Object.assign({}, c.moves, m.moves || {}),
     projectiles: Object.assign({}, c.projectiles, m.projectiles || {}), clips: Object.assign({}, c.clips, m.clips || {}),
     passive: m.passive || null
@@ -1797,6 +1797,7 @@ const KNOWN_STATES = ['IDLE', 'WALK_F', 'WALK_B', 'CROUCH', 'PREJUMP', 'AIR', 'L
 const FREE_ST = { IDLE: 1, WALK_F: 1, WALK_B: 1, CROUCH: 1 };
 const GUARD_ST = { IDLE: 1, WALK_F: 1, WALK_B: 1, CROUCH: 1, DASH_B: 1, BLOCKSTUN: 1, LANDING: 1 };
 const THROWABLE_ST = { IDLE: 1, WALK_F: 1, WALK_B: 1, CROUCH: 1, DASH_F: 1, DASH_B: 1, LANDING: 1, ATTACK: 1, PREJUMP: 1 };
+const BURST_ST = { IDLE: 1, WALK_F: 1, WALK_B: 1, CROUCH: 1, LANDING: 1, HITSTUN: 1, BLOCKSTUN: 1, ATTACK: 1, DASH_F: 1, DASH_B: 1, PREJUMP: 1 };
 const NO_HURT_ST = { DOWN: 1, WAKEUP: 1, THROWN: 1, GRAB: 1, SUPERFLASH: 1, INTRO: 1, WIN: 1 };
 
 function holdAt(hold, g) {
@@ -1839,7 +1840,7 @@ class Fighter {
     this.state = 'IDLE'; this.stateT = 0; this.mv = null;
     this.hitstop = 0; this.hitstopTotal = 0; this.hitstopHit = false;
     this.stunLeft = 0; this.blockCrouch = false; this.hitCrouch = false;
-    this.shield = CFG.SHIELD_MAX; this.shieldHeld = false; this.breakPending = false; this.brokenT = 0; this.poison = null; this.chargeStock = 0; this.modeGauge = false;
+    this.shield = CFG.SHIELD_MAX; this.shieldHeld = false; this.breakPending = false; this.brokenT = 0; this.poison = null; this.chargeStock = 0; this.modeGauge = false; this.burstPending = false;
     this.kb = { total: 0, dir: 1, i: 10 }; this.kbSrc = null;
     this.combo = { techs: 0, hits: 0, dmg: 0, serial: -1 }; this.comboShow = { hits: 0, dmg: 0, t: 0 };
     this.usedInCombo = {}; this.juggle = 0; this.ko = false;
@@ -2209,12 +2210,19 @@ class Fighter {
     if (m2 && this.hp > 0 && this.match.phase === 'FIGHTING') {
       if (!this.mode && this.hp <= this.maxHp * (m2.at || 0.5)) {
         this.setMode(1);
-        if (!this.modeGauge) { this.modeGauge = true; this.gauge = Math.min(CFG.GAUGE_MAX, this.gauge + (m2.gauge || 0)); }
+        if (!this.modeGauge) { this.modeGauge = true; this.gauge = Math.min(CFG.GAUGE_MAX, this.gauge + (m2.gauge || 0)); if (m2.burst) this.burstPending = true; }
         this.fx.modeShift(this, m2.label || '');
       } else if (this.mode && m2.backAt && this.hp >= this.maxHp * m2.backAt) {
         this.setMode(0);
         this.fx.modeShift(this, m2.backLabel || '');
       }
+    }
+    /* mode2.burst: 変化した瞬間（地上に足が着いていれば、のけぞり中・ガード中・技の途中でも）に無敵の衝撃波の技を出す。1ラウンドに1回 */
+    if (this.burstPending && this.y <= 0.001 && BURST_ST[this.state] && this.match.phase === 'FIGHTING') {
+      this.burstPending = false;
+      this.mv = null; this.stunLeft = 0; this.kb.i = 10; this.vx = 0;
+      this.startMove(m2.burst);
+      return;
     }
     if (this.chargeStock > 0 && this.match.frame % 24 === 0) this.fx.chargeKeep(this, this.chargeStock / (this.ch.moves.sp1.charge ? this.ch.moves.sp1.charge.max : 1));
     if (this.breakPending) { this.breakPending = false; this.guardBreak(); return; }
@@ -2699,7 +2707,7 @@ class Combat {
     const byCmd = isProj ? !!(s.proj && s.proj.cmd) : !!(mv && mv.cmd);
     if (D.state === 'DOWN') {
       /* ダウン追い打ち（ガード不能・1回のダウンにつき1回。少し威力を下げる） */
-      const dmg = Math.max(1, Math.round(hit.damage * CFG.OTG_SCALE * (A.st.dmgMul || 1) * (byCmd ? CFG.CMD_DMG : 1)));
+      const dmg = Math.max(1, Math.round(hit.damage * CFG.OTG_SCALE * (A.st.dmgMul || 1) * (byCmd ? CFG.CMD_DMG : 1) * this.boost(A)));
       D.hp = Math.max(0, D.hp - dmg); D.dmgRound += dmg; D.otgUsed = true; this.drain(A, dmg);
       D.combo.hits++; D.combo.dmg += dmg; m.noteCombo(A.slot, D.combo.hits);
       if (D.hp <= 0) D.ko = true;
@@ -2734,7 +2742,7 @@ class Combat {
     } else if (guarded) {
       hs = Math.max(4, Math.round(hit.hitstop * CFG.HITSTOP_BLOCK));
       /* 削り: データの chip × CFG.CHIP_MUL。削りでは倒れない */
-      /* passive.guardChip / guardShield: ガードしたときの削り・耐久の減りの倍率（陰陽獏の陽） */
+      /* passive.guardChip / guardShield: ガードしたときの削り・耐久の減りの倍率（今は使うキャラなし） */
       const pv = D.ch.passive || {};
       const chip = just ? 0 : Math.max(0, Math.min(Math.round((hit.chip || 0) * CFG.CHIP_MUL * (pv.guardChip != null ? pv.guardChip : 1)), D.hp - 1));
       D.hp -= chip; D.dmgRound += chip;
@@ -2766,6 +2774,7 @@ class Combat {
       if (counter) scale *= CFG.COUNTER_DMG;
       if (mv && mv.gc) scale *= 0.6;
       if (byCmd) scale *= CFG.CMD_DMG;
+      scale *= this.boost(A);
       /* stats.dmgMul = キャラ全体の攻撃力の倍率（調整用。既定 1） */
       const dmg = Math.max(1, Math.round(hit.damage * scale * (A.st.dmgMul || 1)));
       D.hp = Math.max(0, D.hp - dmg); D.dmgRound += dmg;
@@ -2883,7 +2892,13 @@ class Combat {
     m.fx.throwTech((A.x + D.x) / 2, 90);
   }
   /* 投げの解放（ダメージ + 打ち上げ） */
-  /* passive.drain: 与えたダメージの一部で体力が回復する（陰陽獏の陰「悪夢喰い」） */
+  /* passive.desperate（背水）: 体力が最大の from（割合）を下回った分だけ、攻撃力が最大 1+desperate 倍まで上がる */
+  boost(A) {
+    const pv = A.ch.passive;
+    if (!pv || !pv.desperate) return 1;
+    return 1 + pv.desperate * Util.clamp(1 - A.hp / (A.maxHp * (pv.from || 0.5)), 0, 1);
+  }
+  /* passive.drain: 与えたダメージの一部で体力が回復する（今は使うキャラなし） */
   drain(A, dmg) {
     const pv = A.ch.passive;
     if (!pv || !pv.drain || A.hp <= 0) return;
@@ -2895,7 +2910,7 @@ class Combat {
     D.pup.rotOv = null; D.thrownBy = null;
     /* コンボの途中でつかんだとき（throw.combo）は威力を comboScale 倍 */
     const scale = Math.max(CFG.COMBO_SCALE[0], 0.5) * (A.grab && A.grab.comboed ? (def.comboScale || 0.75) : 1);
-    const dmg = Math.max(1, Math.round(def.damage * scale * (A.st.dmgMul || 1)));
+    const dmg = Math.max(1, Math.round(def.damage * scale * (A.st.dmgMul || 1) * this.boost(A)));
     D.hp = Math.max(0, D.hp - dmg); D.dmgRound += dmg;
     this.drain(A, dmg);
     D.combo.hits = 1; D.combo.dmg = dmg; D.combo.seq = ['throw'];
@@ -5238,7 +5253,7 @@ const SPECIAL_DESC = {
   maneki:  { sp1: '遠くの相手を引き寄せる。当たったら 強 でつながる', sp2: 'ガードできない掴み', sp3: '弾を受け流して突っ込む', super: 'ガードできない大投げ。弱・強の後につなげてもつかめる' },
   chochin: { sp1: '押しっぱなしでためる鬼火。← かガードでため保持。満タンで転ぶ', sp2: '出始め無敵の対空', sp3: '転がって弾をすり抜ける', super: 'ゆっくり進む大きな鬼火（6ヒット）' },
   kappa:   { sp1: '前の床に水たまり（罠）。踏むとガードできず転んで毒', sp2: '出始め無敵の対空', sp3: '弾の下をすべる下段', super: '進む大波（5ヒット＋毒）' },
-  onmyo:   { sp1: '陽: まっすぐ飛ぶ陽玉 / 陰: 遅く重い陰玉（2ヒット・弾に勝つ）', sp2: '陽: 出始め無敵の対空 / 陰: 遠くの相手を引き寄せる', sp3: '陽: 転がって弾をすり抜ける / 陰: 無敵の速い踏み込み', super: '陽: 進む太極図（6ヒット） / 陰: 突進の連撃' },
+  onmyo:   { sp1: '鶴: まっすぐ飛ぶ陽玉 / 烏: 遅く重い陰玉（2ヒット・弾に勝つ）', sp2: '鶴: 出始め無敵の対空 / 烏: 遠くの相手を引き寄せる（影縫い）', sp3: '鶴: 低く滑って弾をすり抜ける / 烏: 無敵の速い踏み込み', super: '鶴: 進む大きな玉（6ヒット） / 烏: 突進の連撃' },
 };
 /* キャラだけの仕組み（技一覧の最後の行） */
 const UNIQUE_ROW = {
@@ -5249,7 +5264,7 @@ const UNIQUE_ROW = {
   maneki:  ['手招きコンボ', '手招きが当たったら 強', '同じ', '引き寄せて、そのまま連続技に'],
   chochin: ['ため撃ち', '必殺技のボタンを押しっぱなし', '同じ', '最大約0.5秒。ため中に ← かガードで保持できる'],
   kappa:   ['毒', '水たまり・大祓が当たる', '同じ', 'しばらく体力が減り続ける（毒では倒れない）'],
-  onmyo:   ['陰陽（パッシブ）', '体力が半分で陰、6割に戻ると陽', '同じ', '陽: ガードで削られない / 陰: 当てると体力を吸う・速い'],
+  onmyo:   ['八咫烏（変化）', '体力が半分を切ると自動で', '同じ', '変わる瞬間に無敵の衝撃波（のけぞり中でも出る）。烏は体力が減るほど攻撃力アップ（最大1.4倍）'],
 };
 function normalDesc(m, base) {
   const h = m.hit || {}, t = [];
@@ -5339,9 +5354,9 @@ COMBO_ROWS.kappa = [
 COMBO_ROWS.onmyo = [
   ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。陽玉で締める'],
   ['下段から', '↓弱 → 弱 → 強 → ←+必殺', '4ヒット。転輪で締める'],
-  ['陰: 引き寄せ', '→+必殺 → 強 → ←+必殺', '陰縛りで寄せて3ヒット'],
+  ['烏: 引き寄せ', '→+必殺 → 強 → ←+必殺', '影縫いで寄せて3ヒット'],
   ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
-  ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '陽は太極図、陰は黒天']
+  ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '鶴は千羽鶴、烏は黒天']
 ];
 const SYSTEM_ROWS = [
   ['守り', 'ガード中に →+強 = ガードキャンセル（ゲージ半分） / 弱+強 = 押し返し'],
@@ -6104,22 +6119,22 @@ const VS_LINES = {
   'kappa>maneki': ['招き猫さん、小判よりきゅうりがいい', '当店、きゅうりは扱っておりません'],
   'chochin>kappa': ['河童くん、水はかけないでね', '火には水。相性ばっちりだね'],
   'kappa>chochin': ['提灯さん、湿気には弱いでしょ', 'ぼうっ。乾かしてあげる'],
-  'onmyo>miko':    ['巫女さん、悪い夢は見ていませんか', '獏さん…わたしの夢は食べないでください'],
-  'miko>onmyo':    ['獏さん、どちらの顔で来ますか', 'まずは白で。半分削れたら、黒です'],
-  'onmyo>komainu': ['阿と吽。あなたも二つで一つですね', '獏よ、門の中で夢を喰うな'],
-  'komainu>onmyo': ['白黒の獣か。白黒つけに来たな', 'ええ。白も黒も、両方つけます'],
-  'onmyo>oni404':  ['あなたの悪夢、少し分けてください', '…夢、404'],
-  'oni404>onmyo':  ['…白い方、消す', '消すと、黒い方が出てきますよ'],
-  'onmyo>fox':     ['狐さんの夢、ずっと同じ場面ですね', 'ループしてるからね！ 食べてみる？'],
-  'fox>onmyo':     ['白黒ちゃん、化かしてあげる', '化かされても、陰と陽がひっくり返るだけ'],
-  'onmyo>tengu':   ['天狗さん、高いところから落ちる夢を見ますね', '我は落ちぬ。夢でもな'],
-  'tengu>onmyo':   ['鼻の長いのが、もう一匹おるな', 'わたしのは、夢を吸う鼻です'],
-  'onmyo>maneki':  ['招き猫さん、陰と陽、どちらを招きます？', 'もちろん、白い方のお客様を'],
-  'maneki>onmyo':  ['いらっしゃいませ。白と黒のお客様', 'お代は、悪い夢でお願いします'],
-  'onmyo>chochin': ['提灯さん、怖い夢の明かりですね', 'ぼうっ。食べたらおなか熱くなるよ'],
-  'chochin>onmyo': ['獏さん、夜になると黒くなるの？', '夜ではなく、体力が半分を切るとです'],
-  'onmyo>kappa':   ['河童さん、水と火のように釣り合いましょう', 'きゅうりは半分こしようね'],
-  'kappa>onmyo':   ['獏さん、白い方から感染させるね', '黒い方は、もっとしつこいですよ'],
+  'onmyo>miko':    ['巫女さん、白い羽を一枚どうぞ', 'きれい…でも、勝負は別です'],
+  'miko>onmyo':    ['鶴さん、半分で烏になるって本当ですか', '本当です。そこからが本番ですよ'],
+  'onmyo>komainu': ['門番さん、上を通らせてもらいます', '鳥であろうと、門は通さぬ'],
+  'komainu>onmyo': ['白い鳥か。境内で暴れるな', '暴れるのは、黒くなってからです'],
+  'onmyo>oni404':  ['鬼さん、八咫烏は道案内の鳥です', '…道、404'],
+  'oni404>onmyo':  ['…白い鳥、消す', '消えるのは、白い方だけですよ'],
+  'onmyo>fox':     ['狐さん、化かし合いなら負けません', '鶴の恩返し、ならぬ鶴の仕返し？'],
+  'fox>onmyo':     ['鶴ちゃん、黒くなるの見せてよ', '見たら、もう遅いですよ'],
+  'onmyo>tengu':   ['天狗さん、空はわたしの庭です', '空は、我のものだ'],
+  'tengu>onmyo':   ['羽の生えたのが、もう一羽おるな', '黒い羽も、もう一枚ありますよ'],
+  'onmyo>maneki':  ['招き猫さん、鶴は千年、福を運びます', 'まあ、縁起のよいお客様'],
+  'maneki>onmyo':  ['いらっしゃいませ。白いお客様', '帰りは、黒くなっているかもしれません'],
+  'onmyo>chochin': ['提灯さん、夜道は烏が案内します', 'ぼうっ。明かりはこっちだよ'],
+  'chochin>onmyo': ['鶴さん、夜になると黒くなるの？', '夜ではなく、体力が半分を切るとです'],
+  'onmyo>kappa':   ['河童さん、水辺は鶴の場所です', 'じゃあ、きゅうりと交換ね'],
+  'kappa>onmyo':   ['鶴さん、白い羽から感染させるね', '黒い羽は、もっとしつこいですよ'],
   'mirror':         ['偽物め', 'それはこちらの台詞']
 };
 function vsLines(a, b) { return VS_LINES[a === b ? 'mirror' : a + '>' + b] || null; }
@@ -6166,21 +6181,21 @@ const WIN_LINES = {
   'tengu>kappa': '空に水たまりはない',
   'maneki>chochin': 'お化けのお客さま、またのお越しを',
   'maneki>kappa': 'きゅうりは、またの機会に',
-  'onmyo>miko': '悪い夢、いただきました',
-  'onmyo>komainu': '阿吽の間に、陰陽あり',
-  'onmyo>oni404': '悪夢、ちゃんと見つかりました',
-  'onmyo>fox': 'ループの夢、ごちそうさま',
-  'onmyo>tengu': '落ちる夢は、もう見ませんよ',
-  'onmyo>maneki': '陰の福も、招いてしまいましたね',
-  'onmyo>chochin': '怖い夢、あったかかったです',
-  'onmyo>kappa': '水も火も、陰陽のうち',
-  'miko>onmyo': '陰も陽も、祓わせていただきました',
-  'komainu>onmyo': '白黒、門の前でつけた',
-  'oni404>onmyo': '白も黒も、404',
-  'fox>onmyo': '獏ちゃん、化かされちゃったね',
-  'tengu>onmyo': '夢を喰う前に、風を喰らったな',
-  'maneki>onmyo': '白黒のお客様、毎度ありがとうございました',
-  'chochin>onmyo': '黒い方も、照らしちゃった',
+  'onmyo>miko': '白い羽、お守りにどうぞ',
+  'onmyo>komainu': '門は、上から越えました',
+  'onmyo>oni404': '道は、八咫烏が見つけました',
+  'onmyo>fox': '鶴の仕返し、成功です',
+  'onmyo>tengu': '空の主は、鳥のほうでした',
+  'onmyo>maneki': '福も災いも、運ぶのは鳥です',
+  'onmyo>chochin': '夜道の案内、ありがとう',
+  'onmyo>kappa': '水辺は、やっぱり鶴の場所',
+  'miko>onmyo': '白い羽も黒い羽も、祓わせていただきました',
+  'komainu>onmyo': '鳥であろうと、門は通さぬ',
+  'oni404>onmyo': '羽、404',
+  'fox>onmyo': '鶴ちゃん、化かされちゃったね',
+  'tengu>onmyo': '空は、我のものだと言ったろう',
+  'maneki>onmyo': '鳥のお客様、毎度ありがとうございました',
+  'chochin>onmyo': '黒い羽も、照らしちゃった',
   'kappa>onmyo': '白も黒も、感染完了',
   'mirror': '本物は、ひとりで十分'
 };
@@ -7681,7 +7696,7 @@ const CPU_CHAR = {
   chochin: { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'sp2'], ['5H', 'sp1']], punish: ['5H', 'sp1'] },
   /* 河童: 遠くでは水たまりを置いて待つ */
   kappa:   { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['2H', 'sp2'], ['5H', 'sp3']], punish: ['5H', 'sp3'] },
-  /* 陰陽玉: 陽は弾と対空で待つ。陰（':2'）は引き寄せと踏み込みで攻める */
+  /* 白鶴: 弾と対空で待つ。八咫烏（':2'）は引き寄せと踏み込みで攻める */
   onmyo:   { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp3'], ['2H', 'sp2'], ['5H', 'sp1']], punish: ['5H', 'sp3'] },
   'onmyo:2': { aa: '5H', zone: 'sp1', mid: ['sp2', '5H', 'sp3'], routes: [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['5H', 'sp3']], punish: ['5H', 'sp3'] }
 };
