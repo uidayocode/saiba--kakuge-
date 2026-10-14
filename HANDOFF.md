@@ -119,6 +119,8 @@
 
 - 招き猫の大祓（投げの超必殺）がコンボでつながらなかった（ユーザー指摘）: 投げは のけぞり中（HITSTUN）の相手をつかめないため。投げに `throw.combo: true` を付けると地上の のけぞり中もつかめる（`canBeThrown(combo)`）。コンボからつかんだときは威力 `comboScale`=0.75 倍。5L・2L・5H・5L>5H からつながる（2H は浮くので不可）。scratchpad の mgrab.js で確認。
 
+- ユーザー指定（2026-10-14）: 鬼の倍率 0.8、狐の体力 実際 1150（データ hp 958 × HP_MUL 1.2）、提灯の倍率 1.10。
+
 ## 確認のしかた（ヘッドレスの Chromium で回せる）
 
 - `game.html#selftest&matches=64&maxSec=150&seed=N` … 全キャラの組み合わせで CPU 同士の自動対戦。`document.title` が `SELFTEST PASS` なら合格。
