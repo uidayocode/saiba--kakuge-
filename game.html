@@ -1061,7 +1061,7 @@ function validateGameData(D) {
       if (isInt(pr.maxActive) && (pr.maxActive < 1 || pr.maxActive > 3)) E(pp + '.maxActive', '1〜3');
       if (pr.box != null) vBox(pp + '.box', pr.box);
       if (pr.hit != null) vHit(pp + '.hit', pr.hit, true);
-      if (!isObj(pr.look) || ['fuda', 'orb', 'shock', 'beam', 'ghost', 'slash', 'flame', 'puddle', 'taiji'].indexOf(pr.look.style) < 0) E(pp + '.look.style', 'fuda|orb|shock|beam|ghost|slash|flame|puddle|taiji');
+      if (!isObj(pr.look) || ['fuda', 'orb', 'shock', 'beam', 'ghost', 'slash', 'flame', 'puddle', 'taiji', 'feather'].indexOf(pr.look.style) < 0) E(pp + '.look.style', 'fuda|orb|shock|beam|ghost|slash|flame|puddle|taiji|feather');
       else {
         if (pal(c, pr.look.color) == null) E(pp + '.look.color', 'palette のキー名が必要');
         if (pr.look.style === 'ghost' && (!pr.look.clip || !c.clips[pr.look.clip])) E(pp + '.look.clip', 'ghost には実在するクリップ名が必要');
@@ -2856,6 +2856,8 @@ class Combat {
     const m = this.m;
     t.mv.thrown = true;
     A.mv = null; A.vx = 0;
+    /* 空中からつかんだとき（八咫烏の急降下）は、その場で着地してから投げる */
+    if (A.y > 0.001) { A.y = 0; A.vy = 0; }
     A.setState('GRAB', def.attackerClip, 1, true);
     /* 後ろ投げ: 通常投げを ← を押しながら出すと、相手を頭の上を越えて背中側へ投げる（位置を入れ替えて画面端へ追い込める） */
     A.grab = { def: def, target: D, g: 0, back: !!t.mv.backThrow, comboed: comboed };
@@ -4538,6 +4540,18 @@ function drawProjectiles(ctx, match, alpha) {
         }
         break;
       }
+      /* 羽根: 進む向きに傾いた細長い葉の形 */
+      case 'feather': {
+        ctx.translate(x, -y); ctx.scale(p.dir, 1); ctx.rotate(-Math.atan2(p.vy, Math.abs(p.vx) || 1));
+        const L = 22 * size, W = 6 * size;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = rgba(col, 0.25); ctx.beginPath(); ctx.ellipse(-L * 0.4, 0, L * 1.2, W * 1.8, 0, 0, 6.283); ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = '#06070d'; ctx.strokeStyle = col; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(L, 0); ctx.quadraticCurveTo(0, -W, -L, 0); ctx.quadraticCurveTo(0, W, L, 0); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = '#f4f7ff'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(L * 0.9, 0); ctx.lineTo(-L * 1.3, 0); ctx.stroke();
+        break;
+      }
       case 'slash': {
         ctx.translate(x, -y); ctx.scale(p.dir, 1);
         ctx.globalCompositeOperation = 'lighter';
@@ -5253,7 +5267,7 @@ const SPECIAL_DESC = {
   maneki:  { sp1: '遠くの相手を引き寄せる。当たったら 強 でつながる', sp2: 'ガードできない掴み', sp3: '弾を受け流して突っ込む', super: 'ガードできない大投げ。弱・強の後につなげてもつかめる' },
   chochin: { sp1: '押しっぱなしでためる鬼火。← かガードでため保持。満タンで転ぶ', sp2: '出始め無敵の対空', sp3: '転がって弾をすり抜ける', super: 'ゆっくり進む大きな鬼火（6ヒット）' },
   kappa:   { sp1: '前の床に水たまり（罠）。踏むとガードできず転んで毒', sp2: '出始め無敵の対空', sp3: '弾の下をすべる下段', super: '進む大波（5ヒット＋毒）' },
-  onmyo:   { sp1: '鶴: まっすぐ飛ぶ陽玉 / 烏: 遅く重い陰玉（2ヒット・弾に勝つ）', sp2: '鶴: 出始め無敵の対空 / 烏: 遠くの相手を引き寄せる（影縫い）', sp3: '鶴: 低く滑って弾をすり抜ける / 烏: 無敵の速い踏み込み', super: '鶴: 進む大きな玉（6ヒット） / 烏: 突進の連撃' },
+  onmyo:   { sp1: '鶴: 羽根を3枚、扇に飛ばす / 烏: 遅く重い陰玉（2ヒット・弾に勝つ）', sp2: '鶴: 出始め無敵の対空 / 烏: 遠くの相手を引き寄せる', sp3: '鶴: 低く滑って弾をすり抜ける / 烏: 跳んで急降下でつかむ（ガード不能）', super: '鶴: 進む大きな玉（6ヒット） / 烏: 突進の連撃' },
 };
 /* キャラだけの仕組み（技一覧の最後の行） */
 const UNIQUE_ROW = {
@@ -5264,7 +5278,7 @@ const UNIQUE_ROW = {
   maneki:  ['手招きコンボ', '手招きが当たったら 強', '同じ', '引き寄せて、そのまま連続技に'],
   chochin: ['ため撃ち', '必殺技のボタンを押しっぱなし', '同じ', '最大約0.5秒。ため中に ← かガードで保持できる'],
   kappa:   ['毒', '水たまり・大祓が当たる', '同じ', 'しばらく体力が減り続ける（毒では倒れない）'],
-  onmyo:   ['八咫烏（変化）', '体力が半分を切ると自動で', '同じ', '変わる瞬間に無敵の衝撃波（のけぞり中でも出る）。烏は体力が減るほど攻撃力アップ（最大1.4倍）'],
+  onmyo:   ['八咫烏（変化）', '体力が半分を切ると自動で', '同じ', '変わる瞬間に無敵の衝撃波（のけぞり中でも出る）。烏は体力が減るほど攻撃力アップ（最大1.4倍）。打たれ弱い'],
 };
 function normalDesc(m, base) {
   const h = m.hit || {}, t = [];
@@ -5352,9 +5366,9 @@ COMBO_ROWS.kappa = [
   ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '6ヒット＋毒']
 ];
 COMBO_ROWS.onmyo = [
-  ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。陽玉で締める'],
+  ['基本コンボ', '弱 → 弱 → 強 → 必殺', '羽根で締める'],
   ['下段から', '↓弱 → 弱 → 強 → ←+必殺', '4ヒット。転輪で締める'],
-  ['烏: 引き寄せ', '→+必殺 → 強 → ←+必殺', '影縫いで寄せて3ヒット'],
+  ['烏: 引き寄せ', '→+必殺 → 強 → 必殺', '影縫いで寄せて3ヒット'],
   ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
   ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '鶴は千羽鶴、烏は黒天']
 ];
@@ -7698,7 +7712,7 @@ const CPU_CHAR = {
   kappa:   { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['2H', 'sp2'], ['5H', 'sp3']], punish: ['5H', 'sp3'] },
   /* 白鶴: 弾と対空で待つ。八咫烏（':2'）は引き寄せと踏み込みで攻める */
   onmyo:   { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp3'], ['2H', 'sp2'], ['5H', 'sp1']], punish: ['5H', 'sp3'] },
-  'onmyo:2': { aa: '5H', zone: 'sp1', mid: ['sp2', '5H', 'sp3'], routes: [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['5H', 'sp3']], punish: ['5H', 'sp3'] }
+  'onmyo:2': { aa: '5H', zone: 'sp1', mid: ['sp3'], routes: [['5L', '5L', '5H', 'sp2'], ['2L', '5L', '5H', 'sp2'], ['sp2', '5H', 'sp1']], punish: ['5H', 'sp2'] }
 };
 class CpuPolicy {
   /* mode: 'test' = ランダムに全技を踏む / 'dummy' = 立ち・ガード固定の練習相手 / 'cpu' = 対戦用（level: easy|normal|hard） */

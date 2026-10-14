@@ -1196,9 +1196,9 @@ window.GAME_DATA = {
       name: "白鶴",
       nameEn: "WHITE CRANE",
       title: "モード変化型",
-      blurb: "体力が半分を切ると八咫烏に変わる。追い詰められるほど強い。",
-      ratings: { power: 3, speed: 3, range: 4, defense: 3 },
-      stats: { dmgMul: 0.8, hp: 1000, walkF: 3.3, walkB: 2.9, jumpVy: 15, jumpVx: 3.6, gravity: 0.74, airJumps: 0, prejump: 4, landLag: 3, dashF: { frames: 18, speed: 8 }, dashB: { frames: 18, speed: 5.8, invuln: 6 }, gaugeMul: 1 },
+      blurb: "打たれ弱い白い鶴。体力が半分で八咫烏に変わり、追い詰められるほど強い。",
+      ratings: { power: 3, speed: 3, range: 4, defense: 1 },
+      stats: { dmgMul: 0.9, hp: 860, walkF: 3.3, walkB: 2.9, jumpVy: 15, jumpVx: 3.6, gravity: 0.74, airJumps: 0, prejump: 4, landLag: 3, dashF: { frames: 18, speed: 8 }, dashB: { frames: 18, speed: 5.8, invuln: 6 }, gaugeMul: 1 },
       boxes: { push: { stand: { w: 52, h: 100 }, crouch: { w: 56, h: 70 }, air: { w: 44, h: 100 } }, hurt: { stand: [ { x: -9, y: 139, w: 32, h: 32 }, { x: -26, y: 60, w: 54, h: 82 }, { x: -24, y: 0, w: 48, h: 64 } ], crouch: [ { x: 17, y: 92, w: 32, h: 32 }, { x: -28, y: 0, w: 58, h: 74 } ], air: [ { x: -24, y: 20, w: 50, h: 149 }, { x: -12, y: 137, w: 32, h: 32 } ] } },
       look: { palette: { skin: "#ffe0cc", hair: "#1a1033", primary: "#f4f7ff", secondary: "#ff3b5c", accent: "#b67cff", glow: "#19f3ff", outline: "#0a0620", eye: "#19f3ff" }, paletteP2: { skin: "#ffe0cc", hair: "#2b1033", primary: "#e8ddff", secondary: "#a56bff", accent: "#b67cff", glow: "#ff4fa3", outline: "#0a0620", eye: "#ff4fa3" }, body: { torsoLen: 52, torsoWTop: 30, torsoWBottom: 24, neckLen: 8, headR: 17, shoulderDrop: 6, uArmLen: 30, fArmLen: 28, handR: 6, thighLen: 40, shinLen: 40, footLen: 20, footH: 8, limbW: { uArm: [ 11, 9 ], fArm: [ 9, 7 ], thigh: [ 16, 13 ], shin: [ 12, 9 ] } }, colors: { head: "skin", neck: "skin", torso: "primary", uArm: "primary", fArm: "primary", hand: "skin", thigh: "secondary", shin: "secondary", foot: "accent" }, prop: { kind: "gohei", len: 46, thick: 4, angle: 0, color: "accent" }, neon: { tubeW: 3, glowW: 8, glowAlpha: 0.24, coreW: 1, fill: 0.9 }, decor: [], chains: [] },
       feel: { breath: { amp: 0.012, period: 90 }, jump: { sx: 0.94, sy: 1.08, frames: 4 }, land: { sx: 1.1, sy: 0.88, frames: 6 }, dash: { sx: 1.06, sy: 0.97, frames: 5 }, hitShake: { amp: [ 1, 2, 3, 3.5 ] }, recoil: { x: [ 3, 6, 10, 14 ], rot: [ 2, 4, 7, 10 ], frames: 4 }, squashHit: { sx: 1.06, sy: 0.94, frames: 3 } },
@@ -1240,7 +1240,7 @@ window.GAME_DATA = {
         in5H: { length: 29, plant: "feet", blend: 3, keys: [ { f: 5, ease: "outQuad", p: { torso: 10, uarmF: 150, farmF: 60, rootX: -4 } }, { f: 9, ease: "outExpo", p: { torso: 40, head: 10, uarmF: 96, farmF: -10, uarmB: 20, rootX: 18, thighF: 46, shinF: 40 } }, { f: 13, ease: "linear", p: { torso: 40, head: 10, uarmF: 96, farmF: -10, uarmB: 20, rootX: 18, thighF: 46, shinF: 40 } }, { f: 29, ease: "inOutQuad", p: "base" } ] },
         insp1: { length: 40, plant: "feet", blend: 3, keys: [ { f: 8, ease: "outQuad", p: { torso: 20, head: -10, uarmF: 160, farmF: 40, uarmB: 150, farmB: 40, rootY: -6 } }, { f: 15, ease: "outExpo", p: { torso: 30, head: 0, uarmF: 90, farmF: 0, uarmB: 80, farmB: 0, rootX: 8 } }, { f: 24, ease: "linear", p: { torso: 30, head: 0, uarmF: 90, farmF: 0, uarmB: 80, farmB: 0, rootX: 8 } }, { f: 40, ease: "inOutQuad", p: "base" } ] },
         insp2: { length: 48, plant: "feet", blend: 3, keys: [ { f: 8, ease: "outQuad", p: { torso: 10, uarmF: 40, farmF: 60 } }, { f: 14, ease: "outExpo", p: { torso: 30, head: 4, uarmF: 92, farmF: -10, rootX: 10, thighF: 40, shinF: 40 } }, { f: 28, ease: "linear", p: { torso: 30, head: 4, uarmF: 92, farmF: -10, rootX: 10, thighF: 40, shinF: 40 } }, { f: 48, ease: "inOutQuad", p: "base" } ] },
-        insp3: { length: 39, plant: "feet", blend: 3, keys: [ { f: 5, ease: "outQuad", p: { torso: 40, head: -10, rootY: -12, uarmF: 160, uarmB: 160 } }, { f: 9, ease: "outExpo", p: { torso: 60, head: 10, rootX: 14, rootY: -14, uarmF: 100, farmF: 0, uarmB: 120, thighF: 60, shinF: 50, thighB: -40 } }, { f: 25, ease: "linear", p: { torso: 60, head: 10, rootX: 14, rootY: -14, uarmF: 100, farmF: 0, uarmB: 120, thighF: 60, shinF: 50, thighB: -40 } }, { f: 39, ease: "inOutQuad", p: "base" } ] },
+        insp3: { length: 54, plant: "feet", blend: 3, keys: [ { f: 11, ease: "outQuad", p: { torso: -20, head: -10, uarmF: 175, farmF: 10, uarmB: 175, farmB: 10, thighF: 70, shinF: 110, thighB: 30, shinB: 100 } }, { f: 20, ease: "outExpo", p: { torso: 50, head: 20, uarmF: 110, farmF: 0, uarmB: 100, farmB: 0, rootX: 12, thighF: 60, shinF: 80, thighB: 20, shinB: 90 } }, { f: 42, ease: "linear", p: { torso: 50, head: 20, uarmF: 110, farmF: 0, uarmB: 100, farmB: 0, rootX: 12, thighF: 60, shinF: 80, thighB: 20, shinB: 90 } }, { f: 54, ease: "inOutQuad", p: "base" } ] },
         insuper: { length: 70, plant: "feet", blend: 3, keys: [ { f: 6, ease: "outQuad", p: { torso: 30, head: -12, uarmF: 150, farmF: 40, uarmB: 150, farmB: 40, rootY: -8 } }, { f: 10, ease: "outExpo", p: { torso: 50, head: 10, uarmF: 100, farmF: 0, uarmB: 110, farmB: 0, rootX: 16, thighF: 50, shinF: 50, thighB: -40 } }, { f: 56, ease: "linear", p: { torso: 50, head: 10, uarmF: 100, farmF: 0, uarmB: 110, farmB: 0, rootX: 16, thighF: 50, shinF: 50, thighB: -40 } }, { f: 70, ease: "inOutQuad", p: "base" } ] }
       },
       moves: {
@@ -1251,16 +1251,18 @@ window.GAME_DATA = {
         jL: { kind: "normal", name: "ジャンプ弱", stance: "air", startup: 4, active: 9, recovery: 5, landLag: 3, boxes: [ { f0: 5, f1: 13, x: 18, y: 30, w: 76, h: 46 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 1, damage: 26, hitstun: 16, blockstun: 12, hitstop: 6, knock: { hit: 6, block: 8 }, gauge: { hit: 25, block: 12 } }, cancel: { into: [ "jH" ], frames: 12 }, sfx: "swingL" },
         jH: { kind: "normal", name: "ジャンプ強", stance: "air", startup: 8, active: 6, recovery: 10, landLag: 4, boxes: [ { f0: 9, f1: 14, x: 4, y: -10, w: 86, h: 74 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 3, damage: 60, hitstun: 22, blockstun: 16, hitstop: 10, knock: { hit: 10, block: 14 }, gauge: { hit: 45, block: 22 } }, sfx: "swingH" },
         throw: { kind: "throw", name: "投げ", stance: "stand", startup: 5, active: 2, recovery: 20, boxes: [], hit: null, throw: { box: { x: 10, y: 20, w: 64, h: 100 }, techable: true, damage: 120, grabFrames: 30, afterRecovery: 18, attackerClip: "throwHit", hold: [ { f: 0, x: 50, y: 60, rot: -10 }, { f: 12, ease: "inOutCubic", x: 24, y: 170, rot: -100 }, { f: 26, ease: "outExpo", x: 70, y: 30, rot: -150 }, { f: 30, ease: "linear", x: 76, y: 20, rot: -160 } ], launch: { vx: 3, vy: 7 }, hitstop: 12, impact: 3, gauge: { hit: 40 } }, sfx: "grab" },
-        sp1: { kind: "special", name: "陽玉", stance: "stand", startup: 13, active: 1, recovery: 26, boxes: [], hit: null, spawn: [ { at: 14, projectile: "youdama", x: 56, y: 66 } ], sfx: "cast" },
+        sp1: { kind: "special", name: "白羽扇", stance: "stand", startup: 13, active: 1, recovery: 26, boxes: [], hit: null, spawn: [ { at: 14, projectile: "haneU", x: 56, y: 80 }, { at: 14, projectile: "haneM", x: 56, y: 70 }, { at: 14, projectile: "haneD", x: 56, y: 60 } ], sfx: "wind" },
         sp2: { kind: "special", name: "舞い鶴", stance: "stand", startup: 5, active: 7, recovery: 28, landLag: 6, boxes: [ { f0: 6, f1: 12, x: 6, y: 40, w: 72, h: 130 } ], hit: { chip: 6, level: "mid", effect: "launch", impact: 3, damage: 72, hitstun: 0, blockstun: 22, hitstop: 10, knock: { hit: 0, block: 14 }, launch: { vx: 2.5, vy: 10 }, juggle: 0, gauge: { hit: 60, block: 30 } }, motion: [ { f0: 6, f1: 6, vx: 2, vy: 11 } ], invuln: [ { f0: 1, f1: 8, type: "strike" } ], sfx: "rise" },
         sp3: { kind: "special", name: "翔け鶴", stance: "stand", startup: 12, active: 10, recovery: 18, boxes: [ { f0: 13, f1: 22, x: 16, y: 10, w: 92, h: 70 } ], hit: { chip: 6, level: "mid", effect: "launch", impact: 3, damage: 66, hitstun: 0, blockstun: 16, hitstop: 11, knock: { hit: 0, block: 22 }, launch: { vx: 3.5, vy: 6 }, juggle: 0, gauge: { hit: 50, block: 25 } }, motion: [ { f0: 3, f1: 22, vx: 7.5 } ], invuln: [ { f0: 1, f1: 22, type: "proj" } ], sfx: "swingH" },
         super: { kind: "super", name: "大祓「千羽鶴」", stance: "stand", startup: 10, active: 1, recovery: 48, cost: 1000, flash: 40, boxes: [], hit: null, invuln: [ { f0: 1, f1: 12, type: "all" } ], spawn: [ { at: 11, projectile: "taikyoku", x: 70, y: 80 } ], sfx: "super" }
       },
       projectiles: {
-        youdama: { life: 120, vx: 7.5, vy: 0, box: { x: -16, y: -16, w: 32, h: 32 }, hits: 1, maxActive: 1, priority: 1, hit: { chip: 5, level: "mid", effect: "stun", impact: 2, damage: 46, hitstun: 18, blockstun: 14, hitstop: 8, knock: { hit: 10, block: 12 }, gauge: { hit: 30, block: 15 } }, look: { style: "taiji", color: "glow", size: 1 } },
+        haneU: { life: 70, vx: 8, vy: 1.7, box: { x: -14, y: -9, w: 28, h: 18 }, hits: 1, maxActive: 1, priority: 1, hit: { chip: 2, level: "mid", effect: "stun", impact: 1, damage: 20, hitstun: 18, blockstun: 12, hitstop: 6, knock: { hit: 8, block: 8 }, gauge: { hit: 12, block: 6 } }, look: { style: "feather", color: "glow", size: 1 } },
+        haneM: { life: 70, vx: 8.5, vy: 0, box: { x: -14, y: -9, w: 28, h: 18 }, hits: 1, maxActive: 1, priority: 1, hit: { chip: 2, level: "mid", effect: "stun", impact: 1, damage: 20, hitstun: 18, blockstun: 12, hitstop: 6, knock: { hit: 8, block: 8 }, gauge: { hit: 12, block: 6 } }, look: { style: "feather", color: "glow", size: 1 } },
+        haneD: { life: 70, vx: 8, vy: -0.75, box: { x: -14, y: -9, w: 28, h: 18 }, hits: 1, maxActive: 1, priority: 1, hit: { chip: 2, level: "mid", effect: "stun", impact: 1, damage: 20, hitstun: 18, blockstun: 12, hitstop: 6, knock: { hit: 8, block: 8 }, gauge: { hit: 12, block: 6 } }, look: { style: "feather", color: "glow", size: 1 } },
         taikyoku: { life: 110, vx: 5.5, vy: 0, box: { x: -46, y: -50, w: 92, h: 100 }, hits: 6, hitEvery: 7, maxActive: 1, priority: 3, hit: { chip: 8, level: "mid", effect: "launch", impact: 3, damage: 42, hitstun: 0, blockstun: 12, hitstop: 5, knock: { hit: 0, block: 4 }, launch: { vx: 0.6, vy: 6.5 }, juggle: 8, gauge: { hit: 0, block: 0 } }, look: { style: "taiji", color: "glow", size: 3 } }
       },
-      mode2: { key: "yin", name: "八咫烏", label: "陰", at: 0.5, gauge: 250, burst: "shift", passive: { desperate: 0.4, from: 0.5 }, stats: { dmgMul: 0.88, hp: 1000, walkF: 3.9, walkB: 3.2, jumpVy: 15, jumpVx: 3.6, gravity: 0.74, airJumps: 0, prejump: 4, landLag: 3, dashF: { frames: 18, speed: 9.6 }, dashB: { frames: 18, speed: 6.4, invuln: 6 }, gaugeMul: 1 }, moves: { "5H": { kind: "normal", name: "立ち強（烏爪）", clip: "in5H", stance: "stand", startup: 9, active: 4, recovery: 16, boxes: [ { f0: 10, f1: 13, x: 24, y: 56, w: 85, h: 60 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 3, damage: 70, hitstun: 23, blockstun: 15, hitstop: 10, knock: { hit: 16, block: 20 }, gauge: { hit: 45, block: 22 } }, cancel: { into: [ "sp1", "sp2", "sp3", "super" ], frames: 16 }, trail: { from: "handF", color: "accent", width: 16, frames: 8 }, sfx: "swingH" }, sp1: { kind: "special", name: "陰玉", clip: "insp1", stance: "stand", startup: 15, active: 1, recovery: 24, boxes: [], hit: null, spawn: [ { at: 16, projectile: "indama", x: 56, y: 66 } ], sfx: "cast" }, sp2: { kind: "special", name: "影縫い", clip: "insp2", stance: "stand", startup: 14, active: 6, recovery: 28, boxes: [ { f0: 15, f1: 20, x: 40, y: 30, w: 170, h: 90 } ], hit: { chip: 2, level: "mid", effect: "stun", impact: 2, damage: 28, hitstun: 30, blockstun: 10, hitstop: 8, knock: { hit: -180, block: 6 }, gauge: { hit: 40, block: 15 } }, cancel: { into: [ "5L", "5H", "sp3", "super" ], frames: 22 }, trail: { from: "handF", color: "accent", width: 18, frames: 10 }, sfx: "beckon" }, sp3: { kind: "special", name: "影渡り", clip: "insp3", stance: "stand", startup: 9, active: 8, recovery: 22, boxes: [ { f0: 10, f1: 17, x: 14, y: 20, w: 95, h: 100 } ], hit: { chip: 6, level: "mid", effect: "launch", impact: 3, damage: 64, hitstun: 0, blockstun: 16, hitstop: 11, knock: { hit: 0, block: 22 }, launch: { vx: 3.5, vy: 6.5 }, juggle: 0, gauge: { hit: 50, block: 25 } }, motion: [ { f0: 2, f1: 17, vx: 11 } ], invuln: [ { f0: 1, f1: 9, type: "strike" }, { f0: 1, f1: 17, type: "proj" } ], sfx: "swingH" }, shift: { kind: "special", name: "陰転・八咫の羽ばたき", clip: "inshift", stance: "stand", startup: 6, active: 6, recovery: 22, boxes: [ { f0: 7, f1: 12, x: -120, y: 0, w: 260, h: 190 } ], hit: { chip: 0, level: "mid", effect: "launch", impact: 4, damage: 30, unblockable: true, hitstun: 0, blockstun: 0, hitstop: 14, knock: { hit: 0, block: 0 }, launch: { vx: 7, vy: 7.5 }, juggle: 0, gauge: { hit: 0, block: 0 } }, invuln: [ { f0: 1, f1: 30, type: "all" } ], sfx: "super" }, super: { kind: "super", name: "大祓「黒天」", clip: "insuper", stance: "stand", startup: 10, active: 26, recovery: 34, cost: 1000, flash: 40, boxes: [ { f0: 11, f1: 36, x: 20, y: 0, w: 110, h: 140 } ], motion: [ { f0: 11, f1: 34, vx: 7 } ], hit: { chip: 8, level: "mid", effect: "stun", impact: 2, damage: 36, hitstun: 18, blockstun: 18, hitstop: 4, knock: { hit: 2, block: 6 }, gauge: { hit: 0, block: 0 } }, multi: { count: 6, every: 5, final: { chip: 14, level: "mid", effect: "launch", impact: 4, damage: 120, hitstun: 0, blockstun: 24, hitstop: 18, knock: { hit: 0, block: 30 }, launch: { vx: 4, vy: 9 }, juggle: 0, gauge: { hit: 0, block: 0 } } }, invuln: [ { f0: 1, f1: 10, type: "all" } ], trail: { from: "handF", color: "accent", width: 18, frames: 10 }, sfx: "super" } }, projectiles: { indama: { life: 160, vx: 4.2, vy: 0, box: { x: -20, y: -20, w: 40, h: 40 }, hits: 2, hitEvery: 14, maxActive: 1, priority: 2, hit: { chip: 5, level: "mid", effect: "stun", impact: 2, damage: 34, hitstun: 20, blockstun: 14, hitstop: 7, knock: { hit: 4, block: 8 }, gauge: { hit: 25, block: 12 } }, look: { style: "taiji", color: "accent", size: 1.35, dark: true } } }, clips: { idle: { length: 48, loop: true, plant: "feet", blend: 6, keys: [ { f: 0, ease: "inOutQuad", p: { torso: 22, head: -10, uarmF: 50, farmF: 70, uarmB: 40, farmB: 50, thighF: 34, shinF: 56, footF: 16, thighB: -18, shinB: 30, footB: 30, rootY: -8 } }, { f: 24, ease: "inOutQuad", p: { torso: 26, head: -12, uarmF: 54, farmF: 76, uarmB: 44, farmB: 54, thighF: 38, shinF: 62, footF: 18, thighB: -18, shinB: 34, footB: 32, rootY: -10 } } ] } } },
+      mode2: { key: "yin", name: "八咫烏", label: "陰", at: 0.5, gauge: 250, burst: "shift", passive: { desperate: 0.4, from: 0.5 }, stats: { dmgMul: 1, hp: 860, walkF: 3.9, walkB: 3.2, jumpVy: 15, jumpVx: 3.6, gravity: 0.74, airJumps: 0, prejump: 4, landLag: 3, dashF: { frames: 18, speed: 9.6 }, dashB: { frames: 18, speed: 6.4, invuln: 6 }, gaugeMul: 1 }, moves: { "5H": { kind: "normal", name: "立ち強（烏爪）", clip: "in5H", stance: "stand", startup: 9, active: 4, recovery: 16, boxes: [ { f0: 10, f1: 13, x: 24, y: 56, w: 85, h: 60 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 3, damage: 70, hitstun: 23, blockstun: 15, hitstop: 10, knock: { hit: 16, block: 20 }, gauge: { hit: 45, block: 22 } }, cancel: { into: [ "sp1", "sp2", "sp3", "super" ], frames: 16 }, trail: { from: "handF", color: "accent", width: 16, frames: 8 }, sfx: "swingH" }, sp1: { kind: "special", name: "陰玉", clip: "insp1", stance: "stand", startup: 15, active: 1, recovery: 24, boxes: [], hit: null, spawn: [ { at: 16, projectile: "indama", x: 56, y: 66 } ], sfx: "cast" }, sp2: { kind: "special", name: "影縫い", clip: "insp2", stance: "stand", startup: 14, active: 6, recovery: 28, boxes: [ { f0: 15, f1: 20, x: 40, y: 30, w: 170, h: 90 } ], hit: { chip: 2, level: "mid", effect: "stun", impact: 2, damage: 28, hitstun: 30, blockstun: 10, hitstop: 8, knock: { hit: -180, block: 6 }, gauge: { hit: 40, block: 15 } }, cancel: { into: [ "5L", "5H", "sp3", "super" ], frames: 22 }, trail: { from: "handF", color: "accent", width: 18, frames: 10 }, sfx: "beckon" }, sp3: { kind: "special", name: "八咫落とし", clip: "insp3", stance: "stand", startup: 20, active: 18, recovery: 16, boxes: [], hit: null, motion: [ { f0: 5, f1: 5, vx: 4.8, vy: 11.5 } ], invuln: [ { f0: 1, f1: 32, type: "proj" } ], throw: { box: { x: -6, y: -30, w: 86, h: 170 }, techable: false, damage: 135, grabFrames: 30, afterRecovery: 18, attackerClip: "throwHit", hold: [ { f: 0, x: 50, y: 60, rot: -10 }, { f: 12, ease: "inOutCubic", x: 24, y: 170, rot: -100 }, { f: 26, ease: "outExpo", x: 70, y: 30, rot: -150 }, { f: 30, ease: "linear", x: 76, y: 20, rot: -160 } ], launch: { vx: 3, vy: 7 }, hitstop: 14, impact: 4, gauge: { hit: 45 } }, sfx: "swingH" }, shift: { kind: "special", name: "陰転・八咫の羽ばたき", clip: "inshift", stance: "stand", startup: 6, active: 6, recovery: 22, boxes: [ { f0: 7, f1: 12, x: -120, y: 0, w: 260, h: 190 } ], hit: { chip: 0, level: "mid", effect: "launch", impact: 4, damage: 30, unblockable: true, hitstun: 0, blockstun: 0, hitstop: 14, knock: { hit: 0, block: 0 }, launch: { vx: 7, vy: 7.5 }, juggle: 0, gauge: { hit: 0, block: 0 } }, invuln: [ { f0: 1, f1: 30, type: "all" } ], sfx: "super" }, super: { kind: "super", name: "大祓「黒天」", clip: "insuper", stance: "stand", startup: 10, active: 26, recovery: 34, cost: 1000, flash: 40, boxes: [ { f0: 11, f1: 36, x: 20, y: 0, w: 110, h: 140 } ], motion: [ { f0: 11, f1: 34, vx: 7 } ], hit: { chip: 8, level: "mid", effect: "stun", impact: 2, damage: 36, hitstun: 18, blockstun: 18, hitstop: 4, knock: { hit: 2, block: 6 }, gauge: { hit: 0, block: 0 } }, multi: { count: 6, every: 5, final: { chip: 14, level: "mid", effect: "launch", impact: 4, damage: 120, hitstun: 0, blockstun: 24, hitstop: 18, knock: { hit: 0, block: 30 }, launch: { vx: 4, vy: 9 }, juggle: 0, gauge: { hit: 0, block: 0 } } }, invuln: [ { f0: 1, f1: 10, type: "all" } ], trail: { from: "handF", color: "accent", width: 18, frames: 10 }, sfx: "super" } }, projectiles: { indama: { life: 160, vx: 4.2, vy: 0, box: { x: -20, y: -20, w: 40, h: 40 }, hits: 2, hitEvery: 14, maxActive: 1, priority: 2, hit: { chip: 5, level: "mid", effect: "stun", impact: 2, damage: 34, hitstun: 20, blockstun: 14, hitstop: 7, knock: { hit: 4, block: 8 }, gauge: { hit: 25, block: 12 } }, look: { style: "taiji", color: "accent", size: 1.35, dark: true } } }, clips: { idle: { length: 48, loop: true, plant: "feet", blend: 6, keys: [ { f: 0, ease: "inOutQuad", p: { torso: 22, head: -10, uarmF: 50, farmF: 70, uarmB: 40, farmB: 50, thighF: 34, shinF: 56, footF: 16, thighB: -18, shinB: 30, footB: 30, rootY: -8 } }, { f: 24, ease: "inOutQuad", p: { torso: 26, head: -12, uarmF: 54, farmF: 76, uarmB: 44, farmB: 54, thighF: 38, shinF: 62, footF: 18, thighB: -18, shinB: 34, footB: 32, rootY: -10 } } ] } } },
       quotes: { select: "白か黒か、決めるのはあなた。", intro: [ "白鶴、舞います。" ], win: [ "白い羽、黒い羽。どちらもわたし。", "陰きわまれば、陽となる。" ], lose: [ "羽が…散る…" ] }
     }
   }
@@ -3794,7 +3796,7 @@ function validateGameData(D) {
       if (isInt(pr.maxActive) && (pr.maxActive < 1 || pr.maxActive > 3)) E(pp + '.maxActive', '1〜3');
       if (pr.box != null) vBox(pp + '.box', pr.box);
       if (pr.hit != null) vHit(pp + '.hit', pr.hit, true);
-      if (!isObj(pr.look) || ['fuda', 'orb', 'shock', 'beam', 'ghost', 'slash', 'flame', 'puddle', 'taiji'].indexOf(pr.look.style) < 0) E(pp + '.look.style', 'fuda|orb|shock|beam|ghost|slash|flame|puddle|taiji');
+      if (!isObj(pr.look) || ['fuda', 'orb', 'shock', 'beam', 'ghost', 'slash', 'flame', 'puddle', 'taiji', 'feather'].indexOf(pr.look.style) < 0) E(pp + '.look.style', 'fuda|orb|shock|beam|ghost|slash|flame|puddle|taiji|feather');
       else {
         if (pal(c, pr.look.color) == null) E(pp + '.look.color', 'palette のキー名が必要');
         if (pr.look.style === 'ghost' && (!pr.look.clip || !c.clips[pr.look.clip])) E(pp + '.look.clip', 'ghost には実在するクリップ名が必要');
@@ -5589,6 +5591,8 @@ class Combat {
     const m = this.m;
     t.mv.thrown = true;
     A.mv = null; A.vx = 0;
+    /* 空中からつかんだとき（八咫烏の急降下）は、その場で着地してから投げる */
+    if (A.y > 0.001) { A.y = 0; A.vy = 0; }
     A.setState('GRAB', def.attackerClip, 1, true);
     /* 後ろ投げ: 通常投げを ← を押しながら出すと、相手を頭の上を越えて背中側へ投げる（位置を入れ替えて画面端へ追い込める） */
     A.grab = { def: def, target: D, g: 0, back: !!t.mv.backThrow, comboed: comboed };
@@ -7271,6 +7275,18 @@ function drawProjectiles(ctx, match, alpha) {
         }
         break;
       }
+      /* 羽根: 進む向きに傾いた細長い葉の形 */
+      case 'feather': {
+        ctx.translate(x, -y); ctx.scale(p.dir, 1); ctx.rotate(-Math.atan2(p.vy, Math.abs(p.vx) || 1));
+        const L = 22 * size, W = 6 * size;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = rgba(col, 0.25); ctx.beginPath(); ctx.ellipse(-L * 0.4, 0, L * 1.2, W * 1.8, 0, 0, 6.283); ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = '#06070d'; ctx.strokeStyle = col; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(L, 0); ctx.quadraticCurveTo(0, -W, -L, 0); ctx.quadraticCurveTo(0, W, L, 0); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = '#f4f7ff'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(L * 0.9, 0); ctx.lineTo(-L * 1.3, 0); ctx.stroke();
+        break;
+      }
       case 'slash': {
         ctx.translate(x, -y); ctx.scale(p.dir, 1);
         ctx.globalCompositeOperation = 'lighter';
@@ -7986,7 +8002,7 @@ const SPECIAL_DESC = {
   maneki:  { sp1: '遠くの相手を引き寄せる。当たったら 強 でつながる', sp2: 'ガードできない掴み', sp3: '弾を受け流して突っ込む', super: 'ガードできない大投げ。弱・強の後につなげてもつかめる' },
   chochin: { sp1: '押しっぱなしでためる鬼火。← かガードでため保持。満タンで転ぶ', sp2: '出始め無敵の対空', sp3: '転がって弾をすり抜ける', super: 'ゆっくり進む大きな鬼火（6ヒット）' },
   kappa:   { sp1: '前の床に水たまり（罠）。踏むとガードできず転んで毒', sp2: '出始め無敵の対空', sp3: '弾の下をすべる下段', super: '進む大波（5ヒット＋毒）' },
-  onmyo:   { sp1: '鶴: まっすぐ飛ぶ陽玉 / 烏: 遅く重い陰玉（2ヒット・弾に勝つ）', sp2: '鶴: 出始め無敵の対空 / 烏: 遠くの相手を引き寄せる（影縫い）', sp3: '鶴: 低く滑って弾をすり抜ける / 烏: 無敵の速い踏み込み', super: '鶴: 進む大きな玉（6ヒット） / 烏: 突進の連撃' },
+  onmyo:   { sp1: '鶴: 羽根を3枚、扇に飛ばす / 烏: 遅く重い陰玉（2ヒット・弾に勝つ）', sp2: '鶴: 出始め無敵の対空 / 烏: 遠くの相手を引き寄せる', sp3: '鶴: 低く滑って弾をすり抜ける / 烏: 跳んで急降下でつかむ（ガード不能）', super: '鶴: 進む大きな玉（6ヒット） / 烏: 突進の連撃' },
 };
 /* キャラだけの仕組み（技一覧の最後の行） */
 const UNIQUE_ROW = {
@@ -7997,7 +8013,7 @@ const UNIQUE_ROW = {
   maneki:  ['手招きコンボ', '手招きが当たったら 強', '同じ', '引き寄せて、そのまま連続技に'],
   chochin: ['ため撃ち', '必殺技のボタンを押しっぱなし', '同じ', '最大約0.5秒。ため中に ← かガードで保持できる'],
   kappa:   ['毒', '水たまり・大祓が当たる', '同じ', 'しばらく体力が減り続ける（毒では倒れない）'],
-  onmyo:   ['八咫烏（変化）', '体力が半分を切ると自動で', '同じ', '変わる瞬間に無敵の衝撃波（のけぞり中でも出る）。烏は体力が減るほど攻撃力アップ（最大1.4倍）'],
+  onmyo:   ['八咫烏（変化）', '体力が半分を切ると自動で', '同じ', '変わる瞬間に無敵の衝撃波（のけぞり中でも出る）。烏は体力が減るほど攻撃力アップ（最大1.4倍）。打たれ弱い'],
 };
 function normalDesc(m, base) {
   const h = m.hit || {}, t = [];
@@ -8085,9 +8101,9 @@ COMBO_ROWS.kappa = [
   ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '6ヒット＋毒']
 ];
 COMBO_ROWS.onmyo = [
-  ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。陽玉で締める'],
+  ['基本コンボ', '弱 → 弱 → 強 → 必殺', '羽根で締める'],
   ['下段から', '↓弱 → 弱 → 強 → ←+必殺', '4ヒット。転輪で締める'],
-  ['烏: 引き寄せ', '→+必殺 → 強 → ←+必殺', '影縫いで寄せて3ヒット'],
+  ['烏: 引き寄せ', '→+必殺 → 強 → 必殺', '影縫いで寄せて3ヒット'],
   ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
   ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '鶴は千羽鶴、烏は黒天']
 ];
@@ -10431,7 +10447,7 @@ const CPU_CHAR = {
   kappa:   { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['2H', 'sp2'], ['5H', 'sp3']], punish: ['5H', 'sp3'] },
   /* 白鶴: 弾と対空で待つ。八咫烏（':2'）は引き寄せと踏み込みで攻める */
   onmyo:   { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp3'], ['2H', 'sp2'], ['5H', 'sp1']], punish: ['5H', 'sp3'] },
-  'onmyo:2': { aa: '5H', zone: 'sp1', mid: ['sp2', '5H', 'sp3'], routes: [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['5H', 'sp3']], punish: ['5H', 'sp3'] }
+  'onmyo:2': { aa: '5H', zone: 'sp1', mid: ['sp3'], routes: [['5L', '5L', '5H', 'sp2'], ['2L', '5L', '5H', 'sp2'], ['sp2', '5H', 'sp1']], punish: ['5H', 'sp2'] }
 };
 class CpuPolicy {
   /* mode: 'test' = ランダムに全技を踏む / 'dummy' = 立ち・ガード固定の練習相手 / 'cpu' = 対戦用（level: easy|normal|hard） */
