@@ -483,7 +483,54 @@ function costumeKappa(j, ch) {
   arm(J.EF, J.HF, "front");
   return parts;
 }
-const COSTUMES = { miko: costumeMiko, komainu: costumeKomainu, oni404: costumeOni, fox: costumeFox, tengu: costumeTengu, maneki: costumeManeki, chochin: costumeChochin, kappa: costumeKappa };
+/* 陰陽玉: 狩衣（袖の広い衣）の人影で、頭が回る太極図。陰のときは頭がほぼ黒になり白い点（目）だけが光り、頭のまわりにとげとげの光輪が出る。
+ * o.mode = 'yin' で陰。o.clipT で太極図がゆっくり回る */
+function taiji(c, R, ang, dark) {
+  const cs = Math.cos(ang), sn = Math.sin(ang), at = (x, y) => [c[0] + x * cs - y * sn, c[1] + x * sn + y * cs];
+  if (dark) return [circle(at(0, -R * 0.42), R * 0.24)];
+  const g = new Path2D(), top = at(0, -R);
+  g.moveTo(top[0], top[1]);
+  g.arc(c[0], c[1], R, ang - Math.PI / 2, ang + Math.PI / 2, false);
+  const lo = at(0, R / 2), up = at(0, -R / 2);
+  g.arc(lo[0], lo[1], R / 2, ang + Math.PI / 2, ang + Math.PI * 1.5, false);
+  g.arc(up[0], up[1], R / 2, ang + Math.PI / 2, ang - Math.PI / 2, true);
+  g.closePath();
+  /* 白い側の中の黒い点は逆回りの円で穴にする */
+  g.moveTo(lo[0] + R * 0.17, lo[1]); g.arc(lo[0], lo[1], R * 0.17, 0, -Math.PI * 2, true);
+  return [g, circle(up, R * 0.17)];
+}
+function costumeOnmyo(j, ch, o) {
+  o = o || {};
+  const yin = o.mode === 'yin';
+  const { P, pel, neck, head, sh, tUp, back, fwd, down, parts, put } = bodyFrame(j);
+  const R = 18;
+  /* 脚（指貫袴: ふくらんだ袴、足首でしぼる） */
+  for (const [K, A, T] of [[J.KB, J.AB, J.TB], [J.KF, J.AF, J.TF]]) {
+    put(capsule(pel, P(K), 13, 13)); put(capsule(P(K), P(A), 13, 7)); put(capsule(P(A), P(T), 4.5, 3.5));
+  }
+  /* 袖の広い腕（狩衣） */
+  const arm = (E, H, layer) => {
+    put(polyPath(hull([add(sh, back, 4), add(sh, fwd, 6), P(E), P(H), add(P(H), down, 20), add(P(E), down, 26), add(lerp(sh, P(E), 0.5), down, 16)])), layer);
+    put(circle(P(H), 5), layer);
+  };
+  arm(J.EB, J.HB, "main");
+  /* 胴（裾が広がる） */
+  put(polyPath(hull([add(neck, back, 11), add(neck, fwd, 11), add(sh, fwd, 13), add(add(pel, back, 22), down, 22), add(add(pel, fwd, 20), down, 22), add(pel, back, 16)])));
+  /* 頭 = 太極図の玉 */
+  const hc = add(head, tUp, 2);
+  /* 陰: 頭のまわりにとげとげの黒い光輪（ゆっくり回る） */
+  if (yin) {
+    const sp = [], rot = (o.clipT || 0) * 0.01;
+    for (let k = 0; k < 24; k++) { const a = rot + k / 24 * Math.PI * 2, rr = k % 2 ? R + 3 : R + 12; sp.push(add(hc, [Math.cos(a) * rr, Math.sin(a) * rr])); }
+    put(polyPath(sp));
+  }
+  put(circle(hc, R));
+  const ang = (o.clipT || 0) * (yin ? 0.02 : 0.035);
+  for (const g of taiji(hc, R - 2.5, ang, yin)) put(g, "main", true);
+  arm(J.EF, J.HF, "front");
+  return parts;
+}
+const COSTUMES = { miko: costumeMiko, komainu: costumeKomainu, oni404: costumeOni, fox: costumeFox, tengu: costumeTengu, maneki: costumeManeki, chochin: costumeChochin, kappa: costumeKappa, onmyo: costumeOnmyo };
 function costume(j, ch, id, o) { return (COSTUMES[id] || costumeMiko)(j, ch, o); }
 
 function rgba(h, a) { const n = parseInt(h.slice(1), 16); return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")"; }

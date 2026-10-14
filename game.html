@@ -378,12 +378,26 @@ const LookAdapter = {
 };
 
 /* キャラのランタイムを作る: クリップをトラックへコンパイルし restPelvisH を計算 */
+/* モード変化（ch.mode2）: 体力が mode2.at（割合）以下になると、stats / moves / projectiles を mode2 の中身で上書きした別キャラに切り替わる。
+ * 名前は「名前・ラベル」。クリップは同じ ch.clips を使う（変化後の技は clip 名を別にしておく） */
+function modeChar(c) {
+  const m = c && c.mode2;
+  if (!m) return null;
+  const a = Object.assign({}, c, {
+    name: c.name + '・' + (m.label || '2'), modeName: m.key || 'mode2',
+    stats: Object.assign({}, c.stats, m.stats || {}), moves: Object.assign({}, c.moves, m.moves || {}),
+    projectiles: Object.assign({}, c.projectiles, m.projectiles || {}), clips: Object.assign({}, c.clips, m.clips || {})
+  });
+  delete a.mode2;
+  return a;
+}
 function compileCharacter(ch) {
   const rt = {
     id: ch.id, ch: ch, body: LookAdapter.body(ch), clips: {}, feel: normFeel(ch.feel),
     base: poseToArray(ch.basePose), restPelvisH: 0, neon: LookAdapter.neon(ch),
-    height: 0
+    height: 0, mode: ch.modeName || null
   };
+  if (ch.mode2) rt.alt = compileCharacter(modeChar(ch));
   const state = {};
   const tmp = new Float64Array(NCH);
   function comp(name) {
@@ -851,7 +865,7 @@ function validateGameData(D) {
     if (rk.length && rk[rk.length - 1].minPoints !== 0) E('fortunes.ranks', '最後の minPoints は 0 にしてください');
   } else if (D.fortunes != null) E('fortunes.ranks', '配列が必要');
   /* roster */
-  if (!Array.isArray(D.roster) || D.roster.length < 1 || D.roster.length > 8) E('roster', '1〜8件の配列が必要');
+  if (!Array.isArray(D.roster) || D.roster.length < 1 || D.roster.length > 10) E('roster', '1〜10件の配列が必要');
   else {
     D.roster.forEach(id => { if (!D.characters || !D.characters[id]) E('roster', '"' + id + '" が characters にありません'); });
     if (D.roster.length < 4) Wn('roster', D.roster.length + '件のみ（最終は4件）');
@@ -861,6 +875,7 @@ function validateGameData(D) {
       const c = D.characters[id];
       if (!c) return;
       try { vChar(id, c); } catch (e) { E('characters.' + id, '検証中に例外: ' + e.message); }
+      if (c.mode2) { try { vChar(id, modeChar(c), 'mode2'); } catch (e) { E('characters.' + id + '.mode2', '検証中に例外: ' + e.message); } }
     });
   }
 
@@ -930,8 +945,8 @@ function validateGameData(D) {
     }
   }
 
-  function vChar(id, c) {
-    const P = 'characters.' + id;
+  function vChar(id, c, sub) {
+    const P = 'characters.' + id + (sub ? '.' + sub : '');
     if (c.id !== id) E(P + '.id', 'キー "' + id + '" と一致しません');
     ['name', 'nameEn', 'title', 'blurb'].forEach(k => { if (!isStr(c[k])) E(P + '.' + k, '文字列が必要'); });
     lenWarn(P + '.title', c.title, 12); lenWarn(P + '.blurb', c.blurb, 40);
@@ -1045,7 +1060,7 @@ function validateGameData(D) {
       if (isInt(pr.maxActive) && (pr.maxActive < 1 || pr.maxActive > 3)) E(pp + '.maxActive', '1〜3');
       if (pr.box != null) vBox(pp + '.box', pr.box);
       if (pr.hit != null) vHit(pp + '.hit', pr.hit, true);
-      if (!isObj(pr.look) || ['fuda', 'orb', 'shock', 'beam', 'ghost', 'slash', 'flame', 'puddle'].indexOf(pr.look.style) < 0) E(pp + '.look.style', 'fuda|orb|shock|beam|ghost|slash|flame|puddle');
+      if (!isObj(pr.look) || ['fuda', 'orb', 'shock', 'beam', 'ghost', 'slash', 'flame', 'puddle', 'taiji'].indexOf(pr.look.style) < 0) E(pp + '.look.style', 'fuda|orb|shock|beam|ghost|slash|flame|puddle|taiji');
       else {
         if (pal(c, pr.look.color) == null) E(pp + '.look.color', 'palette のキー名が必要');
         if (pr.look.style === 'ghost' && (!pr.look.clip || !c.clips[pr.look.clip])) E(pp + '.look.clip', 'ghost には実在するクリップ名が必要');
@@ -1798,7 +1813,7 @@ function holdAt(hold, g) {
 
 class Fighter {
   constructor(match, slot, rt, pal2, easy) {
-    this.match = match; this.slot = slot; this.rt = rt; this.ch = rt.ch; this.st = rt.ch.stats;
+    this.match = match; this.slot = slot; this.rt0 = rt; this.rt = rt; this.ch = rt.ch; this.st = rt.ch.stats; this.mode = 0;
     this.pup = new Puppet(rt, pal2);
     this.buf = new InputBuf();
     this.easy = !!easy;
@@ -1808,7 +1823,15 @@ class Fighter {
     this.usedMoves = {}; this.hitMoves = {};
     this.resetRound(false);
   }
+  /* モード変化: 0 = 通常 / 1 = mode2（rt.alt）。体力の最大値はそのまま */
+  setMode(k) {
+    const rt = k && this.rt0.alt ? this.rt0.alt : this.rt0;
+    this.mode = rt === this.rt0 ? 0 : 1;
+    this.rt = rt; this.ch = rt.ch; this.st = rt.ch.stats;
+    this.pup.rt = rt; this.pup.cp.rt = rt;
+  }
   resetRound(half) {
+    if (this.mode) this.setMode(0);
     this.x = CFG.START_X[this.slot]; this.y = 0; this.vx = 0; this.vy = 0; this.dx = 0; this.kbPart = 0;
     this.facing = this.slot === 0 ? 1 : -1;
     this.hp = half ? Math.round(this.maxHp * 0.5) : this.maxHp;
@@ -2178,6 +2201,12 @@ class Fighter {
         const d = Math.min(this.poison.dmg, this.hp - 1);
         this.hp -= d; this.dmgRound += d; this.fx.poison(this);
       }
+    }
+    /* モード変化: 体力が mode2.at 以下になったら切り替わる（1ラウンドに1回。ゲージ少し回復） */
+    if (!this.mode && this.rt0.alt && this.hp > 0 && this.match.phase === 'FIGHTING' && this.hp <= this.maxHp * (this.rt0.ch.mode2.at || 0.5)) {
+      this.setMode(1);
+      this.gauge = Math.min(CFG.GAUGE_MAX, this.gauge + (this.rt0.ch.mode2.gauge || 0));
+      this.fx.modeShift(this, this.rt0.ch.mode2.label || '');
     }
     if (this.chargeStock > 0 && this.match.frame % 24 === 0) this.fx.chargeKeep(this, this.chargeStock / (this.ch.moves.sp1.charge ? this.ch.moves.sp1.charge.max : 1));
     if (this.breakPending) { this.breakPending = false; this.guardBreak(); return; }
@@ -3678,6 +3707,17 @@ const FX = {
     }
     if (k >= 1) { this.addText('MAX', cx, cy + 70, '#ffe94d', 16, 30, 0.6, 'en'); this.addRing(cx, cy, 8, 60, 12, '#ffe94d', 3); }
   },
+  /* モード変化: 黒い輪が広がって「陰転」 */
+  modeShift(f, label) {
+    const c = f.pup.glow(), x = f.x, y = f.y + 100;
+    this.addRing(x, y, 10, 150, 24, '#ffffff', 5);
+    this.addRing(x, y, 6, 110, 18, c, 4);
+    for (let i = 0; i < 18; i++) { const a = i / 18 * 6.283; this.addPart(x, y, Math.cos(a) * 5, Math.sin(a) * 5, 26, 3, i % 2 ? '#ffffff' : c, 0, 0); }
+    this.addText(label + '転', x, y + 110, '#ffffff', 26, 60, 0.9, 'jp');
+    this.flash(0.3, '#ffffff', 10);
+    this.shake(5, 10);
+    this.sfx('gaugeFull', x);
+  },
   /* ため保持: やめた瞬間に「保持」、持っている間は体のまわりに小さな火の粉 */
   chargeStock(f, k) {
     const c = f.pup.glow();
@@ -4213,7 +4253,7 @@ function drawMikoVisual(ctx, pup, j, o) {
   MikoVisual.draw(ctx, j, {
     x: 0, y: 0, facing: o.face, scale: 1, color: LookAdapter.edge(pup.rt.ch, pup.pal), id: pup.rt.id,
     flash: o.ghost ? 0 : pup.flash, alpha: ctx.globalAlpha * (o.ghost ? o.ghostA : 1), chains: chains,
-    clip: pup.cp.name, clipT: pup.cp.t, lite: !!o.lite || Display.level() === 'low' || Display.level() === 'min'
+    clip: pup.cp.name, clipT: pup.cp.t, mode: pup.rt.mode, lite: !!o.lite || Display.level() === 'low' || Display.level() === 'min'
   });
 }
 
@@ -4403,6 +4443,24 @@ function drawProjectiles(ctx, match, alpha) {
         const gr2 = ctx.createLinearGradient(0, 0, len, 0);
         gr2.addColorStop(0, 'rgba(255,255,255,0.9)'); gr2.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.fillStyle = gr2; ctx.fillRect(0, -hgt * 0.14, len * 0.9, hgt * 0.28);
+        break;
+      }
+      /* 陰陽玉: 回る太極図。look.dark = 陰（ほぼ黒で白い点だけ） */
+      case 'taiji': {
+        ctx.translate(x, -y); ctx.scale(p.dir, 1); ctx.rotate(p.age * 0.18);
+        const r = 15 * size;
+        ctx.globalCompositeOperation = 'lighter';
+        for (let k = 3; k >= 1; k--) { ctx.fillStyle = rgba(col, 0.09 * (4 - k)); ctx.beginPath(); ctx.arc(0, 0, r * (1 + k * 0.32), 0, 6.283); ctx.fill(); }
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = '#06070d'; ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.283); ctx.fill();
+        ctx.fillStyle = '#f4f7ff';
+        if (lk.dark) { ctx.beginPath(); ctx.arc(0, -r * 0.5, r * 0.2, 0, 6.283); ctx.fill(); }
+        else {
+          ctx.beginPath(); ctx.arc(0, 0, r, -Math.PI / 2, Math.PI / 2, false); ctx.arc(0, r / 2, r / 2, Math.PI / 2, Math.PI * 1.5, false); ctx.arc(0, -r / 2, r / 2, Math.PI / 2, -Math.PI / 2, true); ctx.fill();
+          ctx.fillStyle = '#06070d'; ctx.beginPath(); ctx.arc(0, r / 2, r * 0.17, 0, 6.283); ctx.fill();
+          ctx.fillStyle = '#f4f7ff'; ctx.beginPath(); ctx.arc(0, -r / 2, r * 0.17, 0, 6.283); ctx.fill();
+        }
+        ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.283); ctx.stroke();
         break;
       }
       /* 鬼火: しずく形の炎がゆらめく（ため撃ちほど大きい） */
@@ -5156,6 +5214,7 @@ const SPECIAL_DESC = {
   maneki:  { sp1: '遠くの相手を引き寄せる。当たったら 強 でつながる', sp2: 'ガードできない掴み', sp3: '弾を受け流して突っ込む', super: 'ガードできない大投げ。弱・強の後につなげてもつかめる' },
   chochin: { sp1: '押しっぱなしでためる鬼火。← かガードでため保持。満タンで転ぶ', sp2: '出始め無敵の対空', sp3: '転がって弾をすり抜ける', super: 'ゆっくり進む大きな鬼火（6ヒット）' },
   kappa:   { sp1: '前の床に水たまり（罠）。踏むとガードできず転んで毒', sp2: '出始め無敵の対空', sp3: '弾の下をすべる下段', super: '進む大波（5ヒット＋毒）' },
+  onmyo:   { sp1: '陽: まっすぐ飛ぶ陽玉 / 陰: 遅く重い陰玉（2ヒット・弾に勝つ）', sp2: '陽: 出始め無敵の対空 / 陰: 遠くの相手を引き寄せる', sp3: '陽: 転がって弾をすり抜ける / 陰: 無敵の速い踏み込み', super: '陽: 進む太極図（6ヒット） / 陰: 突進の連撃' },
 };
 /* キャラだけの仕組み（技一覧の最後の行） */
 const UNIQUE_ROW = {
@@ -5166,6 +5225,7 @@ const UNIQUE_ROW = {
   maneki:  ['手招きコンボ', '手招きが当たったら 強', '同じ', '引き寄せて、そのまま連続技に'],
   chochin: ['ため撃ち', '必殺技のボタンを押しっぱなし', '同じ', '最大約0.5秒。ため中に ← かガードで保持できる'],
   kappa:   ['毒', '水たまり・大祓が当たる', '同じ', 'しばらく体力が減り続ける（毒では倒れない）'],
+  onmyo:   ['陰転（モード変化）', '体力が半分を切ると自動で', '同じ', '陰に変わる。速くなり、必殺技と立ち強が変わる'],
 };
 function normalDesc(m, base) {
   const h = m.hit || {}, t = [];
@@ -5251,6 +5311,13 @@ COMBO_ROWS.kappa = [
   ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
   ['罠', '強 → 必殺（水たまり）', '当たったら足元に罠。すぐ動かないと転んで毒'],
   ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '6ヒット＋毒']
+];
+COMBO_ROWS.onmyo = [
+  ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。陽玉で締める'],
+  ['下段から', '↓弱 → 弱 → 強 → ←+必殺', '4ヒット。転輪で締める'],
+  ['陰: 引き寄せ', '→+必殺 → 強 → ←+必殺', '陰縛りで寄せて3ヒット'],
+  ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
+  ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '陽は太極図、陰は黒天']
 ];
 const SYSTEM_ROWS = [
   ['守り', 'ガード中に →+強 = ガードキャンセル（ゲージ半分） / 弱+強 = 押し返し'],
@@ -6013,6 +6080,22 @@ const VS_LINES = {
   'kappa>maneki': ['招き猫さん、小判よりきゅうりがいい', '当店、きゅうりは扱っておりません'],
   'chochin>kappa': ['河童くん、水はかけないでね', '火には水。相性ばっちりだね'],
   'kappa>chochin': ['提灯さん、湿気には弱いでしょ', 'ぼうっ。乾かしてあげる'],
+  'onmyo>miko':    ['巫女さん、陰と陽の釣り合いを見せましょう', '回る玉…目が回りそうです'],
+  'miko>onmyo':    ['陰陽玉さん、どちらの顔で来ますか', 'まずは陽で。半分削れたら、陰です'],
+  'onmyo>komainu': ['阿と吽。あなたも二つで一つですね', '狛犬は、ひとりでも門を守る'],
+  'komainu>onmyo': ['白黒つけに来たか', 'ええ。白黒、両方つけます'],
+  'onmyo>oni404':  ['あなたの闇、少し分けてください', '…闇、404'],
+  'oni404>onmyo':  ['…白い方、消す', '消すと、黒い方が出てきますよ'],
+  'onmyo>fox':     ['回るのは、わたしも得意です', 'じゃあ無限に回りっこしよ！'],
+  'fox>onmyo':     ['くるくる玉ちゃん、化かしてあげる', '化かされても、陰陽はひっくり返るだけ'],
+  'onmyo>tengu':   ['風向きも、陰と陽で変わります', '風は、我が決める'],
+  'tengu>onmyo':   ['玉ごとき、風で転がしてやる', '転がるほど、よく回ります'],
+  'onmyo>maneki':  ['招き猫さん、陰と陽、どちらを招きます？', 'もちろん、陽のお客様を'],
+  'maneki>onmyo':  ['いらっしゃいませ。白と黒のお客様', 'お会計は、半分ずつで'],
+  'onmyo>chochin': ['提灯さん、闇を照らしてくれますか', 'ぼうっ。黒い方も照らすよ'],
+  'chochin>onmyo': ['玉さん、夜になると黒くなるの？', '夜ではなく、半分を切るとです'],
+  'onmyo>kappa':   ['河童さん、水と火のように釣り合いましょう', 'きゅうりは半分こしようね'],
+  'kappa>onmyo':   ['玉さん、白い方から感染させるね', '黒い方は、もっとしつこいですよ'],
   'mirror':         ['偽物め', 'それはこちらの台詞']
 };
 function vsLines(a, b) { return VS_LINES[a === b ? 'mirror' : a + '>' + b] || null; }
@@ -6059,6 +6142,22 @@ const WIN_LINES = {
   'tengu>kappa': '空に水たまりはない',
   'maneki>chochin': 'お化けのお客さま、またのお越しを',
   'maneki>kappa': 'きゅうりは、またの機会に',
+  'onmyo>miko': '祓いも呪いも、表と裏です',
+  'onmyo>komainu': '阿吽の間に、陰陽あり',
+  'onmyo>oni404': '闇は、ちゃんと見つかりました',
+  'onmyo>fox': '回り続けても、最後は止まります',
+  'onmyo>tengu': '風向き、変わりましたね',
+  'onmyo>maneki': '陰の福も、招いてしまいましたね',
+  'onmyo>chochin': '明かりと影、ちょうど半分',
+  'onmyo>kappa': '水も火も、陰陽のうち',
+  'miko>onmyo': '陰も陽も、祓わせていただきました',
+  'komainu>onmyo': '白黒、門の前でつけた',
+  'oni404>onmyo': '白も黒も、404',
+  'fox>onmyo': '玉、転がしちゃった',
+  'tengu>onmyo': '転がる玉は、風に勝てぬ',
+  'maneki>onmyo': '白黒のお客様、毎度ありがとうございました',
+  'chochin>onmyo': '黒い方も、照らしちゃった',
+  'kappa>onmyo': '白も黒も、感染完了',
   'mirror': '本物は、ひとりで十分'
 };
 function winLine(w, l) { return WIN_LINES[w === l ? 'mirror' : w + '>' + l] || null; }
@@ -6640,7 +6739,8 @@ Game.scenes.fight = {
     tengu:   [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'sp2'], ['5H', 'super']],
     maneki:  [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['sp1', '5H', 'sp3'], ['sp1', '5L', '5L', '5H', 'sp3']],
     chochin: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'jL', 'jH'], ['5H', 'super']],
-    kappa:   [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['2H', 'jL', 'jH'], ['5H', 'super']]
+    kappa:   [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['2H', 'jL', 'jH'], ['5H', 'super']],
+    onmyo:   [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp3'], ['2H', 'jL', 'jH'], ['5H', 'super']]
   },
   STEP_LABEL: { '5L': '弱', '2L': '↓弱', '5H': '強', '2H': '↓強', jL: 'J弱', jH: 'J強', jS: 'J必殺', sp1: '必殺', sp2: '→+必殺', sp3: '←+必殺', super: '↓+必殺', throw: '投げ' },
   /* かんたん操作でないときの必殺技の表記 */
@@ -7556,7 +7656,10 @@ const CPU_CHAR = {
   /* 提灯: 遠くでは鬼火をためて撃つ */
   chochin: { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'sp2'], ['5H', 'sp1']], punish: ['5H', 'sp1'] },
   /* 河童: 遠くでは水たまりを置いて待つ */
-  kappa:   { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['2H', 'sp2'], ['5H', 'sp3']], punish: ['5H', 'sp3'] }
+  kappa:   { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['2H', 'sp2'], ['5H', 'sp3']], punish: ['5H', 'sp3'] },
+  /* 陰陽玉: 陽は弾と対空で待つ。陰（':2'）は引き寄せと踏み込みで攻める */
+  onmyo:   { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp3'], ['2H', 'sp2'], ['5H', 'sp1']], punish: ['5H', 'sp3'] },
+  'onmyo:2': { aa: '5H', zone: 'sp1', mid: ['sp2', '5H', 'sp3'], routes: [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['5H', 'sp3']], punish: ['5H', 'sp3'] }
 };
 class CpuPolicy {
   /* mode: 'test' = ランダムに全技を踏む / 'dummy' = 立ち・ガード固定の練習相手 / 'cpu' = 対戦用（level: easy|normal|hard） */
@@ -7665,7 +7768,7 @@ class CpuPolicy {
   }
   nextCpu(m, slot) {
     const me = m.fighters[slot], opp = m.fighters[1 - slot], rng = m.rng, L = this.L;
-    const C = CPU_CHAR[me.rt.id] || CPU_CHAR.miko;
+    const C = (me.mode && CPU_CHAR[me.rt.id + ':2']) || CPU_CHAR[me.rt.id] || CPU_CHAR.miko;
     if (!m.controlsOn()) { this.q.length = 0; this.combo = null; return 0; }
     const F = this.fwdBit(me), Bk = this.backBit(me), dist = Math.abs(opp.x - me.x);
     /* 倒れた相手に追い打ち（ふつう・つよい。1回のダウンにつき1回） */

@@ -39,7 +39,7 @@ window.GAME_DATA = {
     banners: { round: "ROUND {n}", finalRound: "FINAL ROUND", fight: "FIGHT!", ko: "浄化完了", timeup: "TIME UP", draw: "DRAW", perfect: "PERFECT", superReady: "大祓 READY", win: "WIN" },
     glitchWords: ["SEGFAULT", "NULL", "404", "0xDEADBEEF", "STACK OVERFLOW"]
   },
-  roster: ["miko", "komainu", "oni404", "fox", "tengu", "maneki", "chochin", "kappa"],
+  roster: ["miko", "komainu", "oni404", "fox", "tengu", "maneki", "chochin", "kappa", "onmyo"],
   stage: {
     name: "電脳神社・参道", subtitle: "ネオン鳥居の境内",
     colors: { skyTop: "#05060f", skyBottom: "#120a2e", torii: "#ff3b5c", grid: "#19f3ff", floor: "#0b0a22", lantern: "#ffd24a", accent: "#ff4fa3" }
@@ -1189,6 +1189,78 @@ window.GAME_DATA = {
         nami: { life: 100, vx: 5, vy: 0, ground: true, box: { x: -50, y: 0, w: 100, h: 120 }, hits: 5, hitEvery: 7, maxActive: 1, priority: 3, hit: { chip: 8, level: "mid", effect: "launch", impact: 3, damage: 46, hitstun: 0, blockstun: 12, hitstop: 5, knock: { hit: 0, block: 4 }, launch: { vx: 0.6, vy: 6.5 }, juggle: 8, gauge: { hit: 0, block: 0 }, poison: { every: 30, ticks: 8, dmg: 6 } }, look: { style: "shock", color: "accent", size: 2.4 } }
       },
       quotes: { select: "きゅうりは持ってきた？", intro: [ "河童ウイルス、感染開始。" ], win: [ "足元、気をつけて。", "感染、完了です。" ], lose: [ "皿が…乾く…" ] }
+    },
+    /* ---- 追加キャラ3（newchars3.js で生成） ---- */
+    onmyo: {
+      id: "onmyo",
+      name: "陰陽玉",
+      nameEn: "YIN-YANG ORB",
+      title: "モード変化型",
+      blurb: "体力が半分を切ると「陰」に変わる。陽は弾で守り、陰は引き寄せて攻める。",
+      ratings: { power: 3, speed: 3, range: 4, defense: 3 },
+      stats: { dmgMul: 0.92, hp: 1000, walkF: 3.3, walkB: 2.9, jumpVy: 15, jumpVx: 3.6, gravity: 0.74, airJumps: 0, prejump: 4, landLag: 3, dashF: { frames: 18, speed: 8 }, dashB: { frames: 18, speed: 5.8, invuln: 6 }, gaugeMul: 1 },
+      boxes: { push: { stand: { w: 52, h: 100 }, crouch: { w: 56, h: 70 }, air: { w: 44, h: 100 } }, hurt: { stand: [ { x: -9, y: 139, w: 32, h: 32 }, { x: -26, y: 60, w: 54, h: 82 }, { x: -24, y: 0, w: 48, h: 64 } ], crouch: [ { x: 17, y: 92, w: 32, h: 32 }, { x: -28, y: 0, w: 58, h: 74 } ], air: [ { x: -24, y: 20, w: 50, h: 149 }, { x: -12, y: 137, w: 32, h: 32 } ] } },
+      look: { palette: { skin: "#ffe0cc", hair: "#1a1033", primary: "#f4f7ff", secondary: "#ff3b5c", accent: "#b67cff", glow: "#19f3ff", outline: "#0a0620", eye: "#19f3ff" }, paletteP2: { skin: "#ffe0cc", hair: "#2b1033", primary: "#e8ddff", secondary: "#a56bff", accent: "#b67cff", glow: "#ff4fa3", outline: "#0a0620", eye: "#ff4fa3" }, body: { torsoLen: 52, torsoWTop: 30, torsoWBottom: 24, neckLen: 8, headR: 17, shoulderDrop: 6, uArmLen: 30, fArmLen: 28, handR: 6, thighLen: 40, shinLen: 40, footLen: 20, footH: 8, limbW: { uArm: [ 11, 9 ], fArm: [ 9, 7 ], thigh: [ 16, 13 ], shin: [ 12, 9 ] } }, colors: { head: "skin", neck: "skin", torso: "primary", uArm: "primary", fArm: "primary", hand: "skin", thigh: "secondary", shin: "secondary", foot: "accent" }, prop: { kind: "gohei", len: 46, thick: 4, angle: 0, color: "accent" }, neon: { tubeW: 3, glowW: 8, glowAlpha: 0.24, coreW: 1, fill: 0.9 }, decor: [], chains: [] },
+      feel: { breath: { amp: 0.012, period: 90 }, jump: { sx: 0.94, sy: 1.08, frames: 4 }, land: { sx: 1.1, sy: 0.88, frames: 6 }, dash: { sx: 1.06, sy: 0.97, frames: 5 }, hitShake: { amp: [ 1, 2, 3, 3.5 ] }, recoil: { x: [ 3, 6, 10, 14 ], rot: [ 2, 4, 7, 10 ], frames: 4 }, squashHit: { sx: 1.06, sy: 0.94, frames: 3 } },
+      basePose: { rootX: 0, rootY: 0, rot: 0, torso: 6, head: -3, uarmF: 20, farmF: 140, uarmB: 14, farmB: 60, thighF: 22, shinF: 34, footF: 12, thighB: -14, shinB: 14, footB: 28 },
+      clips: {
+        idle: { length: 72, loop: true, plant: "feet", blend: 6, keys: [ { f: 0, ease: "inOutQuad", p: "base" }, { f: 36, ease: "inOutQuad", p: { torso: 8, head: -4, uarmF: 24, farmF: 135, uarmB: 18, farmB: 56, thighF: 26, shinF: 42, footF: 16, thighB: -15, shinB: 18, footB: 33 } } ] },
+        walkF: { length: 32, loop: true, plant: "feet", blend: 5, events: [ { f: 0, sfx: "step" }, { f: 16, sfx: "step" } ], keys: [ { f: 0, ease: "inOutQuad", p: { torso: 8, thighF: 30, shinF: 10, footF: -20, thighB: -24, shinB: 28, footB: 20, uarmF: 12, farmF: 145, uarmB: 44, farmB: 62 } }, { f: 8, ease: "inOutQuad", p: { thighF: 6, shinF: 8, footF: 2, thighB: 28, shinB: 60, footB: 30, uarmF: 18, uarmB: 36 } }, { f: 16, ease: "inOutQuad", p: { thighF: -24, shinF: 28, footF: 20, thighB: 30, shinB: 10, footB: -20, uarmF: 26, uarmB: 30 } }, { f: 24, ease: "inOutQuad", p: { thighF: 28, shinF: 60, footF: 30, thighB: 6, shinB: 8, footB: 2, uarmF: 18, uarmB: 36 } } ] },
+        walkB: { length: 40, loop: true, plant: "feet", blend: 5, events: [ { f: 0, sfx: "step" }, { f: 20, sfx: "step" } ], keys: [ { f: 0, ease: "inOutQuad", p: { torso: 4, thighF: 18, shinF: 22, footF: 4, thighB: -22, shinB: 24, footB: 2 } }, { f: 10, ease: "inOutQuad", p: { thighF: 4, shinF: 8, footF: 2, thighB: -6, shinB: 44, footB: 26 } }, { f: 20, ease: "inOutQuad", p: { thighF: -22, shinF: 24, footF: 2, thighB: 18, shinB: 22, footB: 4 } }, { f: 30, ease: "inOutQuad", p: { thighF: -6, shinF: 44, footF: 26, thighB: 4, shinB: 8, footB: 2 } } ] },
+        crouch: { length: 60, loop: true, plant: "feet", blend: 4, keys: [ { f: 0, ease: "inOutQuad", p: { torso: 30, head: -12, uarmF: 32, farmF: 155, uarmB: 35, farmB: 80, thighF: 75, shinF: 125, footF: 50, thighB: 60, shinB: 125, footB: 65 } }, { f: 30, ease: "inOutQuad", p: { torso: 32, head: -13, thighF: 77, shinF: 128, footF: 51, thighB: 62, shinB: 128, footB: 66 } } ] },
+        jumpUp: { length: 18, plant: "root", blend: 3, keys: [ { f: 6, ease: "outCubic", p: { torso: 2, thighF: 60, shinF: 95, footF: 35, thighB: 18, shinB: 55, footB: 30, uarmF: 57, farmF: 125, uarmB: 50, farmB: 70 } }, { f: 18, ease: "inOutQuad", p: { torso: 0, head: 0, thighF: 68, shinF: 105, thighB: 22, shinB: 62 } } ] },
+        jumpFall: { length: 24, loop: true, plant: "root", blend: 6, keys: [ { f: 0, ease: "inOutQuad", p: { torso: 4, thighF: 30, shinF: 40, footF: 20, thighB: -6, shinB: 44, footB: 30, uarmF: 42, farmF: 115, uarmB: 40, farmB: 60 } }, { f: 12, ease: "inOutQuad", p: { thighF: 26, shinF: 34, thighB: -2, shinB: 38, uarmF: 50, uarmB: 46 } } ] },
+        dashF: { length: 18, plant: "feet", blend: 2, keys: [ { f: 0, ease: "linear", p: { torso: 24, head: -8, thighF: 50, shinF: 80, footF: 30, thighB: -40, shinB: 50, footB: 10, uarmF: -38, farmF: 135, uarmB: 60, farmB: 80 } }, { f: 9, ease: "inOutQuad", p: { torso: 26, thighF: -35, shinF: 50, footF: 10, thighB: 50, shinB: 80, footB: 30, uarmF: 37, farmF: 145, uarmB: -25, farmB: 70 } }, { f: 17, ease: "inOutQuad", p: { torso: 24, thighF: 50, shinF: 80, footF: 30, thighB: -40, shinB: 50, footB: 10, uarmF: -38, uarmB: 60 } } ] },
+        dashB: { length: 18, plant: "feet", blend: 2, keys: [ { f: 4, ease: "outCubic", p: { rootY: 22, rot: -6, torso: -8, thighF: 30, shinF: 60, footF: 25, thighB: 10, shinB: 50, footB: 35 } }, { f: 12, ease: "inOutQuad", p: { rootY: 10, rot: -3, torso: -4 } }, { f: 17, ease: "inQuad", p: { rootY: 0, rot: 0, torso: 6, thighF: 40, shinF: 70, footF: 30, thighB: 20, shinB: 60, footB: 40 } } ] },
+        landing: { length: 6, plant: "feet", blend: 1, keys: [ { f: 0, ease: "linear", p: { torso: 30, thighF: 60, shinF: 100, footF: 40, thighB: 40, shinB: 90, footB: 50, uarmF: 32, farmF: 145, uarmB: 35, farmB: 70 } }, { f: 5, ease: "inOutQuad", p: "base" } ] },
+        guardStand: { length: 30, loop: true, plant: "feet", blend: 2, keys: [ { f: 0, ease: "inOutQuad", p: { torso: 10, head: 2, uarmF: 52, farmF: 118, uarmB: 44, farmB: 112, thighF: 26, shinF: 42, footF: 16, thighB: -15, shinB: 18, footB: 33 } }, { f: 15, ease: "inOutQuad", p: { torso: 8, uarmF: 50, farmF: 120 } } ] },
+        guardCrouch: { length: 30, loop: true, plant: "feet", blend: 2, keys: [ { f: 0, ease: "inOutQuad", p: { torso: 30, head: -12, uarmF: 52, farmF: 118, uarmB: 44, farmB: 112, thighF: 75, shinF: 125, footF: 50, thighB: 60, shinB: 125, footB: 65 } }, { f: 15, ease: "inOutQuad", p: { torso: 32, uarmF: 50, farmF: 120 } } ] },
+        hurtHigh: { length: 16, plant: "feet", blend: 1, keys: [ { f: 2, ease: "outExpo", p: { torso: -16, head: -22, rootX: -6, uarmF: -5, farmF: 25, uarmB: -20, farmB: 30, thighF: 20, shinF: 34, footF: 12, thighB: -18, shinB: 10, footB: 24 } }, { f: 12, ease: "inOutQuad", p: { torso: -8, head: -12, rootX: -3 } } ] },
+        hurtLow: { length: 16, plant: "feet", blend: 1, keys: [ { f: 2, ease: "outExpo", p: { torso: 34, head: 14, rootX: -4, uarmF: 10, farmF: 40, uarmB: -8, farmB: 30, thighF: 36, shinF: 60, footF: 24, thighB: -8, shinB: 40, footB: 25 } }, { f: 12, ease: "inOutQuad", p: { torso: 26, head: 8 } } ] },
+        hurtAir: { length: 24, plant: "root", blend: 1, keys: [ { f: 3, ease: "outCubic", p: { rot: -25, torso: -14, head: -18, uarmF: -20, farmF: 20, uarmB: -30, farmB: 20, thighF: 30, shinF: 50, footF: 20, thighB: 10, shinB: 50, footB: 20 } }, { f: 24, ease: "inOutQuad", p: { rot: -80, torso: -6, thighF: 40, shinF: 70 } } ] },
+        down: { length: 40, loop: true, plant: "root", blend: 3, keys: [ { f: 0, ease: "inOutQuad", p: { rot: -90, rootY: -62, torso: 0, head: -5, uarmF: 20, farmF: 10, uarmB: 30, farmB: 15, thighF: 10, shinF: 20, footF: 0, thighB: 5, shinB: 15, footB: 0 } }, { f: 20, ease: "inOutQuad", p: { head: -3, uarmF: 22 } } ] },
+        wakeup: { length: 18, plant: "root", blend: 1, keys: [ { f: 0, ease: "linear", p: { rot: -90, rootY: -62, torso: 0, head: -5, uarmF: 2, farmF: 75, uarmB: 30, farmB: 15, thighF: 10, shinF: 20, footF: 0, thighB: 5, shinB: 15, footB: 0 } }, { f: 8, ease: "outCubic", p: { rot: -30, rootY: -30, torso: 35, head: 10, uarmF: 7, farmF: 125, uarmB: 15, farmB: 50, thighF: 60, shinF: 110, footF: 50, thighB: 40, shinB: 100, footB: 60 } }, { f: 17, ease: "inOutQuad", p: "base" } ] },
+        thrown: { length: 20, loop: true, plant: "root", blend: 2, keys: [ { f: 0, ease: "inOutQuad", p: { rot: -20, rootY: -10, torso: -10, head: -15, uarmF: 70, farmF: 30, uarmB: 60, farmB: 40, thighF: 40, shinF: 60, footF: 20, thighB: 20, shinB: 50, footB: 20 } }, { f: 10, ease: "inOutQuad", p: { rot: -26, uarmF: 80, uarmB: 50, thighF: 34 } } ] },
+        intro: { length: 60, plant: "feet", blend: 6, keys: [ { f: 20, ease: "inOutCubic", p: { torso: 42, head: 10, uarmF: 25, farmF: 105, uarmB: 25, farmB: 105 } }, { f: 34, ease: "linear", p: { torso: 42, head: 10 } }, { f: 52, ease: "inOutCubic", p: "base" } ] },
+        win: { length: 90, loop: true, plant: "feet", blend: 6, keys: [ { f: 0, ease: "inOutQuad", p: { torso: -4, head: -6, uarmF: 150, farmF: 25, uarmB: 20, farmB: 50, thighF: 20, shinF: 28, footF: 8, thighB: -12, shinB: 12, footB: 24 } }, { f: 45, ease: "inOutQuad", p: { uarmF: 158, torso: -6 } } ] },
+        lose: { length: 40, plant: "feet", blend: 6, keys: [ { f: 20, ease: "outCubic", p: { torso: 38, head: 20, uarmF: 10, farmF: 30, uarmB: 5, farmB: 25, thighF: 50, shinF: 90, footF: 40, thighB: 30, shinB: 80, footB: 50 } } ] },
+        throwHit: { length: 48, plant: "feet", blend: 1, keys: [ { f: 0, ease: "linear", p: { torso: 20, rootX: 8, uarmF: 85, farmF: 5, uarmB: 85, farmB: 5 } }, { f: 12, ease: "inOutCubic", p: { torso: -10, rootX: 0, uarmF: 170, farmF: 10, uarmB: 170, farmB: 10, thighF: 26, shinF: 36, footF: 10 } }, { f: 26, ease: "outExpo", p: { torso: 35, rootX: 10, uarmF: 40, farmF: 5, uarmB: 40, farmB: 5 } }, { f: 30, ease: "linear", p: { rootX: 12 } }, { f: 47, ease: "inOutQuad", p: "base" } ] },
+        "5L": { length: 17, plant: "feet", blend: 2, keys: [ { f: 3, ease: "outQuad", p: { uarmF: 40, farmF: 100 } }, { f: 5, ease: "outExpo", p: { torso: 12, uarmF: 92, farmF: 0, rootX: 6 } }, { f: 8, ease: "linear", p: { torso: 12, uarmF: 92, farmF: 0, rootX: 6 } }, { f: 17, ease: "inOutQuad", p: "base" } ] },
+        "2L": { length: 17, plant: "feet", blend: 2, base: "crouch", keys: [ { f: 3, ease: "outQuad", p: { thighF: 60, shinF: 100 } }, { f: 5, ease: "outExpo", p: { torso: 14, head: -8, thighF: 86, shinF: 6, footF: 0, rootX: 6 } }, { f: 8, ease: "linear", p: { torso: 14, head: -8, thighF: 86, shinF: 6, footF: 0, rootX: 6 } }, { f: 17, ease: "inOutQuad", p: "base" } ] },
+        "5H": { length: 33, plant: "feet", blend: 3, keys: [ { f: 6, ease: "outQuad", p: { torso: -12, uarmF: 160, farmF: 30, rootX: -6 } }, { f: 11, ease: "outExpo", p: { torso: 28, head: 8, uarmF: 84, farmF: 0, uarmB: 30, rootX: 16, thighF: 40, shinF: 40 } }, { f: 15, ease: "linear", p: { torso: 28, head: 8, uarmF: 84, farmF: 0, uarmB: 30, rootX: 16, thighF: 40, shinF: 40 } }, { f: 33, ease: "inOutQuad", p: "base" } ] },
+        "2H": { length: 34, plant: "feet", blend: 3, base: "crouch", keys: [ { f: 5, ease: "outQuad", p: { torso: 30, thighF: 50, shinF: 110 } }, { f: 9, ease: "outExpo", p: { torso: 40, head: -14, thighF: 94, shinF: 4, footF: -10, rootX: 8, uarmF: 0, farmF: 30, uarmB: 60 } }, { f: 13, ease: "linear", p: { torso: 40, head: -14, thighF: 94, shinF: 4, footF: -10, rootX: 8, uarmF: 0, farmF: 30, uarmB: 60 } }, { f: 34, ease: "inOutQuad", p: "base" } ] },
+        jL: { length: 18, plant: "root", blend: 2, base: "jumpFall", keys: [ { f: 2, ease: "outQuad", p: { thighF: 50, shinF: 110 } }, { f: 4, ease: "outExpo", p: { torso: -6, thighF: 92, shinF: 0, uarmF: 20, farmF: 60 } }, { f: 13, ease: "linear", p: { torso: -6, thighF: 92, shinF: 0, uarmF: 20, farmF: 60 } }, { f: 18, ease: "inOutQuad", p: "base" } ] },
+        jH: { length: 24, plant: "root", blend: 3, base: "jumpFall", keys: [ { f: 4, ease: "outQuad", p: { torso: -20, uarmF: 170, farmF: 20 } }, { f: 8, ease: "outExpo", p: { torso: 40, head: 20, uarmF: 60, farmF: 0, uarmB: 40, thighF: 30, shinF: 80 } }, { f: 14, ease: "linear", p: { torso: 40, head: 20, uarmF: 60, farmF: 0, uarmB: 40, thighF: 30, shinF: 80 } }, { f: 24, ease: "inOutQuad", p: "base" } ] },
+        throw: { length: 27, plant: "feet", blend: 3, keys: [ { f: 3, ease: "outQuad", p: { uarmF: 60, farmF: 60, uarmB: 50, farmB: 60 } }, { f: 5, ease: "outExpo", p: { torso: 20, uarmF: 80, farmF: 30, uarmB: 80, farmB: 30, rootX: 10 } }, { f: 7, ease: "linear", p: { torso: 20, uarmF: 80, farmF: 30, uarmB: 80, farmB: 30, rootX: 10 } }, { f: 27, ease: "inOutQuad", p: "base" } ] },
+        sp1: { length: 40, plant: "feet", blend: 3, keys: [ { f: 7, ease: "outQuad", p: { torso: -10, head: -6, uarmF: 40, farmF: 90, uarmB: 40, farmB: 90, rootY: 4 } }, { f: 13, ease: "outExpo", p: { torso: 14, head: 4, uarmF: 92, farmF: 0, uarmB: 86, farmB: 0, rootX: 8 } }, { f: 22, ease: "linear", p: { torso: 14, head: 4, uarmF: 92, farmF: 0, uarmB: 86, farmB: 0, rootX: 8 } }, { f: 40, ease: "inOutQuad", p: "base" } ] },
+        sp2: { length: 40, plant: "feet", blend: 3, keys: [ { f: 3, ease: "outQuad", p: { torso: 20, rootY: -8 } }, { f: 5, ease: "outExpo", p: { torso: -14, head: -16, uarmF: 170, farmF: 0, uarmB: 150, farmB: 10 } }, { f: 16, ease: "linear", p: { torso: -14, head: -16, uarmF: 170, farmF: 0, uarmB: 150, farmB: 10 } }, { f: 40, ease: "inOutQuad", p: "base" } ] },
+        sp3: { length: 40, plant: "feet", blend: 3, keys: [ { f: 7, ease: "outQuad", p: { torso: 40, head: 20, rootY: -10 } }, { f: 12, ease: "outExpo", p: { torso: 70, head: 30, rootX: 12, rootY: -24, uarmF: 120, uarmB: 120 } }, { f: 30, ease: "linear", p: { torso: 70, head: 30, rootX: 12, rootY: -24, uarmF: 120, uarmB: 120 } }, { f: 40, ease: "inOutQuad", p: "base" } ] },
+        super: { length: 59, plant: "feet", blend: 3, keys: [ { f: 6, ease: "outQuad", p: { torso: -16, head: -12, uarmF: 170, farmF: 10, uarmB: 170, farmB: 10, rootY: 6 } }, { f: 10, ease: "outExpo", p: { torso: 24, head: 6, uarmF: 96, farmF: 0, uarmB: 90, farmB: 0, rootX: 12 } }, { f: 35, ease: "linear", p: { torso: 24, head: 6, uarmF: 96, farmF: 0, uarmB: 90, farmB: 0, rootX: 12 } }, { f: 59, ease: "inOutQuad", p: "base" } ] },
+        in5H: { length: 29, plant: "feet", blend: 3, keys: [ { f: 5, ease: "outQuad", p: { torso: 10, uarmF: 150, farmF: 60, rootX: -4 } }, { f: 9, ease: "outExpo", p: { torso: 40, head: 10, uarmF: 96, farmF: -10, uarmB: 20, rootX: 18, thighF: 46, shinF: 40 } }, { f: 13, ease: "linear", p: { torso: 40, head: 10, uarmF: 96, farmF: -10, uarmB: 20, rootX: 18, thighF: 46, shinF: 40 } }, { f: 29, ease: "inOutQuad", p: "base" } ] },
+        insp1: { length: 40, plant: "feet", blend: 3, keys: [ { f: 8, ease: "outQuad", p: { torso: 20, head: -10, uarmF: 160, farmF: 40, uarmB: 150, farmB: 40, rootY: -6 } }, { f: 15, ease: "outExpo", p: { torso: 30, head: 0, uarmF: 90, farmF: 0, uarmB: 80, farmB: 0, rootX: 8 } }, { f: 24, ease: "linear", p: { torso: 30, head: 0, uarmF: 90, farmF: 0, uarmB: 80, farmB: 0, rootX: 8 } }, { f: 40, ease: "inOutQuad", p: "base" } ] },
+        insp2: { length: 48, plant: "feet", blend: 3, keys: [ { f: 8, ease: "outQuad", p: { torso: 10, uarmF: 40, farmF: 60 } }, { f: 14, ease: "outExpo", p: { torso: 30, head: 4, uarmF: 92, farmF: -10, rootX: 10, thighF: 40, shinF: 40 } }, { f: 28, ease: "linear", p: { torso: 30, head: 4, uarmF: 92, farmF: -10, rootX: 10, thighF: 40, shinF: 40 } }, { f: 48, ease: "inOutQuad", p: "base" } ] },
+        insp3: { length: 39, plant: "feet", blend: 3, keys: [ { f: 5, ease: "outQuad", p: { torso: 40, head: -10, rootY: -12, uarmF: 160, uarmB: 160 } }, { f: 9, ease: "outExpo", p: { torso: 60, head: 10, rootX: 14, rootY: -14, uarmF: 100, farmF: 0, uarmB: 120, thighF: 60, shinF: 50, thighB: -40 } }, { f: 25, ease: "linear", p: { torso: 60, head: 10, rootX: 14, rootY: -14, uarmF: 100, farmF: 0, uarmB: 120, thighF: 60, shinF: 50, thighB: -40 } }, { f: 39, ease: "inOutQuad", p: "base" } ] },
+        insuper: { length: 70, plant: "feet", blend: 3, keys: [ { f: 6, ease: "outQuad", p: { torso: 30, head: -12, uarmF: 150, farmF: 40, uarmB: 150, farmB: 40, rootY: -8 } }, { f: 10, ease: "outExpo", p: { torso: 50, head: 10, uarmF: 100, farmF: 0, uarmB: 110, farmB: 0, rootX: 16, thighF: 50, shinF: 50, thighB: -40 } }, { f: 56, ease: "linear", p: { torso: 50, head: 10, uarmF: 100, farmF: 0, uarmB: 110, farmB: 0, rootX: 16, thighF: 50, shinF: 50, thighB: -40 } }, { f: 70, ease: "inOutQuad", p: "base" } ] }
+      },
+      moves: {
+        "5L": { kind: "normal", name: "立ち弱（掌打）", stance: "stand", startup: 5, active: 3, recovery: 9, boxes: [ { f0: 6, f1: 8, x: 30, y: 84, w: 57, h: 28 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 1, damage: 28, hitstun: 19, blockstun: 11, hitstop: 6, knock: { hit: 8, block: 10 }, gauge: { hit: 25, block: 12 } }, cancel: { into: [ "5L", "2L", "5H", "2H", "sp1", "sp2", "super" ], frames: 14 }, trail: { from: "handF", color: "glow", width: 9, frames: 6 }, sfx: "swingL" },
+        "2L": { kind: "normal", otg: true, name: "しゃがみ弱（足払い小）", stance: "crouch", startup: 5, active: 3, recovery: 9, boxes: [ { f0: 6, f1: 8, x: 28, y: 10, w: 72, h: 24 } ], hit: { chip: 0, level: "low", effect: "stun", impact: 1, damage: 24, hitstun: 20, blockstun: 12, hitstop: 6, knock: { hit: 8, block: 10 }, gauge: { hit: 25, block: 12 } }, cancel: { into: [ "5L", "2L", "5H", "2H", "sp1", "sp2", "super" ], frames: 14 }, sfx: "swingL" },
+        "5H": { kind: "normal", name: "立ち強（陽玉打ち）", stance: "stand", startup: 11, active: 4, recovery: 18, boxes: [ { f0: 12, f1: 15, x: 26, y: 60, w: 74, h: 56 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 3, damage: 76, hitstun: 23, blockstun: 15, hitstop: 10, knock: { hit: 16, block: 20 }, gauge: { hit: 45, block: 22 } }, cancel: { into: [ "sp1", "sp2", "sp3", "super" ], frames: 16 }, trail: { from: "handF", color: "glow", width: 14, frames: 8 }, sfx: "swingH" },
+        "2H": { kind: "normal", name: "しゃがみ強（払い）", stance: "crouch", startup: 9, active: 4, recovery: 21, boxes: [ { f0: 10, f1: 13, x: 26, y: 0, w: 79, h: 26 } ], hit: { chip: 0, level: "low", effect: "launch", impact: 3, damage: 56, hitstun: 0, blockstun: 12, hitstop: 10, knock: { hit: 0, block: 18 }, launch: { vx: 1.5, vy: 9.5 }, juggle: 3, gauge: { hit: 40, block: 20 } }, cancel: { into: [ "sp2", "super", "jump" ], frames: 14 }, sfx: "swingH" },
+        jL: { kind: "normal", name: "ジャンプ弱", stance: "air", startup: 4, active: 9, recovery: 5, landLag: 3, boxes: [ { f0: 5, f1: 13, x: 18, y: 30, w: 76, h: 46 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 1, damage: 26, hitstun: 16, blockstun: 12, hitstop: 6, knock: { hit: 6, block: 8 }, gauge: { hit: 25, block: 12 } }, cancel: { into: [ "jH" ], frames: 12 }, sfx: "swingL" },
+        jH: { kind: "normal", name: "ジャンプ強", stance: "air", startup: 8, active: 6, recovery: 10, landLag: 4, boxes: [ { f0: 9, f1: 14, x: 4, y: -10, w: 81, h: 74 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 3, damage: 60, hitstun: 22, blockstun: 16, hitstop: 10, knock: { hit: 10, block: 14 }, gauge: { hit: 45, block: 22 } }, sfx: "swingH" },
+        throw: { kind: "throw", name: "投げ", stance: "stand", startup: 5, active: 2, recovery: 20, boxes: [], hit: null, throw: { box: { x: 10, y: 20, w: 64, h: 100 }, techable: true, damage: 120, grabFrames: 30, afterRecovery: 18, attackerClip: "throwHit", hold: [ { f: 0, x: 50, y: 60, rot: -10 }, { f: 12, ease: "inOutCubic", x: 24, y: 170, rot: -100 }, { f: 26, ease: "outExpo", x: 70, y: 30, rot: -150 }, { f: 30, ease: "linear", x: 76, y: 20, rot: -160 } ], launch: { vx: 3, vy: 7 }, hitstop: 12, impact: 3, gauge: { hit: 40 } }, sfx: "grab" },
+        sp1: { kind: "special", name: "陽玉", stance: "stand", startup: 13, active: 1, recovery: 26, boxes: [], hit: null, spawn: [ { at: 14, projectile: "youdama", x: 56, y: 66 } ], sfx: "cast" },
+        sp2: { kind: "special", name: "陽昇", stance: "stand", startup: 5, active: 7, recovery: 28, landLag: 6, boxes: [ { f0: 6, f1: 12, x: 6, y: 40, w: 72, h: 130 } ], hit: { chip: 6, level: "mid", effect: "launch", impact: 3, damage: 72, hitstun: 0, blockstun: 22, hitstop: 10, knock: { hit: 0, block: 14 }, launch: { vx: 2.5, vy: 10 }, juggle: 0, gauge: { hit: 60, block: 30 } }, motion: [ { f0: 6, f1: 6, vx: 2, vy: 11 } ], invuln: [ { f0: 1, f1: 8, type: "strike" } ], sfx: "rise" },
+        sp3: { kind: "special", name: "転輪", stance: "stand", startup: 12, active: 10, recovery: 18, boxes: [ { f0: 13, f1: 22, x: 16, y: 10, w: 88, h: 70 } ], hit: { chip: 6, level: "mid", effect: "launch", impact: 3, damage: 66, hitstun: 0, blockstun: 16, hitstop: 11, knock: { hit: 0, block: 22 }, launch: { vx: 3.5, vy: 6 }, juggle: 0, gauge: { hit: 50, block: 25 } }, motion: [ { f0: 3, f1: 22, vx: 7.5 } ], invuln: [ { f0: 1, f1: 22, type: "proj" } ], sfx: "swingH" },
+        super: { kind: "super", name: "大祓「太極図」", stance: "stand", startup: 10, active: 1, recovery: 48, cost: 1000, flash: 40, boxes: [], hit: null, invuln: [ { f0: 1, f1: 12, type: "all" } ], spawn: [ { at: 11, projectile: "taikyoku", x: 70, y: 80 } ], sfx: "super" }
+      },
+      projectiles: {
+        youdama: { life: 120, vx: 7.5, vy: 0, box: { x: -16, y: -16, w: 32, h: 32 }, hits: 1, maxActive: 1, priority: 1, hit: { chip: 5, level: "mid", effect: "stun", impact: 2, damage: 46, hitstun: 18, blockstun: 14, hitstop: 8, knock: { hit: 10, block: 12 }, gauge: { hit: 30, block: 15 } }, look: { style: "taiji", color: "glow", size: 1 } },
+        taikyoku: { life: 110, vx: 5.5, vy: 0, box: { x: -46, y: -50, w: 92, h: 100 }, hits: 6, hitEvery: 7, maxActive: 1, priority: 3, hit: { chip: 8, level: "mid", effect: "launch", impact: 3, damage: 42, hitstun: 0, blockstun: 12, hitstop: 5, knock: { hit: 0, block: 4 }, launch: { vx: 0.6, vy: 6.5 }, juggle: 8, gauge: { hit: 0, block: 0 } }, look: { style: "taiji", color: "glow", size: 3 } }
+      },
+      mode2: { key: "yin", label: "陰", at: 0.5, gauge: 250, stats: { dmgMul: 1, hp: 1000, walkF: 3.9, walkB: 3.2, jumpVy: 15, jumpVx: 3.6, gravity: 0.74, airJumps: 0, prejump: 4, landLag: 3, dashF: { frames: 18, speed: 9.6 }, dashB: { frames: 18, speed: 6.4, invuln: 6 }, gaugeMul: 1 }, moves: { "5H": { kind: "normal", name: "立ち強（陰爪）", clip: "in5H", stance: "stand", startup: 9, active: 4, recovery: 16, boxes: [ { f0: 10, f1: 13, x: 24, y: 56, w: 83, h: 60 } ], hit: { chip: 0, level: "mid", effect: "stun", impact: 3, damage: 70, hitstun: 23, blockstun: 15, hitstop: 10, knock: { hit: 16, block: 20 }, gauge: { hit: 45, block: 22 } }, cancel: { into: [ "sp1", "sp2", "sp3", "super" ], frames: 16 }, trail: { from: "handF", color: "accent", width: 16, frames: 8 }, sfx: "swingH" }, sp1: { kind: "special", name: "陰玉", clip: "insp1", stance: "stand", startup: 15, active: 1, recovery: 24, boxes: [], hit: null, spawn: [ { at: 16, projectile: "indama", x: 56, y: 66 } ], sfx: "cast" }, sp2: { kind: "special", name: "陰縛り", clip: "insp2", stance: "stand", startup: 14, active: 6, recovery: 28, boxes: [ { f0: 15, f1: 20, x: 40, y: 30, w: 170, h: 90 } ], hit: { chip: 2, level: "mid", effect: "stun", impact: 2, damage: 28, hitstun: 30, blockstun: 10, hitstop: 8, knock: { hit: -180, block: 6 }, gauge: { hit: 40, block: 15 } }, cancel: { into: [ "5L", "5H", "sp3", "super" ], frames: 22 }, trail: { from: "handF", color: "accent", width: 18, frames: 10 }, sfx: "beckon" }, sp3: { kind: "special", name: "影渡り", clip: "insp3", stance: "stand", startup: 9, active: 8, recovery: 22, boxes: [ { f0: 10, f1: 17, x: 14, y: 20, w: 89, h: 100 } ], hit: { chip: 6, level: "mid", effect: "launch", impact: 3, damage: 64, hitstun: 0, blockstun: 16, hitstop: 11, knock: { hit: 0, block: 22 }, launch: { vx: 3.5, vy: 6.5 }, juggle: 0, gauge: { hit: 50, block: 25 } }, motion: [ { f0: 2, f1: 17, vx: 11 } ], invuln: [ { f0: 1, f1: 9, type: "strike" }, { f0: 1, f1: 17, type: "proj" } ], sfx: "swingH" }, super: { kind: "super", name: "大祓「黒天」", clip: "insuper", stance: "stand", startup: 10, active: 26, recovery: 34, cost: 1000, flash: 40, boxes: [ { f0: 11, f1: 36, x: 20, y: 0, w: 110, h: 140 } ], motion: [ { f0: 11, f1: 34, vx: 7 } ], hit: { chip: 8, level: "mid", effect: "stun", impact: 2, damage: 36, hitstun: 18, blockstun: 18, hitstop: 4, knock: { hit: 2, block: 6 }, gauge: { hit: 0, block: 0 } }, multi: { count: 6, every: 5, final: { chip: 14, level: "mid", effect: "launch", impact: 4, damage: 120, hitstun: 0, blockstun: 24, hitstop: 18, knock: { hit: 0, block: 30 }, launch: { vx: 4, vy: 9 }, juggle: 0, gauge: { hit: 0, block: 0 } } }, invuln: [ { f0: 1, f1: 10, type: "all" } ], trail: { from: "handF", color: "accent", width: 18, frames: 10 }, sfx: "super" } }, projectiles: { indama: { life: 160, vx: 4.2, vy: 0, box: { x: -20, y: -20, w: 40, h: 40 }, hits: 2, hitEvery: 14, maxActive: 1, priority: 2, hit: { chip: 5, level: "mid", effect: "stun", impact: 2, damage: 34, hitstun: 20, blockstun: 14, hitstop: 7, knock: { hit: 4, block: 8 }, gauge: { hit: 25, block: 12 } }, look: { style: "taiji", color: "accent", size: 1.35, dark: true } } }, clips: { idle: { length: 48, loop: true, plant: "feet", blend: 6, keys: [ { f: 0, ease: "inOutQuad", p: { torso: 22, head: -10, uarmF: 50, farmF: 70, uarmB: 40, farmB: 50, thighF: 34, shinF: 56, footF: 16, thighB: -18, shinB: 30, footB: 30, rootY: -8 } }, { f: 24, ease: "inOutQuad", p: { torso: 26, head: -12, uarmF: 54, farmF: 76, uarmB: 44, farmB: 54, thighF: 38, shinF: 62, footF: 18, thighB: -18, shinB: 34, footB: 32, rootY: -10 } } ] } } },
+      quotes: { select: "陰と陽、どちらが見たい？", intro: [ "陰陽玉、回ります。" ], win: [ "陰きわまれば、陽となる。", "白も黒も、わたしです。" ], lose: [ "均衡が…くずれる…" ] }
     }
   }
 };
@@ -1680,7 +1752,54 @@ function costumeKappa(j, ch) {
   arm(J.EF, J.HF, "front");
   return parts;
 }
-const COSTUMES = { miko: costumeMiko, komainu: costumeKomainu, oni404: costumeOni, fox: costumeFox, tengu: costumeTengu, maneki: costumeManeki, chochin: costumeChochin, kappa: costumeKappa };
+/* 陰陽玉: 狩衣（袖の広い衣）の人影で、頭が回る太極図。陰のときは頭がほぼ黒になり白い点（目）だけが光り、頭のまわりにとげとげの光輪が出る。
+ * o.mode = 'yin' で陰。o.clipT で太極図がゆっくり回る */
+function taiji(c, R, ang, dark) {
+  const cs = Math.cos(ang), sn = Math.sin(ang), at = (x, y) => [c[0] + x * cs - y * sn, c[1] + x * sn + y * cs];
+  if (dark) return [circle(at(0, -R * 0.42), R * 0.24)];
+  const g = new Path2D(), top = at(0, -R);
+  g.moveTo(top[0], top[1]);
+  g.arc(c[0], c[1], R, ang - Math.PI / 2, ang + Math.PI / 2, false);
+  const lo = at(0, R / 2), up = at(0, -R / 2);
+  g.arc(lo[0], lo[1], R / 2, ang + Math.PI / 2, ang + Math.PI * 1.5, false);
+  g.arc(up[0], up[1], R / 2, ang + Math.PI / 2, ang - Math.PI / 2, true);
+  g.closePath();
+  /* 白い側の中の黒い点は逆回りの円で穴にする */
+  g.moveTo(lo[0] + R * 0.17, lo[1]); g.arc(lo[0], lo[1], R * 0.17, 0, -Math.PI * 2, true);
+  return [g, circle(up, R * 0.17)];
+}
+function costumeOnmyo(j, ch, o) {
+  o = o || {};
+  const yin = o.mode === 'yin';
+  const { P, pel, neck, head, sh, tUp, back, fwd, down, parts, put } = bodyFrame(j);
+  const R = 18;
+  /* 脚（指貫袴: ふくらんだ袴、足首でしぼる） */
+  for (const [K, A, T] of [[J.KB, J.AB, J.TB], [J.KF, J.AF, J.TF]]) {
+    put(capsule(pel, P(K), 13, 13)); put(capsule(P(K), P(A), 13, 7)); put(capsule(P(A), P(T), 4.5, 3.5));
+  }
+  /* 袖の広い腕（狩衣） */
+  const arm = (E, H, layer) => {
+    put(polyPath(hull([add(sh, back, 4), add(sh, fwd, 6), P(E), P(H), add(P(H), down, 20), add(P(E), down, 26), add(lerp(sh, P(E), 0.5), down, 16)])), layer);
+    put(circle(P(H), 5), layer);
+  };
+  arm(J.EB, J.HB, "main");
+  /* 胴（裾が広がる） */
+  put(polyPath(hull([add(neck, back, 11), add(neck, fwd, 11), add(sh, fwd, 13), add(add(pel, back, 22), down, 22), add(add(pel, fwd, 20), down, 22), add(pel, back, 16)])));
+  /* 頭 = 太極図の玉 */
+  const hc = add(head, tUp, 2);
+  /* 陰: 頭のまわりにとげとげの黒い光輪（ゆっくり回る） */
+  if (yin) {
+    const sp = [], rot = (o.clipT || 0) * 0.01;
+    for (let k = 0; k < 24; k++) { const a = rot + k / 24 * Math.PI * 2, rr = k % 2 ? R + 3 : R + 12; sp.push(add(hc, [Math.cos(a) * rr, Math.sin(a) * rr])); }
+    put(polyPath(sp));
+  }
+  put(circle(hc, R));
+  const ang = (o.clipT || 0) * (yin ? 0.02 : 0.035);
+  for (const g of taiji(hc, R - 2.5, ang, yin)) put(g, "main", true);
+  arm(J.EF, J.HF, "front");
+  return parts;
+}
+const COSTUMES = { miko: costumeMiko, komainu: costumeKomainu, oni404: costumeOni, fox: costumeFox, tengu: costumeTengu, maneki: costumeManeki, chochin: costumeChochin, kappa: costumeKappa, onmyo: costumeOnmyo };
 function costume(j, ch, id, o) { return (COSTUMES[id] || costumeMiko)(j, ch, o); }
 
 function rgba(h, a) { const n = parseInt(h.slice(1), 16); return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")"; }
@@ -2983,12 +3102,26 @@ const LookAdapter = {
 };
 
 /* キャラのランタイムを作る: クリップをトラックへコンパイルし restPelvisH を計算 */
+/* モード変化（ch.mode2）: 体力が mode2.at（割合）以下になると、stats / moves / projectiles を mode2 の中身で上書きした別キャラに切り替わる。
+ * 名前は「名前・ラベル」。クリップは同じ ch.clips を使う（変化後の技は clip 名を別にしておく） */
+function modeChar(c) {
+  const m = c && c.mode2;
+  if (!m) return null;
+  const a = Object.assign({}, c, {
+    name: c.name + '・' + (m.label || '2'), modeName: m.key || 'mode2',
+    stats: Object.assign({}, c.stats, m.stats || {}), moves: Object.assign({}, c.moves, m.moves || {}),
+    projectiles: Object.assign({}, c.projectiles, m.projectiles || {}), clips: Object.assign({}, c.clips, m.clips || {})
+  });
+  delete a.mode2;
+  return a;
+}
 function compileCharacter(ch) {
   const rt = {
     id: ch.id, ch: ch, body: LookAdapter.body(ch), clips: {}, feel: normFeel(ch.feel),
     base: poseToArray(ch.basePose), restPelvisH: 0, neon: LookAdapter.neon(ch),
-    height: 0
+    height: 0, mode: ch.modeName || null
   };
+  if (ch.mode2) rt.alt = compileCharacter(modeChar(ch));
   const state = {};
   const tmp = new Float64Array(NCH);
   function comp(name) {
@@ -3456,7 +3589,7 @@ function validateGameData(D) {
     if (rk.length && rk[rk.length - 1].minPoints !== 0) E('fortunes.ranks', '最後の minPoints は 0 にしてください');
   } else if (D.fortunes != null) E('fortunes.ranks', '配列が必要');
   /* roster */
-  if (!Array.isArray(D.roster) || D.roster.length < 1 || D.roster.length > 8) E('roster', '1〜8件の配列が必要');
+  if (!Array.isArray(D.roster) || D.roster.length < 1 || D.roster.length > 10) E('roster', '1〜10件の配列が必要');
   else {
     D.roster.forEach(id => { if (!D.characters || !D.characters[id]) E('roster', '"' + id + '" が characters にありません'); });
     if (D.roster.length < 4) Wn('roster', D.roster.length + '件のみ（最終は4件）');
@@ -3466,6 +3599,7 @@ function validateGameData(D) {
       const c = D.characters[id];
       if (!c) return;
       try { vChar(id, c); } catch (e) { E('characters.' + id, '検証中に例外: ' + e.message); }
+      if (c.mode2) { try { vChar(id, modeChar(c), 'mode2'); } catch (e) { E('characters.' + id + '.mode2', '検証中に例外: ' + e.message); } }
     });
   }
 
@@ -3535,8 +3669,8 @@ function validateGameData(D) {
     }
   }
 
-  function vChar(id, c) {
-    const P = 'characters.' + id;
+  function vChar(id, c, sub) {
+    const P = 'characters.' + id + (sub ? '.' + sub : '');
     if (c.id !== id) E(P + '.id', 'キー "' + id + '" と一致しません');
     ['name', 'nameEn', 'title', 'blurb'].forEach(k => { if (!isStr(c[k])) E(P + '.' + k, '文字列が必要'); });
     lenWarn(P + '.title', c.title, 12); lenWarn(P + '.blurb', c.blurb, 40);
@@ -3650,7 +3784,7 @@ function validateGameData(D) {
       if (isInt(pr.maxActive) && (pr.maxActive < 1 || pr.maxActive > 3)) E(pp + '.maxActive', '1〜3');
       if (pr.box != null) vBox(pp + '.box', pr.box);
       if (pr.hit != null) vHit(pp + '.hit', pr.hit, true);
-      if (!isObj(pr.look) || ['fuda', 'orb', 'shock', 'beam', 'ghost', 'slash', 'flame', 'puddle'].indexOf(pr.look.style) < 0) E(pp + '.look.style', 'fuda|orb|shock|beam|ghost|slash|flame|puddle');
+      if (!isObj(pr.look) || ['fuda', 'orb', 'shock', 'beam', 'ghost', 'slash', 'flame', 'puddle', 'taiji'].indexOf(pr.look.style) < 0) E(pp + '.look.style', 'fuda|orb|shock|beam|ghost|slash|flame|puddle|taiji');
       else {
         if (pal(c, pr.look.color) == null) E(pp + '.look.color', 'palette のキー名が必要');
         if (pr.look.style === 'ghost' && (!pr.look.clip || !c.clips[pr.look.clip])) E(pp + '.look.clip', 'ghost には実在するクリップ名が必要');
@@ -4403,7 +4537,7 @@ function holdAt(hold, g) {
 
 class Fighter {
   constructor(match, slot, rt, pal2, easy) {
-    this.match = match; this.slot = slot; this.rt = rt; this.ch = rt.ch; this.st = rt.ch.stats;
+    this.match = match; this.slot = slot; this.rt0 = rt; this.rt = rt; this.ch = rt.ch; this.st = rt.ch.stats; this.mode = 0;
     this.pup = new Puppet(rt, pal2);
     this.buf = new InputBuf();
     this.easy = !!easy;
@@ -4413,7 +4547,15 @@ class Fighter {
     this.usedMoves = {}; this.hitMoves = {};
     this.resetRound(false);
   }
+  /* モード変化: 0 = 通常 / 1 = mode2（rt.alt）。体力の最大値はそのまま */
+  setMode(k) {
+    const rt = k && this.rt0.alt ? this.rt0.alt : this.rt0;
+    this.mode = rt === this.rt0 ? 0 : 1;
+    this.rt = rt; this.ch = rt.ch; this.st = rt.ch.stats;
+    this.pup.rt = rt; this.pup.cp.rt = rt;
+  }
   resetRound(half) {
+    if (this.mode) this.setMode(0);
     this.x = CFG.START_X[this.slot]; this.y = 0; this.vx = 0; this.vy = 0; this.dx = 0; this.kbPart = 0;
     this.facing = this.slot === 0 ? 1 : -1;
     this.hp = half ? Math.round(this.maxHp * 0.5) : this.maxHp;
@@ -4783,6 +4925,12 @@ class Fighter {
         const d = Math.min(this.poison.dmg, this.hp - 1);
         this.hp -= d; this.dmgRound += d; this.fx.poison(this);
       }
+    }
+    /* モード変化: 体力が mode2.at 以下になったら切り替わる（1ラウンドに1回。ゲージ少し回復） */
+    if (!this.mode && this.rt0.alt && this.hp > 0 && this.match.phase === 'FIGHTING' && this.hp <= this.maxHp * (this.rt0.ch.mode2.at || 0.5)) {
+      this.setMode(1);
+      this.gauge = Math.min(CFG.GAUGE_MAX, this.gauge + (this.rt0.ch.mode2.gauge || 0));
+      this.fx.modeShift(this, this.rt0.ch.mode2.label || '');
     }
     if (this.chargeStock > 0 && this.match.frame % 24 === 0) this.fx.chargeKeep(this, this.chargeStock / (this.ch.moves.sp1.charge ? this.ch.moves.sp1.charge.max : 1));
     if (this.breakPending) { this.breakPending = false; this.guardBreak(); return; }
@@ -6283,6 +6431,17 @@ const FX = {
     }
     if (k >= 1) { this.addText('MAX', cx, cy + 70, '#ffe94d', 16, 30, 0.6, 'en'); this.addRing(cx, cy, 8, 60, 12, '#ffe94d', 3); }
   },
+  /* モード変化: 黒い輪が広がって「陰転」 */
+  modeShift(f, label) {
+    const c = f.pup.glow(), x = f.x, y = f.y + 100;
+    this.addRing(x, y, 10, 150, 24, '#ffffff', 5);
+    this.addRing(x, y, 6, 110, 18, c, 4);
+    for (let i = 0; i < 18; i++) { const a = i / 18 * 6.283; this.addPart(x, y, Math.cos(a) * 5, Math.sin(a) * 5, 26, 3, i % 2 ? '#ffffff' : c, 0, 0); }
+    this.addText(label + '転', x, y + 110, '#ffffff', 26, 60, 0.9, 'jp');
+    this.flash(0.3, '#ffffff', 10);
+    this.shake(5, 10);
+    this.sfx('gaugeFull', x);
+  },
   /* ため保持: やめた瞬間に「保持」、持っている間は体のまわりに小さな火の粉 */
   chargeStock(f, k) {
     const c = f.pup.glow();
@@ -6818,7 +6977,7 @@ function drawMikoVisual(ctx, pup, j, o) {
   MikoVisual.draw(ctx, j, {
     x: 0, y: 0, facing: o.face, scale: 1, color: LookAdapter.edge(pup.rt.ch, pup.pal), id: pup.rt.id,
     flash: o.ghost ? 0 : pup.flash, alpha: ctx.globalAlpha * (o.ghost ? o.ghostA : 1), chains: chains,
-    clip: pup.cp.name, clipT: pup.cp.t, lite: !!o.lite || Display.level() === 'low' || Display.level() === 'min'
+    clip: pup.cp.name, clipT: pup.cp.t, mode: pup.rt.mode, lite: !!o.lite || Display.level() === 'low' || Display.level() === 'min'
   });
 }
 
@@ -7008,6 +7167,24 @@ function drawProjectiles(ctx, match, alpha) {
         const gr2 = ctx.createLinearGradient(0, 0, len, 0);
         gr2.addColorStop(0, 'rgba(255,255,255,0.9)'); gr2.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.fillStyle = gr2; ctx.fillRect(0, -hgt * 0.14, len * 0.9, hgt * 0.28);
+        break;
+      }
+      /* 陰陽玉: 回る太極図。look.dark = 陰（ほぼ黒で白い点だけ） */
+      case 'taiji': {
+        ctx.translate(x, -y); ctx.scale(p.dir, 1); ctx.rotate(p.age * 0.18);
+        const r = 15 * size;
+        ctx.globalCompositeOperation = 'lighter';
+        for (let k = 3; k >= 1; k--) { ctx.fillStyle = rgba(col, 0.09 * (4 - k)); ctx.beginPath(); ctx.arc(0, 0, r * (1 + k * 0.32), 0, 6.283); ctx.fill(); }
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = '#06070d'; ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.283); ctx.fill();
+        ctx.fillStyle = '#f4f7ff';
+        if (lk.dark) { ctx.beginPath(); ctx.arc(0, -r * 0.5, r * 0.2, 0, 6.283); ctx.fill(); }
+        else {
+          ctx.beginPath(); ctx.arc(0, 0, r, -Math.PI / 2, Math.PI / 2, false); ctx.arc(0, r / 2, r / 2, Math.PI / 2, Math.PI * 1.5, false); ctx.arc(0, -r / 2, r / 2, Math.PI / 2, -Math.PI / 2, true); ctx.fill();
+          ctx.fillStyle = '#06070d'; ctx.beginPath(); ctx.arc(0, r / 2, r * 0.17, 0, 6.283); ctx.fill();
+          ctx.fillStyle = '#f4f7ff'; ctx.beginPath(); ctx.arc(0, -r / 2, r * 0.17, 0, 6.283); ctx.fill();
+        }
+        ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.283); ctx.stroke();
         break;
       }
       /* 鬼火: しずく形の炎がゆらめく（ため撃ちほど大きい） */
@@ -7761,6 +7938,7 @@ const SPECIAL_DESC = {
   maneki:  { sp1: '遠くの相手を引き寄せる。当たったら 強 でつながる', sp2: 'ガードできない掴み', sp3: '弾を受け流して突っ込む', super: 'ガードできない大投げ。弱・強の後につなげてもつかめる' },
   chochin: { sp1: '押しっぱなしでためる鬼火。← かガードでため保持。満タンで転ぶ', sp2: '出始め無敵の対空', sp3: '転がって弾をすり抜ける', super: 'ゆっくり進む大きな鬼火（6ヒット）' },
   kappa:   { sp1: '前の床に水たまり（罠）。踏むとガードできず転んで毒', sp2: '出始め無敵の対空', sp3: '弾の下をすべる下段', super: '進む大波（5ヒット＋毒）' },
+  onmyo:   { sp1: '陽: まっすぐ飛ぶ陽玉 / 陰: 遅く重い陰玉（2ヒット・弾に勝つ）', sp2: '陽: 出始め無敵の対空 / 陰: 遠くの相手を引き寄せる', sp3: '陽: 転がって弾をすり抜ける / 陰: 無敵の速い踏み込み', super: '陽: 進む太極図（6ヒット） / 陰: 突進の連撃' },
 };
 /* キャラだけの仕組み（技一覧の最後の行） */
 const UNIQUE_ROW = {
@@ -7771,6 +7949,7 @@ const UNIQUE_ROW = {
   maneki:  ['手招きコンボ', '手招きが当たったら 強', '同じ', '引き寄せて、そのまま連続技に'],
   chochin: ['ため撃ち', '必殺技のボタンを押しっぱなし', '同じ', '最大約0.5秒。ため中に ← かガードで保持できる'],
   kappa:   ['毒', '水たまり・大祓が当たる', '同じ', 'しばらく体力が減り続ける（毒では倒れない）'],
+  onmyo:   ['陰転（モード変化）', '体力が半分を切ると自動で', '同じ', '陰に変わる。速くなり、必殺技と立ち強が変わる'],
 };
 function normalDesc(m, base) {
   const h = m.hit || {}, t = [];
@@ -7856,6 +8035,13 @@ COMBO_ROWS.kappa = [
   ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
   ['罠', '強 → 必殺（水たまり）', '当たったら足元に罠。すぐ動かないと転んで毒'],
   ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '6ヒット＋毒']
+];
+COMBO_ROWS.onmyo = [
+  ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。陽玉で締める'],
+  ['下段から', '↓弱 → 弱 → 強 → ←+必殺', '4ヒット。転輪で締める'],
+  ['陰: 引き寄せ', '→+必殺 → 強 → ←+必殺', '陰縛りで寄せて3ヒット'],
+  ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
+  ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '陽は太極図、陰は黒天']
 ];
 const SYSTEM_ROWS = [
   ['守り', 'ガード中に →+強 = ガードキャンセル（ゲージ半分） / 弱+強 = 押し返し'],
@@ -8618,6 +8804,22 @@ const VS_LINES = {
   'kappa>maneki': ['招き猫さん、小判よりきゅうりがいい', '当店、きゅうりは扱っておりません'],
   'chochin>kappa': ['河童くん、水はかけないでね', '火には水。相性ばっちりだね'],
   'kappa>chochin': ['提灯さん、湿気には弱いでしょ', 'ぼうっ。乾かしてあげる'],
+  'onmyo>miko':    ['巫女さん、陰と陽の釣り合いを見せましょう', '回る玉…目が回りそうです'],
+  'miko>onmyo':    ['陰陽玉さん、どちらの顔で来ますか', 'まずは陽で。半分削れたら、陰です'],
+  'onmyo>komainu': ['阿と吽。あなたも二つで一つですね', '狛犬は、ひとりでも門を守る'],
+  'komainu>onmyo': ['白黒つけに来たか', 'ええ。白黒、両方つけます'],
+  'onmyo>oni404':  ['あなたの闇、少し分けてください', '…闇、404'],
+  'oni404>onmyo':  ['…白い方、消す', '消すと、黒い方が出てきますよ'],
+  'onmyo>fox':     ['回るのは、わたしも得意です', 'じゃあ無限に回りっこしよ！'],
+  'fox>onmyo':     ['くるくる玉ちゃん、化かしてあげる', '化かされても、陰陽はひっくり返るだけ'],
+  'onmyo>tengu':   ['風向きも、陰と陽で変わります', '風は、我が決める'],
+  'tengu>onmyo':   ['玉ごとき、風で転がしてやる', '転がるほど、よく回ります'],
+  'onmyo>maneki':  ['招き猫さん、陰と陽、どちらを招きます？', 'もちろん、陽のお客様を'],
+  'maneki>onmyo':  ['いらっしゃいませ。白と黒のお客様', 'お会計は、半分ずつで'],
+  'onmyo>chochin': ['提灯さん、闇を照らしてくれますか', 'ぼうっ。黒い方も照らすよ'],
+  'chochin>onmyo': ['玉さん、夜になると黒くなるの？', '夜ではなく、半分を切るとです'],
+  'onmyo>kappa':   ['河童さん、水と火のように釣り合いましょう', 'きゅうりは半分こしようね'],
+  'kappa>onmyo':   ['玉さん、白い方から感染させるね', '黒い方は、もっとしつこいですよ'],
   'mirror':         ['偽物め', 'それはこちらの台詞']
 };
 function vsLines(a, b) { return VS_LINES[a === b ? 'mirror' : a + '>' + b] || null; }
@@ -8664,6 +8866,22 @@ const WIN_LINES = {
   'tengu>kappa': '空に水たまりはない',
   'maneki>chochin': 'お化けのお客さま、またのお越しを',
   'maneki>kappa': 'きゅうりは、またの機会に',
+  'onmyo>miko': '祓いも呪いも、表と裏です',
+  'onmyo>komainu': '阿吽の間に、陰陽あり',
+  'onmyo>oni404': '闇は、ちゃんと見つかりました',
+  'onmyo>fox': '回り続けても、最後は止まります',
+  'onmyo>tengu': '風向き、変わりましたね',
+  'onmyo>maneki': '陰の福も、招いてしまいましたね',
+  'onmyo>chochin': '明かりと影、ちょうど半分',
+  'onmyo>kappa': '水も火も、陰陽のうち',
+  'miko>onmyo': '陰も陽も、祓わせていただきました',
+  'komainu>onmyo': '白黒、門の前でつけた',
+  'oni404>onmyo': '白も黒も、404',
+  'fox>onmyo': '玉、転がしちゃった',
+  'tengu>onmyo': '転がる玉は、風に勝てぬ',
+  'maneki>onmyo': '白黒のお客様、毎度ありがとうございました',
+  'chochin>onmyo': '黒い方も、照らしちゃった',
+  'kappa>onmyo': '白も黒も、感染完了',
   'mirror': '本物は、ひとりで十分'
 };
 function winLine(w, l) { return WIN_LINES[w === l ? 'mirror' : w + '>' + l] || null; }
@@ -9245,7 +9463,8 @@ Game.scenes.fight = {
     tengu:   [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'sp2'], ['5H', 'super']],
     maneki:  [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['sp1', '5H', 'sp3'], ['sp1', '5L', '5L', '5H', 'sp3']],
     chochin: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'jL', 'jH'], ['5H', 'super']],
-    kappa:   [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['2H', 'jL', 'jH'], ['5H', 'super']]
+    kappa:   [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['2H', 'jL', 'jH'], ['5H', 'super']],
+    onmyo:   [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp3'], ['2H', 'jL', 'jH'], ['5H', 'super']]
   },
   STEP_LABEL: { '5L': '弱', '2L': '↓弱', '5H': '強', '2H': '↓強', jL: 'J弱', jH: 'J強', jS: 'J必殺', sp1: '必殺', sp2: '→+必殺', sp3: '←+必殺', super: '↓+必殺', throw: '投げ' },
   /* かんたん操作でないときの必殺技の表記 */
@@ -10161,7 +10380,10 @@ const CPU_CHAR = {
   /* 提灯: 遠くでは鬼火をためて撃つ */
   chochin: { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'sp2'], ['5H', 'sp1']], punish: ['5H', 'sp1'] },
   /* 河童: 遠くでは水たまりを置いて待つ */
-  kappa:   { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['2H', 'sp2'], ['5H', 'sp3']], punish: ['5H', 'sp3'] }
+  kappa:   { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['2H', 'sp2'], ['5H', 'sp3']], punish: ['5H', 'sp3'] },
+  /* 陰陽玉: 陽は弾と対空で待つ。陰（':2'）は引き寄せと踏み込みで攻める */
+  onmyo:   { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp3'], ['2H', 'sp2'], ['5H', 'sp1']], punish: ['5H', 'sp3'] },
+  'onmyo:2': { aa: '5H', zone: 'sp1', mid: ['sp2', '5H', 'sp3'], routes: [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['5H', 'sp3']], punish: ['5H', 'sp3'] }
 };
 class CpuPolicy {
   /* mode: 'test' = ランダムに全技を踏む / 'dummy' = 立ち・ガード固定の練習相手 / 'cpu' = 対戦用（level: easy|normal|hard） */
@@ -10270,7 +10492,7 @@ class CpuPolicy {
   }
   nextCpu(m, slot) {
     const me = m.fighters[slot], opp = m.fighters[1 - slot], rng = m.rng, L = this.L;
-    const C = CPU_CHAR[me.rt.id] || CPU_CHAR.miko;
+    const C = (me.mode && CPU_CHAR[me.rt.id + ':2']) || CPU_CHAR[me.rt.id] || CPU_CHAR.miko;
     if (!m.controlsOn()) { this.q.length = 0; this.combo = null; return 0; }
     const F = this.fwdBit(me), Bk = this.backBit(me), dist = Math.abs(opp.x - me.x);
     /* 倒れた相手に追い打ち（ふつう・つよい。1回のダウンにつき1回） */
