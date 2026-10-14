@@ -2730,12 +2730,16 @@ class Combat {
     /* 当て身（技の parry: {f0, f1, counter}）: 構えている間に打撃（弾・投げ・大祓・ガード不能以外）を受けると、
      * ダメージなしで受け止めて counter の技に移る（白虎の虎返し） */
     const pmv = D.state === 'ATTACK' ? D.mv : null, pr = pmv && pmv.m.parry;
-    if (pr && !isProj && !isSuperHit && !hit.unblockable && pmv.n >= pr.f0 && pmv.n <= pr.f1) {
+    /* parry.proj: 弾も受け止めてかき消す（白虎の大爪） */
+    if (pr && (!isProj || pr.proj) && !isSuperHit && !hit.unblockable && pmv.n >= pr.f0 && pmv.n <= pr.f1) {
       fx.parry(s.px, s.py, D);
       fx.sfx('block', D.x);
       D.hitstop = Math.max(D.hitstop, 14); D.hitstopTotal = Math.max(D.hitstopTotal, D.hitstop); D.hitstopHit = false;
-      A.hitstop = Math.max(A.hitstop, 14); A.hitstopTotal = Math.max(A.hitstopTotal, A.hitstop); A.hitstopHit = false;
-      mv.hitCount++; mv.hitDone = true; mv.contact = 'block'; mv.cancelLeft = 0;
+      if (isProj) { if (s.proj) s.proj.alive = false; }
+      else {
+        A.hitstop = Math.max(A.hitstop, 14); A.hitstopTotal = Math.max(A.hitstopTotal, A.hitstop); A.hitstopHit = false;
+        mv.hitCount++; mv.hitDone = true; mv.contact = 'block'; mv.cancelLeft = 0;
+      }
       if (D.ch.passive && D.ch.passive.empower) D.empowered = true;
       D.startMove(pr.counter);
       return;
@@ -5318,7 +5322,7 @@ const SPECIAL_DESC = {
   chochin: { sp1: '押しっぱなしでためる鬼火。← かガードでため保持。満タンで転ぶ', sp2: '出始め無敵の対空', sp3: '転がって弾をすり抜ける', super: 'ゆっくり進む大きな鬼火（6ヒット）' },
   kappa:   { sp1: '前の床に水たまり（罠）。踏むとガードできず転んで毒', sp2: '出始め無敵の対空', sp3: '弾の下をすべる下段', super: '進む大波（5ヒット＋毒）' },
   onmyo:   { sp1: '鶴: 羽根を3枚、扇に飛ばす / 烏: 遅く重い陰玉（2ヒット・弾に勝つ）', sp2: '鶴: 出始め無敵の対空 / 烏: 遠くの相手を引き寄せる', sp3: '鶴: 低く滑って弾をすり抜ける / 烏: 跳んで急降下でつかむ（ガード不能）', super: '鶴: 進む大きな玉（6ヒット） / 烏: 突進の連撃' },
-  byakko:  { sp1: '短く飛ぶ3本爪の斬撃（爪痕）', sp2: '前へ跳んで爪で襲う（立ちガード）。爪痕3つでガード不能の「狩り」', sp3: '両腕で大きく裂く大爪（爪痕）。ガードされても耐久を大きく削る・弾を消す', super: '爪の連撃（7ヒット）' },
+  byakko:  { sp1: '短く飛ぶ3本爪の斬撃（爪痕）', sp2: '前へ跳んで爪で襲う（立ちガード）。爪痕3つでガード不能の「狩り」', sp3: '構えて、打撃か弾を受けたら大爪で裂き返す（爪痕）。投げに負け・空振りはスキ大', super: '爪の連撃（7ヒット）' },
 };
 /* キャラだけの仕組み（技一覧の最後の行） */
 const UNIQUE_ROW = {
@@ -5330,7 +5334,7 @@ const UNIQUE_ROW = {
   chochin: ['ため撃ち', '必殺技のボタンを押しっぱなし', '同じ', '最大約0.5秒。ため中に ← かガードで保持できる'],
   kappa:   ['毒', '水たまり・大祓が当たる', '同じ', 'しばらく体力が減り続ける（毒では倒れない）'],
   onmyo:   ['八咫烏（変化）', '体力が半分を切ると自動で', '同じ', '変わる瞬間に無敵の衝撃波（のけぞり中でも出る）。烏は体力が減るほど攻撃力アップ（最大1.4倍）。打たれ弱い'],
-  byakko:  ['爪痕と狩り / 虎視眈々', '強・J強・虎爪・大爪を当てる / ジャストガード', '同じ', '爪痕3つで飛びかかりが狩りの一撃（ガード不能・大ダメージ）。ジャストガード後の1発は1.3倍'],
+  byakko:  ['爪痕と狩り / 虎視眈々', '強・J強・虎爪・大爪を当てる / ジャストガードか大爪の構えで受ける', '同じ', '爪痕3つで飛びかかりが狩りの一撃（ガード不能・大ダメージ）。受けたあとの1発は1.3倍'],
 };
 function normalDesc(m, base) {
   const h = m.hit || {}, t = [];
@@ -5426,7 +5430,7 @@ COMBO_ROWS.onmyo = [
 ];
 COMBO_ROWS.byakko = [
   ['基本コンボ', '弱 → 弱 → 強 → 必殺', '4ヒット。強と虎爪で爪痕2つ'],
-  ['大爪で締め', '↓弱 → 弱 → 強 → ←+必殺', '強と大爪で爪痕2つ。ガードされても耐久を削る'],
+  ['大爪', '相手の攻撃か弾に合わせて ←+必殺', '受け止めて裂き返す。爪痕＋次の1発が1.3倍'],
   ['狩り', '爪痕3つ → →+必殺', 'ガード不能の飛びかかり。大ダメージ'],
   ['空中コンボ', '↓強 → ↑ → ジャンプ弱 → ジャンプ強', '3ヒット'],
   ['大祓コンボ', '強 → ↓+必殺 (ゲージ満タン)', '8ヒット']
@@ -6896,7 +6900,7 @@ Game.scenes.fight = {
     chochin: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'jL', 'jH'], ['5H', 'super']],
     kappa:   [['5L', '5L', '5H', 'sp3'], ['2L', '5L', '5H', 'sp3'], ['2H', 'jL', 'jH'], ['5H', 'super']],
     onmyo:   [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp3'], ['2H', 'jL', 'jH'], ['5H', 'super']],
-    byakko:  [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp3'], ['2H', 'jL', 'jH'], ['5H', 'super']]
+    byakko:  [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'jL', 'jH'], ['5H', 'super']]
   },
   STEP_LABEL: { '5L': '弱', '2L': '↓弱', '5H': '強', '2H': '↓強', jL: 'J弱', jH: 'J強', jS: 'J必殺', sp1: '必殺', sp2: '→+必殺', sp3: '←+必殺', super: '↓+必殺', throw: '投げ' },
   /* かんたん操作でないときの必殺技の表記 */
@@ -7824,7 +7828,7 @@ const CPU_CHAR = {
   onmyo:   { aa: 'sp2', zone: 'sp1', routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp3'], ['2H', 'sp2'], ['5H', 'sp1']], punish: ['5H', 'sp3'] },
   'onmyo:2': { aa: '5H', zone: 'sp1', mid: ['sp3'], routes: [['5L', '5L', '5H', 'sp2'], ['2L', '5L', '5H', 'sp2'], ['sp2', '5H', 'sp1']], punish: ['5H', 'sp2'] },
   /* 白虎: 跳び込みは虎返しで受ける。近くでは咆哮でガードを崩す */
-  byakko:  { aa: '5H', zone: 'sp1', mid: ['sp2'], routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'sp1'], ['5H', 'sp2']], punish: ['5H', 'sp1'] }
+  byakko:  { aa: 'sp3', zone: 'sp1', mid: ['sp2'], routes: [['5L', '5L', '5H', 'sp1'], ['2L', '5L', '5H', 'sp1'], ['2H', 'sp1'], ['5H', 'sp2']], punish: ['5H', 'sp1'] }
 };
 class CpuPolicy {
   /* mode: 'test' = ランダムに全技を踏む / 'dummy' = 立ち・ガード固定の練習相手 / 'cpu' = 対戦用（level: easy|normal|hard） */
