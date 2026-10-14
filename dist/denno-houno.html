@@ -4626,7 +4626,7 @@ const CommandParser = {
     return end;
   },
   /* 必殺ボタンの押下フレーム pf で評価。戻り値: 'super'|'sp1'|'sp2'|'sp3'|'' (空=不発)
-   * sp1 = ↓↘→ / sp2 = ↓↙← / sp3 = →↓↘ 。かんたん操作: 必殺だけ=sp1 / →=sp2 / ←=sp3 / ↓=super */
+   * sp1 = ↓↘→ / sp2 = ↓↙← / sp3 = →↓↘ 。かんたん操作: 必殺だけ=sp1 / →(↘)=sp2 / ←(↙)=sp3 / ↓=super（ゲージが無ければ sp1） */
   parse(buf, pf, gauge, easy) {
     this.byCmd = true;
     const s16 = this.dirString(buf, pf, CFG.CMD_WINDOW);
@@ -4649,9 +4649,11 @@ const CommandParser = {
       const v = buf.num[fr & 63];
       if (v !== 5) { n = v; break; }
     }
-    if (n === 6 || n === 9) return 'sp2';
-    if (n === 4 || n === 7) return 'sp3';
-    if (n === 1 || n === 2 || n === 3) return gauge >= CFG.SUPER_COST ? 'super' : '';
+    /* スティックが斜め下に入っていても横の向きを優先（以前は ↘/↙ が大祓扱いになり、ゲージが無いと何も出なかった）。
+     * 大祓は真下だけ。ゲージが無い真下は必殺1 */
+    if (n === 6 || n === 9 || n === 3) return 'sp2';
+    if (n === 4 || n === 7 || n === 1) return 'sp3';
+    if (n === 2) return gauge >= CFG.SUPER_COST ? 'super' : 'sp1';
     return 'sp1';
   }
 };
