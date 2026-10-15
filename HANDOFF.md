@@ -156,6 +156,8 @@
 
 - 練習の判定表示（ユーザー指定）: 練習中のポーズに「判定表示: ON/OFF」（`Game.showBoxes`）。`Debug.world(ctx, m, nice)` を半透明の塗り付きで描き、画面下に凡例（`Debug.legend`: 緑=やられ / 赤=攻撃 / 黄=投げ / 橙=飛び道具 / 青=押し合い）。ポーズの項目が多いと間隔を詰める。
 
+- 白虎の入力を入れ替え（ユーザー指定）: →+必殺 = 虎の大爪（カウンターの構え）、←+必殺 = 飛びかかり（狩り）。
+
 ## 確認のしかた（ヘッドレスの Chromium で回せる）
 
 - `game.html#selftest&matches=64&maxSec=150&seed=N` … 全キャラの組み合わせで CPU 同士の自動対戦。`document.title` が `SELFTEST PASS` なら合格。
