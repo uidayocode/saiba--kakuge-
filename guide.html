@@ -1,0 +1,468 @@
+<title>電脳奉納試合 展示案内</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Zen+Maru+Gothic:wght@500;700&family=Orbitron:wght@500;700&display=swap">
+<style>
+/* 一画面の案内端末。左に会話、右に「よくある質問」。夜の電脳神社（ゲームと同じ世界）で統一した暗い一色の見た目 */
+:root {
+  --ink: #070816;        /* 夜空 */
+  --panel: #0e1128;      /* 札の地 */
+  --panel-2: #141838;
+  --line: #262c55;
+  --text: #ecf0ff;
+  --muted: #98a4c8;
+  --shu: #ff4a6b;        /* 朱（鳥居・P1） */
+  --cyan: #3ff0ff;       /* 電脳（P2） */
+  --gold: #ffd24a;       /* 金（おみくじ） */
+  --font-display: "DotGothic16", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+  --font-body: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+  --font-en: "Orbitron", "Segoe UI", system-ui, sans-serif;
+  --fs: 17px;
+  color-scheme: dark;
+}
+:root.big { --fs: 21px; }
+html, body { height: 100%; }
+body {
+  background: var(--ink); color: var(--text); font-family: var(--font-body); font-size: var(--fs); line-height: 1.75;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  box-sizing: border-box; overflow: hidden;
+}
+body::after {   /* 背景のごく薄い格子（ゲームの参道の床と同じ意匠） */
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: .5;
+  background:
+    radial-gradient(1200px 500px at 85% -10%, color-mix(in srgb, var(--shu) 14%, transparent), transparent 70%),
+    radial-gradient(900px 500px at -10% 110%, color-mix(in srgb, var(--cyan) 10%, transparent), transparent 70%),
+    linear-gradient(transparent 31px, color-mix(in srgb, var(--line) 45%, transparent) 32px) 0 0 / 100% 32px;
+}
+.app { position: relative; z-index: 1; height: 100%; display: grid; grid-template-rows: auto 1fr; gap: 14px; padding-block: 14px; max-width: 1280px; margin: 0 auto; }
+
+/* ---- 上の帯 ---- */
+header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.mark { width: 46px; height: 40px; flex: none; }
+.brand { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.brand b { font-family: var(--font-display); font-weight: 400; font-size: 1.5em; letter-spacing: .06em; text-shadow: 0 0 12px color-mix(in srgb, var(--cyan) 55%, transparent); }
+.brand span { color: var(--muted); font-size: .78em; }
+.tools { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.tool {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-size: .8em; color: var(--muted);
+}
+.tool:hover, .tool:focus-visible { color: var(--text); border-color: var(--cyan); outline: none; }
+.tool[aria-pressed="true"] { color: var(--ink); background: var(--cyan); border-color: var(--cyan); }
+
+/* ---- 本体 ---- */
+main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; min-height: 0; }
+
+.chat { display: grid; grid-template-rows: 1fr auto; grid-template-columns: minmax(0, 1fr); min-height: 0; background: color-mix(in srgb, var(--panel) 82%, transparent); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.log { overflow-y: auto; padding: 22px 22px 8px; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { .log { scroll-behavior: auto; } }
+
+.msg { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: start; max-width: 860px; }
+.msg.me { grid-template-columns: minmax(0, 1fr); justify-items: end; margin-left: auto; }
+.av { width: 44px; height: 44px; border-radius: 12px; background: var(--panel-2); border: 1px solid color-mix(in srgb, var(--shu) 60%, var(--line)); display: grid; place-items: center; }
+.bubble { background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px 14px 14px 14px; padding: 12px 16px; min-width: 0; overflow-wrap: anywhere; }
+.me .bubble { background: color-mix(in srgb, var(--cyan) 14%, var(--panel)); border-color: color-mix(in srgb, var(--cyan) 40%, var(--line)); border-radius: 14px 4px 14px 14px; }
+.who { font-family: var(--font-display); font-size: .78em; color: var(--shu); letter-spacing: .08em; margin-bottom: 2px; display: flex; gap: 10px; align-items: baseline; }
+.src { font-family: var(--font-body); color: var(--muted); font-size: .85em; letter-spacing: 0; }
+.bubble p { margin: 0 0 .55em; } .bubble p:last-child { margin-bottom: 0; }
+.bubble ul { margin: .2em 0 .6em; padding-left: 1.2em; } .bubble li { margin: .15em 0; }
+.bubble li::marker { color: var(--shu); }
+.bubble strong { color: var(--gold); font-weight: 700; }
+.related { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.chip {
+  background: transparent; border: 1px solid color-mix(in srgb, var(--cyan) 45%, var(--line)); color: var(--cyan);
+  border-radius: 999px; padding: 5px 13px; font-size: .82em; line-height: 1.4; text-align: left;
+}
+.chip:hover, .chip:focus-visible { background: color-mix(in srgb, var(--cyan) 16%, transparent); outline: none; }
+.dots { display: inline-flex; gap: 6px; padding: 6px 2px; }
+.dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite; }
+.dots i:nth-child(2) { animation-delay: .2s; } .dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%, 80%, 100% { opacity: .25 } 40% { opacity: 1 } }
+@media (prefers-reduced-motion: reduce) { .dots i { animation: none; opacity: .7; } }
+
+/* はじめの案内カード: 1/60 秒の流れ */
+.intro { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: color-mix(in srgb, var(--ink) 55%, transparent); margin-top: 10px; }
+.intro h3 { margin: 0 0 8px; font-family: var(--font-display); font-weight: 400; font-size: .9em; color: var(--gold); letter-spacing: .06em; }
+.loop { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 560px) { .loop { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.step { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--panel); transition: border-color .3s, box-shadow .3s; }
+.step b { display: block; font-family: var(--font-en); font-size: .7em; color: var(--muted); letter-spacing: .1em; }
+.step span { font-size: .85em; }
+.step.on { border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan), 0 0 18px color-mix(in srgb, var(--cyan) 35%, transparent); }
+.intro small { display: block; color: var(--muted); font-size: .78em; margin-top: 8px; }
+
+/* 入力欄 */
+form { display: flex; gap: 10px; padding: 12px; border-top: 1px solid var(--line); background: var(--panel); }
+#q {
+  flex: 1; min-width: 0; font: inherit; color: var(--text); background: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+}
+#q:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cyan) 22%, transparent); }
+#send { background: var(--shu); color: #fff; border: 0; border-radius: 10px; padding: 0 22px; font-weight: 700; letter-spacing: .08em; }
+#send:disabled { opacity: .45; cursor: default; }
+#send:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+
+/* 右: よくある質問 */
+.side { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 2px; }
+.group { background: color-mix(in srgb, var(--panel) 82%, transparent); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+.group h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 400; font-size: .86em; letter-spacing: .1em; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.group h2::before { content: ""; width: 10px; height: 10px; border: 2px solid var(--shu); border-radius: 2px; transform: rotate(45deg); }
+.qs { display: flex; flex-direction: column; gap: 6px; }
+.q {
+  text-align: left; background: var(--panel-2); border: 1px solid transparent; border-radius: 9px; padding: 8px 12px; font-size: .86em; line-height: 1.5;
+}
+.q:hover, .q:focus-visible { border-color: var(--cyan); outline: none; }
+.mobileqs { display: none; padding: 0 12px 10px; gap: 8px; overflow-x: auto; background: var(--panel); }
+@media (max-width: 900px) { .mobileqs { display: flex; } .mobileqs .chip { white-space: nowrap; } }
+
+/* 幅が狭い画面: よくある質問は入力欄の上の横並びにする */
+@media (max-width: 900px) {
+  main { grid-template-columns: minmax(0, 1fr); }
+  .side { display: none; }
+  .brand span { display: none; }
+  .log { padding: 16px 14px 8px; }
+  .msg { grid-template-columns: 36px minmax(0, 1fr); gap: 8px; }
+  .av { width: 36px; height: 36px; }
+}
+/* 放っておかれたら最初に戻る */
+.idle { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 5;
+  background: var(--panel-2); border: 1px solid var(--gold); color: var(--text); border-radius: 999px; padding: 8px 18px; font-size: .85em; }
+.idle button { margin-left: 10px; background: var(--gold); color: var(--ink); border: 0; border-radius: 999px; padding: 2px 12px; font-weight: 700; }
+</style>
+
+<div class="app">
+  <header>
+    <svg class="mark" viewBox="0 0 46 40" aria-hidden="true">
+      <path d="M3 8 Q23 3 43 8 L43 12 Q23 8 3 12 Z" fill="var(--shu)"/>
+      <rect x="7" y="16" width="32" height="3.5" fill="var(--shu)"/>
+      <rect x="11" y="10" width="4" height="29" fill="var(--shu)"/>
+      <rect x="31" y="10" width="4" height="29" fill="var(--shu)"/>
+      <rect x="21.5" y="12" width="3" height="5" fill="var(--shu)"/>
+      <path d="M3 8 Q23 3 43 8" fill="none" stroke="var(--cyan)" stroke-width="1" opacity=".7"/>
+    </svg>
+    <div class="brand"><b>電脳奉納試合</b><span>展示案内 ― このゲームがどうやって動いているか、なんでも聞いてください</span></div>
+    <div class="tools">
+      <button class="tool" id="big" aria-pressed="false" type="button">文字を大きく</button>
+      <button class="tool" id="reset" type="button">最初から</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="chat" aria-label="案内係との会話">
+      <div class="log" id="log" aria-live="polite"></div>
+      <div>
+        <div class="mobileqs" id="mobileqs"></div>
+        <form id="f" autocomplete="off">
+          <input id="q" type="text" maxlength="200" placeholder="例: キャラクターの絵はどうやって描いているの？" aria-label="質問を入力">
+          <button id="send" type="submit">聞く</button>
+        </form>
+      </div>
+    </section>
+    <aside class="side" id="side" aria-label="よくある質問"></aside>
+  </main>
+</div>
+<div class="idle" id="idle" hidden><span id="idleMsg"></span><button type="button" id="stay">続ける</button></div>
+
+<script>
+/* ===================================================================
+ * 展示の情報（係の人が書き換える欄）。空のままなら「係の人に聞いてください」と答えます
+ * =================================================================== */
+const EXHIBIT = {
+  place: '',      /* 例: 2年3組の教室 */
+  hours: '',      /* 例: 10:00〜15:00 */
+  creator: '',    /* 例: 2年3組 ○○ */
+  play: ''        /* 遊び方の決まり。例: 1回2試合まで・並んでいる人がいたら交代 */
+};
+
+/* ===================================================================
+ * 案内のもとになる知識。AI もこの内容だけをもとに答えます。
+ * keys: 質問に含まれていたらこの話題とみなす言葉
+ * =================================================================== */
+const KB = [
+  { id: 'about', cat: 'ゲームのこと', q: 'これはどんなゲーム？',
+    keys: ['どんな', 'なに', '何の', 'ゲーム', '概要', 'これ', '内容', 'ジャンル', '格闘', '格ゲー'],
+    a: '「電脳奉納試合」は、**2人で向かい合って戦う2D格闘ゲーム**です。舞台は、ネオンが光る「電脳空間の神社」。巫女や狛犬、天狗、河童など、神社や昔話でおなじみのものたちが、デジタルの存在になって腕比べをします。\n\nパンチやキックのような攻撃と必殺技を出し合い、相手の体力を先になくした方が勝ちです。インターネットの画面（ブラウザ）だけで動くゲームとして、生徒が作りました。' },
+  { id: 'name', cat: 'ゲームのこと', q: '「奉納試合」ってどういう意味？',
+    keys: ['奉納', '名前', 'タイトル', '意味', '電脳', 'サイバー', '神社'],
+    a: '**奉納試合**は、神社のお祭りで神様に見ていただくために行う試合のことです（奉納相撲や奉納演武など）。\n\nこのゲームでは、それを「電脳＝コンピューターの中の神社」で行う、という設定にしています。キャラクターも狛犬や巫女、招き猫などを「AI」「バグ」「ウイルス」風にアレンジしていて、昔ながらのものと電子の世界を混ぜた見た目が特徴です。' },
+  { id: 'chars', cat: 'ゲームのこと', q: 'どんなキャラクターがいるの？',
+    keys: ['キャラ', '登場', '何人', '種類', '巫女', '狛犬', '鬼', '狐', '天狗', '招き猫', '提灯', '河童', '鶴', '白虎'],
+    a: '全部で**10人**います。それぞれ戦い方の個性がちがいます。\n・電脳巫女（バランス型）・狛犬AI（突進型）・404鬼（パワー型）\n・無限ループ狐（すばやい）・電脳天狗（空中・遠距離）・招き猫Bot（投げ・一発逆転）\n・提灯お化け（ため撃ち）・河童ウイルス（罠・毒）・白鶴（途中で姿が変わる）・白虎（追い込み型）\n\nキャラクターは全員「影絵（シルエット）＋ネオンのふち取り」で描いていて、1人目が赤、2人目が水色に光ります。' },
+  { id: 'loop', cat: '動くしくみ', q: 'ゲームはどうやって動いているの？',
+    keys: ['動いて', '動く', '仕組み', 'しくみ', 'どうやって', '原理', 'フレーム', '60', '計算'],
+    a: 'ゲームは**1秒間に60回**、同じ手順をくり返しています。\n・ボタンやスティックの入力を読む\n・キャラクターの動きを計算する（歩く、跳ぶ、技を出す）\n・攻撃が当たったかを調べ、体力を減らす\n・その結果を画面に描く\n\nこの1回分を「フレーム」と呼びます。60分の1秒ごとに絵を描き直すので、パラパラ漫画のようになめらかに動いて見えます。技の速さや強さも「何フレームで出るか」で細かく決めています。' },
+  { id: 'art', cat: '動くしくみ', q: 'キャラクターの絵はどうやって描いているの？',
+    keys: ['絵', '描', 'グラフィック', '画像', 'イラスト', 'シルエット', '見た目', 'アニメ', 'デザイン', 'ネオン'],
+    a: '実はこのゲームには、**画像ファイルが1枚もありません**。キャラクターも背景も、すべてプログラムが毎回その場で描いています。\n\nキャラクターは、人形のように「頭・胴・腕・脚」の関節を持った骨組みがあり、そこに衣装の形（袖、尻尾、羽など）を重ねて、黒い影絵として描きます。ポーズは関節の角度を少しずつ変えて作るので、絵を何十枚も用意しなくても動きを作れます。最後に、ふちをネオンのように光らせています。' },
+  { id: 'hitbox', cat: '動くしくみ', q: '攻撃が「当たった」はどう決めているの？',
+    keys: ['当たり', '当たった', '判定', 'ヒット', 'ガード', 'ダメージ', '体力'],
+    a: '目には見えない**四角い枠**で決めています。キャラクターの体には「ここを打たれたら当たり」という枠、技には「ここが攻撃の届く範囲」という枠があり、2つが重なったら命中です。\n\n相手が後ろに下がって守っていれば「ガード」になり、ダメージがほとんど入りません。練習モードでは、この枠を色つきで画面に出すこともできます（緑が体、赤が攻撃）。' },
+  { id: 'sound', cat: '動くしくみ', q: '音や音楽はどうしているの？',
+    keys: ['音', 'BGM', '音楽', '効果音', 'サウンド', '曲'],
+    a: '効果音と音楽の楽器の音には、**誰でも自由に使ってよいと公開されている録音素材（CC0）**を短く切って使っています。それをゲームのファイルの中に埋め込んでいるので、別の音声ファイルはいりません。\n\n音楽は、楽器の音をプログラムが楽譜どおりに鳴らして演奏しています。試合の残り時間が少なくなると、曲が少し急ぐように変わります。' },
+  { id: 'cpu', cat: '動くしくみ', q: 'コンピューター（CPU）の相手はどう考えているの？',
+    keys: ['CPU', 'コンピューター', 'AI', '相手', '敵', '強さ', '難しさ', 'むずかし', '1人'],
+    a: 'CPUは、毎フレーム**相手との距離や、相手がいま何をしているか**を見て、次の行動を選んでいます。たとえば「相手が跳んできたら対空技」「技を外して隙だらけなら反撃」といった決まりに、少しのランダムさを混ぜて、人間らしい動きにしています。\n\n強さは「やさしい・ふつう・つよい」の3段階です。「やさしい」は、はじめての人でも大技を当てられるよう、わざと隙を見せることもあります。' },
+  { id: 'balance', cat: '作り方', q: 'キャラクターの強さの調整はどうしているの？',
+    keys: ['バランス', '調整', '強すぎ', '弱すぎ', '公平', '勝率'],
+    a: 'コンピューター同士を**自動で何百試合も総当たりで戦わせ**、キャラクターごとの勝率を出しています。勝率が5割から大きくずれたキャラクターは、技の威力や体力を少しずつ直します。\n\nただし数字だけで決めず、最後は実際に遊んだときの「触った感じ」を優先して調整しています。' },
+  { id: 'make', cat: '作り方', q: 'どうやって作ったの？ 全部自分で？',
+    keys: ['作った', '作り方', '制作', '自分で', '一人', 'ひとり', 'AI', 'Claude', 'プログラム', '誰が', 'どうやって作'],
+    a: '企画、キャラクターや技の考え、遊んだときの調整は、**制作した生徒が決めています**。プログラムを書く作業では、AI（Claude）をパートナーとして使い、「こういう技にしたい」「ここが弱すぎる」と指示を出しながら一緒に作りました。\n\nAIが書いたものは、実際に遊んで確かめ、気になる所を何度も直してもらう、というくり返しで仕上げています。プログラムは全部で**1万行以上**あります。' },
+  { id: 'tech', cat: '作り方', q: 'どんな技術・言葉（プログラミング言語）で作られているの？',
+    keys: ['言語', '技術', 'JavaScript', 'HTML', 'ブラウザ', 'ソフト', 'エンジン', 'Unity', 'インストール'],
+    a: 'ホームページと同じ **HTML と JavaScript** で作られています。ゲーム用の専用ソフト（ゲームエンジン）は使っていません。\n・絵: ブラウザの「キャンバス」という描画機能\n・音: ブラウザの音声機能（Web Audio）\n・コントローラー: ブラウザのゲームパッド機能\n・オンライン対戦: ブラウザどうしを直接つなぐ機能（WebRTC）\n\nそのため、Chrome や Edge があれば、インストールなしで動きます。' },
+  { id: 'test', cat: '作り方', q: '不具合（バグ）が出ないようにどう確かめているの？',
+    keys: ['バグ', '不具合', 'テスト', '確認', '確かめ'],
+    a: '画面のないブラウザを自動で動かして、**キャラクター選択から試合の終わりまでを機械に通しで遊ばせる**テストをしています。オンライン対戦なら、2〜6台分の画面を同時に開いて、全員の画面で試合の結果が同じになるかまで確かめています。\n\nゲームの起動時にも、技のデータにおかしな値がないかを自動で点検しています。' },
+  { id: 'controls', cat: '遊び方', q: '子どもでも遊べる？ 操作は難しくない？',
+    keys: ['子ども', '子供', '小学生', '初心者', 'はじめて', '初めて', '難しい', '簡単', 'かんたん', '操作', 'ボタン', 'コントローラー', 'キーボード', 'Joy-Con', 'スイッチ'],
+    a: 'はい、大丈夫です。格闘ゲームの必殺技は、ふつうはレバーを決まった順に動かす必要がありますが、このゲームには**「かんたん操作」**があり、「方向＋必殺ボタン」だけで技が出ます。\n\nボタンは「弱・強・必殺・投げ」の4つが基本です。キーボードでも、ゲーム用のコントローラー（Switch の Joy-Con など）でも遊べます。はじめての人向けの練習（チュートリアル）も入っています。' },
+  { id: 'violence', cat: '安心・安全', q: '暴力的な表現はない？',
+    keys: ['暴力', '血', '怖い', 'こわい', '残酷', '年齢', '対象'],
+    a: 'キャラクターは影絵（シルエット）で描かれていて、**血が出るような表現はありません**。攻撃が当たったときは、光の火花や文字の演出で表しています。\n\n試合が終わると、勝った方の成績に応じて「おみくじ」が出る、という神社らしい締めくくりになっています。' },
+  { id: 'safety', cat: '安心・安全', q: '個人情報やお金は大丈夫？',
+    keys: ['安全', '安心', '個人情報', 'お金', '課金', '広告', '登録', 'アカウント', 'ウイルス', '危険'],
+    a: '**登録も課金も広告もありません**。名前やメールアドレスを入れる場所もありません（オンラインの大部屋でだけ、表示用のニックネームを入れられます）。設定や記録は、そのパソコンのブラウザの中に保存されるだけで、どこにも送られません。\n\nオンライン対戦を使うときだけ、相手のパソコンと直接つながります。その仕組み上、相手とはインターネット上の住所（IPアドレス）をやり取りします。' },
+  { id: 'online', cat: 'オンライン対戦', q: 'ネット対戦はどういう仕組み？',
+    keys: ['オンライン', 'ネット', '通信', 'インターネット', '遠く', '離れ', '対戦', '部屋', 'つなが', 'ラグ', '遅延'],
+    a: '2人のパソコンを**直接つないで**（うまくつながらないときは中継サーバーを通して）、お互いの「ボタンの入力」だけを送り合っています。画面の映像を送るのではなく、両方のパソコンが同じ計算をして同じ試合を作っています。\n\nネットには少し遅れがあるので、相手の入力が届くまでは「さっきと同じ操作を続けているはず」と予想して進め、予想が外れていたら、その瞬間まで一瞬で巻き戻して計算し直します（「ロールバック」という方法）。そのおかげで、遠くの相手とでも遅れを感じにくくなっています。' },
+  { id: 'room', cat: 'オンライン対戦', q: '大人数で遊べる「大部屋」とは？',
+    keys: ['大部屋', '6人', '複数', 'みんな', '観戦', 'チャット', '負け抜け', '友達'],
+    a: '最大**6人**が同じ部屋に入って、勝ち残り・負け抜けで順番に対戦できるモードです。対戦していない人は、その試合をリアルタイムで観戦できます。\n\n観戦する人には映像ではなく「2人のボタンの入力」だけが届き、それぞれのパソコンで同じ試合を再現しています。だから通信量はとても小さく、1人あたり1秒に1〜2キロバイトほどです。部屋の中ではキーボードでチャットもできます。' },
+  { id: 'home', cat: '遊び方', q: '家でも遊べる？',
+    keys: ['家', '自宅', 'ダウンロード', '持って帰', '配布', '遊びたい', 'スマホ', 'タブレット', 'iPad'],
+    a: 'このゲームは**1つのファイル**にまとまっていて、パソコンの Chrome か Edge で開くだけで遊べます。インターネットにつながっていなくても動きます（オンライン対戦を除く）。\n\nスマートフォンやタブレットには、いまのところ対応していません（キーボードかコントローラーが必要です）。配布の方法は、係の人に聞いてください。' },
+  { id: 'hard', cat: '作り方', q: '作っていて一番大変だったところは？',
+    keys: ['大変', '苦労', '難しかった', '工夫', 'こだわり', 'ポイント', '見どころ'],
+    a: '見どころは大きく3つです。\n・**オンライン対戦**: 2台の計算がほんの少しでもずれると試合が食いちがうので、「同じ入力なら必ず同じ結果」になるように作っています。\n・**キャラクターの個性**: 10人それぞれに「その人にしかない仕組み」（姿が変わる、罠を置く、ため撃ちなど）があり、強すぎないように何度も調整しました。\n・**はじめての人でも楽しい**こと: かんたん操作、練習モード、CPUの「やさしい」など。' },
+  { id: 'exhibit', cat: 'この展示', q: '展示の場所や時間は？ 誰が作ったの？',
+    keys: ['場所', '時間', '何時', 'いつまで', 'どこ', 'クラス', '何組', '作者', '制作者', '並', '順番', '何回', '待ち'],
+    a: '' }
+];
+
+/* 展示情報の答えは EXHIBIT から作る */
+function exhibitAnswer() {
+  const L = [];
+  if (EXHIBIT.place) L.push('・場所: ' + EXHIBIT.place);
+  if (EXHIBIT.hours) L.push('・時間: ' + EXHIBIT.hours);
+  if (EXHIBIT.creator) L.push('・制作: ' + EXHIBIT.creator);
+  if (EXHIBIT.play) L.push('・遊び方の決まり: ' + EXHIBIT.play);
+  return L.length ? 'この展示について、わかっていることをお伝えします。\n' + L.join('\n') + '\n\nほかに知りたいことは、近くの係の人にも気軽に声をかけてください。'
+    : '展示の場所・時間・順番などは、近くにいる**係の人に聞いてください**。私（案内係）は、ゲームの中身や仕組みについてお答えできます。';
+}
+KB.find(k => k.id === 'exhibit').a = exhibitAnswer();
+
+const GREETING = 'ようこそ、**電脳奉納試合**の展示へ。私はこのゲームの案内係です。\n\n遊び方の細かい説明ではなく、「**このゲームはどうやって動いているの？**」「**どうやって作ったの？**」といったことを、わかりやすくお話しします。右の質問を押すか、下の欄に自由に書いてください。';
+
+/* ===================================================================
+ * 表示
+ * =================================================================== */
+const $ = id => document.getElementById(id);
+const log = $('log');
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+/* かんたんな書式: **太字**、「・」「- 」で始まる行は箇条書き、空行で段落 */
+function render(text) {
+  const blocks = String(text).trim().split(/\n\s*\n/);
+  return blocks.map(b => {
+    const lines = b.split('\n').map(s => s.trim()).filter(Boolean);
+    const inl = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    const isLi = s => /^(・|- |\* |• )/.test(s);
+    let html = '', list = [];
+    const flush = () => { if (list.length) { html += '<ul>' + list.map(s => '<li>' + inl(s.replace(/^(・|- |\* |• )/, '')) + '</li>').join('') + '</ul>'; list = []; } };
+    const para = [];
+    for (const s of lines) {
+      if (isLi(s)) { if (para.length) { html += '<p>' + para.map(inl).join('<br>') + '</p>'; para.length = 0; } list.push(s); }
+      else { flush(); para.push(s); }
+    }
+    if (para.length) html += '<p>' + para.map(inl).join('<br>') + '</p>';
+    flush();
+    return html;
+  }).join('');
+}
+const AVATAR = '<svg width="30" height="26" viewBox="0 0 46 40" aria-hidden="true"><path d="M3 8 Q23 3 43 8 L43 12 Q23 8 3 12 Z" fill="var(--shu)"/><rect x="7" y="16" width="32" height="3.5" fill="var(--shu)"/><rect x="11" y="10" width="4" height="29" fill="var(--shu)"/><rect x="31" y="10" width="4" height="29" fill="var(--shu)"/></svg>';
+function scrollDown() { log.scrollTop = log.scrollHeight; }
+function addMe(text) {
+  const d = document.createElement('div'); d.className = 'msg me';
+  d.innerHTML = '<div class="bubble">' + esc(text) + '</div>';
+  log.appendChild(d); scrollDown();
+}
+function addBot(html, src) {
+  const d = document.createElement('div'); d.className = 'msg';
+  d.innerHTML = '<div class="av">' + AVATAR + '</div><div class="bubble"><div class="who">案内係<span class="src"></span></div><div class="body">' + html + '</div></div>';
+  if (src) d.querySelector('.src').textContent = src;
+  log.appendChild(d); scrollDown();
+  return d;
+}
+function relatedChips(node, ids) {
+  if (!ids.length) return;
+  const r = document.createElement('div'); r.className = 'related';
+  ids.forEach(id => { const k = KB.find(x => x.id === id); if (!k) return; const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.textContent = k.q; b.onclick = () => ask(k.q, k.id); r.appendChild(b); });
+  node.querySelector('.bubble').appendChild(r);
+  scrollDown();
+}
+/* はじめの案内カード: 1/60 秒の中でやっていること（順番に光る） */
+function introCard() {
+  return '<div class="intro"><h3>60分の1秒のあいだに、ゲームがしていること</h3><div class="loop">' +
+    [['INPUT', '入力を読む'], ['MOVE', '動きを計算'], ['HIT', '当たりを判定'], ['DRAW', '画面に描く']].map((s, i) => '<div class="step" data-i="' + i + '"><b>' + (i + 1) + ' ' + s[0] + '</b><span>' + s[1] + '</span></div>').join('') +
+    '</div><small>これを 1秒間に 60回くり返して、キャラクターを動かしています。</small></div>';
+}
+let loopT = 0;
+function animateLoop() {
+  clearInterval(loopT);
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  let i = 0;
+  loopT = setInterval(() => {
+    const steps = log.querySelectorAll('.step'); if (!steps.length) return;
+    steps.forEach(s => s.classList.toggle('on', +s.dataset.i === i));
+    i = (i + 1) % 4;
+  }, 700);
+}
+
+/* 右の「よくある質問」 */
+function buildSide() {
+  const cats = [];
+  KB.forEach(k => { if (cats.indexOf(k.cat) < 0) cats.push(k.cat); });
+  const side = $('side'); side.innerHTML = '';
+  cats.forEach(c => {
+    const g = document.createElement('div'); g.className = 'group';
+    g.innerHTML = '<h2>' + esc(c) + '</h2><div class="qs"></div>';
+    KB.filter(k => k.cat === c).forEach(k => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'q'; b.textContent = k.q;
+      b.onclick = () => ask(k.q, k.id);
+      g.querySelector('.qs').appendChild(b);
+    });
+    side.appendChild(g);
+  });
+  const mq = $('mobileqs'); mq.innerHTML = '';
+  ['loop', 'art', 'cpu', 'online', 'make', 'safety', 'controls'].forEach(id => {
+    const k = KB.find(x => x.id === id); const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.textContent = k.q; b.onclick = () => ask(k.q, k.id); mq.appendChild(b);
+  });
+}
+
+/* ===================================================================
+ * 答え方
+ *   1) AI（Claude）が使えるときは、上の知識だけをもとに会話で答える
+ *   2) 使えないとき（ネットがない・許可されていない）は、知識から一番近い答えを出す
+ * =================================================================== */
+function score(text, k) {
+  const t = text.toLowerCase(); let s = 0;
+  k.keys.forEach(w => { if (t.indexOf(w.toLowerCase()) >= 0) s += w.length >= 3 ? 2 : 1; });
+  if (t.indexOf(k.q.replace(/[？?]/g, '').toLowerCase()) >= 0) s += 5;
+  return s;
+}
+function bestTopics(text, n) {
+  return KB.map(k => ({ k, s: score(text, k) })).filter(x => x.s > 0).sort((a, b) => b.s - a.s).slice(0, n).map(x => x.k);
+}
+function related(text, exclude) {
+  const got = bestTopics(text, 6).map(k => k.id).filter(id => id !== exclude);
+  const fill = ['loop', 'art', 'online', 'make', 'cpu', 'safety'];
+  for (const id of fill) { if (got.length >= 3) break; if (got.indexOf(id) < 0 && id !== exclude) got.push(id); }
+  return got.slice(0, 3);
+}
+function offlineAnswer(text, id) {
+  const k = id ? KB.find(x => x.id === id) : bestTopics(text, 1)[0];
+  if (k) return { text: k.a, id: k.id };
+  return { text: 'すみません、その質問にはうまくお答えできませんでした。下の質問から選ぶか、言い方を変えてもう一度聞いてみてください。展示の場所や順番などは、近くの係の人に聞いてください。', id: null };
+}
+function kbText() {
+  return KB.map(k => '【' + k.q + '】\n' + k.a.replace(/\*\*/g, '')).join('\n\n');
+}
+const RULES = () => [
+  'あなたは、学校の文化祭で展示している自作の2D格闘ゲーム「電脳奉納試合」の案内係です。展示に来た保護者や一般の方の質問に答えます。',
+  '答え方の決まり:',
+  '- 日本語の、ていねいでやさしい話し言葉（です・ます）。専門用語は使わないか、使うときは一言で説明する。',
+  '- 2〜6文くらいで短く。必要なら「・」で始まる短い箇条書きを使ってよい。見出し・表・絵文字は使わない。強調は **太字** だけ。',
+  '- 下の「案内の知識」に書いてあることだけをもとに答える。知識にないこと（展示の場所・時間・制作者の名前・制作期間など）は推測せず、「係の人に聞いてください」と伝える。',
+  '- 技の出し方や操作の細かい手順ではなく、「どういう仕組みで動いているか」「どう作ったか」を中心に話す。',
+  '- ゲームと関係ない質問には、短くことわってから、ゲームについて聞けることを1つ提案する。',
+  '- 自分がAIであることを聞かれたら、正直に「AI（Claude）が案内しています」と答えてよい。',
+  '',
+  '案内の知識:',
+  kbText()
+].join('\n');
+
+let sample = null, aiOk = true, busy = false, ctl = null;
+const turns = [];   /* AI との会話（最近の分だけ送る） */
+(async () => {
+  try { if (window.claude && claude.use) sample = await claude.use('sample'); } catch (e) { sample = null; }
+})();
+
+async function ask(text, id) {
+  text = String(text || '').trim();
+  if (!text || busy) return;
+  bump();
+  busy = true; $('send').disabled = true;
+  addMe(text);
+  /* 決まった質問（ボタン）は、用意した答えをそのまま出す（すぐ・確実） */
+  if (id || !sample || !aiOk) {
+    const r = offlineAnswer(text, id);
+    const node = addBot('<span class="dots"><i></i><i></i><i></i></span>', id ? '' : '案内データから回答');
+    await new Promise(res => setTimeout(res, 380));
+    node.querySelector('.body').innerHTML = render(r.text);
+    relatedChips(node, related(text + ' ' + r.text, r.id));
+    turns.push({ role: 'user', content: text }, { role: 'assistant', content: r.text.replace(/\*\*/g, '') });
+    done(); return;
+  }
+  const node = addBot('<span class="dots"><i></i><i></i><i></i></span>', 'AI が回答');
+  const body = node.querySelector('.body');
+  ctl = new AbortController();
+  const recent = turns.slice(-8);
+  /* 決まりの文 → 最近の会話 → 今の質問（user で始まり user で終わる） */
+  const input = [{ role: 'user', content: RULES() }].concat(recent, [{ role: 'user', content: text }]);
+  try {
+    const res = await sample(input, { modelTier: 'quick', cache: false, signal: ctl.signal, onText: ({ text: t }) => { body.innerHTML = render(t); scrollDown(); } });
+    body.innerHTML = render(res.text);
+    relatedChips(node, related(text + ' ' + res.text, null));
+    turns.push({ role: 'user', content: text }, { role: 'assistant', content: res.text });
+  } catch (e) {
+    if (e && e.code === 'cancelled') { done(); return; }
+    /* AI が使えない・混んでいるときは、用意した答えで代わりに答える */
+    if (e && ['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed', 'session_expired'].indexOf(e.code) >= 0) aiOk = false;
+    const r = offlineAnswer(text, null);
+    node.querySelector('.src').textContent = '案内データから回答';
+    body.innerHTML = render(r.text);
+    relatedChips(node, related(text + ' ' + r.text, r.id));
+    turns.push({ role: 'user', content: text }, { role: 'assistant', content: r.text.replace(/\*\*/g, '') });
+  }
+  done();
+}
+function done() { busy = false; $('send').disabled = false; ctl = null; }
+
+/* ===================================================================
+ * 端末として: 最初から / 文字の大きさ / しばらく触られなければ最初に戻る
+ * =================================================================== */
+function start() {
+  if (ctl) { try { ctl.abort(); } catch (e) { } }
+  busy = false; $('send').disabled = false; turns.length = 0;
+  log.innerHTML = '';
+  const n = addBot(render(GREETING) + introCard());
+  relatedChips(n, ['loop', 'art', 'make']);
+  animateLoop();
+  $('q').value = '';
+  log.scrollTop = 0;
+}
+$('f').addEventListener('submit', e => { e.preventDefault(); const v = $('q').value; $('q').value = ''; ask(v, null); });
+$('reset').onclick = () => { start(); $('q').focus(); };
+$('big').onclick = () => {
+  const on = !document.documentElement.classList.contains('big');
+  document.documentElement.classList.toggle('big', on); $('big').setAttribute('aria-pressed', String(on));
+  try { localStorage.setItem('guide-big', on ? '1' : ''); } catch (e) { }
+};
+try { if (localStorage.getItem('guide-big')) { document.documentElement.classList.add('big'); $('big').setAttribute('aria-pressed', 'true'); } } catch (e) { }
+
+/* 2分さわられなかったら「最初に戻ります」を出し、さらに15秒で次の方のために最初に戻す */
+const IDLE = 120, WARN = 15;
+let idleS = 0;
+function bump() { idleS = 0; $('idle').hidden = true; }
+['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev => window.addEventListener(ev, bump, { passive: true }));
+$('stay').onclick = bump;
+setInterval(() => {
+  if (turns.length === 0 && !busy) { idleS = 0; return; }   /* 最初の画面のままなら何もしない */
+  idleS++;
+  if (idleS >= IDLE + WARN) { bump(); start(); return; }
+  if (idleS >= IDLE) { $('idle').hidden = false; $('idleMsg').textContent = 'あと ' + (IDLE + WARN - idleS) + ' 秒で、次の方のために最初の画面に戻ります'; }
+}, 1000);
+
+buildSide();
+start();
+</script>
