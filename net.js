@@ -136,7 +136,17 @@ const Net = {
   ICE: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],
   /* 中継サーバー（TURN）。直接つながらないときだけ使われる。例:
    * { urls: ['turn:xxx.metered.live:80', 'turn:xxx.metered.live:443?transport=tcp', 'turns:xxx.metered.live:443'], username: '...', credential: '...' } */
-  TURN: [],
+  TURN: (() => {
+    /* Metered の Open Relay（無料枠 月50GB。ユーザーのアカウント） */
+    const u = '8dccf83b38918bd185fe278d', c = 'oU1a/TYS+1yBCrXn';
+    return [
+      { urls: 'stun:stun.relay.metered.ca:80' },
+      { urls: 'turn:global.relay.metered.ca:80', username: u, credential: c },
+      { urls: 'turn:global.relay.metered.ca:80?transport=tcp', username: u, credential: c },
+      { urls: 'turn:global.relay.metered.ca:443', username: u, credential: c },
+      { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: u, credential: c }
+    ];
+  })(),
   iceServers() { return this.ICE.concat(this.TURN); },
   state: 'idle',          /* idle / signaling / waiting(部屋で待機) / connecting / open / closed / error */
   role: null, code: '', err: '', myId: '', peerId: '',
