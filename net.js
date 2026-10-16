@@ -151,6 +151,7 @@ const Net = {
   state: 'idle',          /* idle / signaling / waiting(部屋で待機) / connecting / open / closed / error */
   role: null, code: '', err: '', myId: '', peerId: '',
   ws: null, pc: null, ch: {}, inbox: [], candQ: [], hb: 0, pingT: 0, rtt: 0, deadline: 0,
+  route: '', routeT: 0,     /* 通信の経路: 'lan'（同じネットワーク）/ 'direct'（直接）/ 'relay'（中継サーバー経由）/ ''（不明） */
   onInput: null,          /* 入力パケットの受け手（NetSession） */
   sim: null,              /* テスト用: { lat: ms, jit: ms, loss: 0..1 } で遅延・パケット落ちを再現 */
   server() {
@@ -216,7 +217,9 @@ const Net = {
   },
   flushCand() { const q = this.candQ; this.candQ = []; q.forEach(c => this.pc.addIceCandidate(c).catch(() => { })); },
   newPc() {
-    const pc = new RTCPeerConnection({ iceServers: this.iceServers() });
+    /* #relay=1 で中継サーバーだけを使う（確認用） */
+    const hp = (E.HASH && E.HASH.p) || {};
+    const pc = new RTCPeerConnection({ iceServers: this.iceServers(), iceTransportPolicy: hp.relay ? 'relay' : 'all' });
     pc.onicecandidate = e => { if (e.candidate) this.wsSend({ type: 'CANDIDATE', payload: { candidate: e.candidate, type: 'data', connectionId: this.cid }, dst: this.peerId }); };
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState;
@@ -252,6 +255,21 @@ const Net = {
     c.onmessage = e => this.recv(e.data);
     c.onclose = () => { if (this.state === 'open') this.lost(); };
   },
+  /* 使われている候補の組（selected candidate pair）の種類から経路を判定する */
+  checkRoute() {
+    const pc = this.pc;
+    if (!pc || !pc.getStats) return;
+    pc.getStats().then(st => {
+      let pair = null; const byId = {};
+      st.forEach(r => { byId[r.id] = r; });
+      st.forEach(r => { if (r.type === 'transport' && r.selectedCandidatePairId) pair = byId[r.selectedCandidatePairId]; });
+      if (!pair) st.forEach(r => { if (r.type === 'candidate-pair' && r.state === 'succeeded' && (r.nominated || r.selected) && !pair) pair = r; });
+      if (!pair) return;
+      const lc = byId[pair.localCandidateId], rc = byId[pair.remoteCandidateId];
+      const lt = lc && lc.candidateType, rt = rc && rc.candidateType;
+      this.route = (lt === 'relay' || rt === 'relay') ? 'relay' : (lt === 'host' && rt === 'host') ? 'lan' : 'direct';
+    }).catch(() => { });
+  },
   checkOpen() {
     const a = this.ch.ctl, b = this.ch.inp;
     if (this.state === 'open' || !a || !b || a.readyState !== 'open' || b.readyState !== 'open') return;
@@ -260,6 +278,9 @@ const Net = {
     clearInterval(this.hb); try { if (this.ws) this.ws.close(); } catch (e) { /* 無視 */ } this.ws = null;
     clearInterval(this.pingT);
     this.pingT = setInterval(() => this.sendInp({ t: 'ping', s: performance.now() }), 500);
+    /* 経路はつながった直後と、その後も3秒ごとに調べ直す（途中で切り替わることがある） */
+    clearInterval(this.routeT); this.route = ''; this.checkRoute();
+    this.routeT = setInterval(() => this.checkRoute(), 3000);
   },
   /* 確実に届く順番どおりのチャネル（キャラ選択・再戦など） */
   send(o) {
@@ -301,7 +322,7 @@ const Net = {
   lost(msg) { if (this.state !== 'open') return; this.state = 'closed'; this.err = msg || '相手との接続が切れました'; this.cleanup(); },
   fail(msg) { this.state = 'error'; this.err = msg; this.cleanup(); },
   cleanup() {
-    clearInterval(this.hb); clearInterval(this.pingT); this.hb = 0; this.pingT = 0; this.deadline = 0;
+    clearInterval(this.hb); clearInterval(this.pingT); clearInterval(this.routeT); this.hb = 0; this.pingT = 0; this.routeT = 0; this.deadline = 0; this.route = '';
     try { if (this.ws) this.ws.close(); } catch (e) { /* 無視 */ }
     try { if (this.pc) this.pc.close(); } catch (e) { /* 無視 */ }
     this.ws = null; this.pc = null; this.ch = {}; this.candQ = []; this.onInput = null;

@@ -163,6 +163,8 @@
 - オンラインの「接続テスト」（ユーザー指定）: オンライン対戦のメニューに追加（`NetTest`、net.js）。①仲介サーバーに WebSocket で届くか（OPEN が来るか）、②2つの STUN（Google と Cloudflare）から見た外向きのポートが同じなら「直接つながりやすい」、違えば対称型NAT（「相手も同じだとつながらない」）、srflx が取れなければ UDP 不可、③ `Net.TURN` が設定されていれば relay 候補が取れるか。約8秒。○△✕と、次にどうすればいいかを表示。
 - 中継サーバー（TURN）: `Net.TURN` に入れれば直接つながらないときだけ使われる（`Net.iceServers()`）。いまは空。ユーザーの Metered（Open Relay、無料枠 月50GB・超過分は残高から）の接続情報を `Net.TURN` に入れた（global.relay.metered.ca の 80/443・UDP/TCP/TLS）。UDP が通らないこの作業環境でも relay 候補が取れることを接続テストで確認。
 
+- 試合中の経路表示（ユーザー指定）: つながった後と3秒ごとに `pc.getStats()` の選ばれた候補の組から `Net.route`（'lan' = 両方 host / 'direct' / 'relay' = どちらかが relay）を出し、オンライン試合の画面下に「直接」「直接（同じネットワーク）」（緑）／「中継サーバー経由」（橙）。`#relay=1` で中継だけを使う（確認用。iceTransportPolicy: 'relay'）。中継だけで1試合通して結果一致を確認（scratchpad の nettest_route.js、RELAY=1）。
+
 ## 確認のしかた（ヘッドレスの Chromium で回せる）
 
 - `game.html#selftest&matches=64&maxSec=150&seed=N` … 全キャラの組み合わせで CPU 同士の自動対戦。`document.title` が `SELFTEST PASS` なら合格。

@@ -7195,9 +7195,12 @@ Game.scenes.fight = {
     const S = this.net; if (!S) return;
     const me = S.local, col = me === 0 ? UI_COL.p1 : UI_COL.p2;
     drawText(ctx, 'YOU', me === 0 ? 40 : 920, 112, { size: 13, font: 'en', align: me === 0 ? 'left' : 'right', color: col, glow: col });
+    /* 通信の経路: 中継サーバー経由のときは目立つ色で */
+    const rt = Net.route, rLabel = rt === 'relay' ? '中継サーバー経由' : rt === 'lan' ? '直接（同じネットワーク）' : rt === 'direct' ? '直接' : '';
     drawText(ctx, 'ONLINE  ' + Math.round(Net.rtt) + 'ms', 480, 488, { size: 11, font: 'en', align: 'center', color: '#8fa3c8', alpha: 0.7 });
+    if (rLabel) drawText(ctx, rLabel, 480, 474, { size: 11, align: 'center', color: rt === 'relay' ? '#ffb347' : '#7cff6b', alpha: 0.8 });
     if (S.waitT > 20) drawText(ctx, '通信を待っています…', 480, 210, { size: 18, align: 'center', color: '#ffb347', glow: '#ffb347' });
-    if (S.desync >= 0) drawText(ctx, '同期ずれが起きました（2人の画面の結果が違う可能性があります）', 480, 466, { size: 13, align: 'center', color: '#ff6b8b' });
+    if (S.desync >= 0) drawText(ctx, '同期ずれが起きました（2人の画面の結果が違う可能性があります）', 480, 456, { size: 13, align: 'center', color: '#ff6b8b' });
     if (this.quitAsk) {
       ctx.fillStyle = 'rgba(3,4,12,0.6)'; ctx.fillRect(0, 210, CFG.W, 110);
       drawText(ctx, '対戦をやめて 切断しますか？', 480, 246, { size: 22, align: 'center', base: 'middle', color: '#ffffff' });
