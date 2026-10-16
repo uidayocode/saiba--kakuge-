@@ -2476,7 +2476,7 @@ class Fighter {
  * ================================================================ */
 const NullFX = new Proxy({}, { get: function () { return function () { }; } });
 /* オンライン対戦（net.js）。中身は使うときに参照するのでゲッターで渡す */
-const { Snap, Net, NetSession } = window.DennoNet({
+const { Snap, Net, NetSession, NetTest } = window.DennoNet({
   get Game() { return Game; }, get FX() { return FX; }, get NullFX() { return NullFX; }, get Match() { return Match; }, get HASH() { return HASH; }
 });
 
@@ -5807,10 +5807,17 @@ function netLost() {
 }
 Game.scenes.online = {
   idleLimit: 0,
-  ITEMS: ['部屋を作る', '部屋に入る', 'タイトルへ'],
-  enter() { this.mode = 'menu'; this.sel = 0; this.dig = this.dig || [0, 0, 0, 0]; this.di = 0; Net.close(); FX.reset(); },
+  ITEMS: ['部屋を作る', '部屋に入る', '接続テスト', 'タイトルへ'],
+  enter() { this.mode = 'menu'; this.sel = 0; this.dig = this.dig || [0, 0, 0, 0]; this.di = 0; Net.close(); NetTest.stop(); FX.reset(); },
+  exit() { NetTest.stop(); },
   update() {
     Net.poll();
+    if (this.mode === 'test') {
+      NetTest.poll();
+      const n2 = Input.nav;
+      if ((n2 & B_H) || Input.keyPressed('Escape') || (NetTest.state === 'done' && (n2 & B_L))) { Audio.play('menuCancel'); NetTest.stop(); this.mode = 'menu'; }
+      return;
+    }
     const n = Input.nav, back = (n & B_H) || Input.keyPressed('Escape'), ok = (n & B_L) || Input.keyPressed('Enter') || Input.keyPressed('NumpadEnter');
     if (this.mode === 'menu') {
       this.sel = menuMove(this.sel, this.ITEMS.length, n);
@@ -5819,6 +5826,7 @@ Game.scenes.online = {
         Audio.play('menuOk');
         if (this.sel === 0) { Net.host(); this.mode = 'host'; }
         else if (this.sel === 1) { this.mode = 'code'; this.di = 0; }
+        else if (this.sel === 2) { NetTest.start(); this.mode = 'test'; }
         else Game.go('title');
       }
       return;
@@ -5846,15 +5854,42 @@ Game.scenes.online = {
     const bad = Net.state === 'error' || Net.state === 'closed';
     if (back || (bad && ok)) { Audio.play('menuCancel'); Net.close(); this.mode = 'menu'; }
   },
+  /* 接続テストの結果: ○ = 大丈夫 / △ = 相手によっては無理 / ✕ = できない */
+  renderTest(ctx, sub) {
+    const r = NetTest.res || {}, dots = '.'.repeat(1 + Math.floor(Game.t * 2) % 3);
+    const row = (y, label, st, okT, midT, ngT) => {
+      const mark = st === 'wait' ? '…' : st === 'ok' ? '○' : st === 'mid' ? '△' : '✕';
+      const col = st === 'wait' ? '#8fa3c8' : st === 'ok' ? '#7cff6b' : st === 'mid' ? '#ffe94d' : '#ff6b8b';
+      drawText(ctx, label, 250, y, { size: 16, color: '#e6f1ff', base: 'middle' });
+      drawText(ctx, mark, 470, y, { size: 22, color: col, align: 'center', base: 'middle' });
+      drawText(ctx, st === 'wait' ? '調べています' + dots : st === 'ok' ? okT : st === 'mid' ? midT : ngT, 500, y, { size: 14, color: col, base: 'middle' });
+    };
+    sub('この回線でオンライン対戦ができるかを調べます（約8秒）', 130, '#e6f1ff');
+    row(190, '仲介サーバー', r.signal === 'ok' ? 'ok' : r.signal === 'wait' ? 'wait' : 'ng', '届きます', '', '届きません（学校・会社のフィルターかも）');
+    row(235, '回線の種類', r.nat === 'open' ? 'ok' : r.nat === 'sym' ? 'mid' : r.nat === 'wait' ? 'wait' : 'ng',
+      '直接つながりやすい回線です', '相手も同じ種類だとつながりません（テザリング等）', 'UDP が通りません。直接はつながりません');
+    if (r.turn !== 'none') row(280, '中継サーバー', r.turn === 'ok' ? 'ok' : r.turn === 'wait' ? 'wait' : 'ng', '使えます（直接だめでもつながります）', '', '使えません');
+    if (NetTest.state === 'done') {
+      const relay = r.turn === 'ok';
+      let msg, col;
+      if (r.signal !== 'ok') { msg = 'この回線ではオンライン対戦できません。別の回線（家の Wi-Fi など）で試してください'; col = '#ff6b8b'; }
+      else if (r.nat === 'open' || relay) { msg = 'オンライン対戦できます'; col = '#7cff6b'; }
+      else if (r.nat === 'sym') { msg = '相手が家の Wi-Fi などならつながります。2人ともこの結果だとつながりません'; col = '#ffe94d'; }
+      else { msg = 'この回線では、相手とは直接つながりません。別の回線で試してください'; col = '#ff6b8b'; }
+      drawText(ctx, msg, 480, 345, { size: 16, align: 'center', color: col });
+      sub('弱 / 強: 戻る', 420);
+    } else sub('強 / Esc: やめる', 420);
+  },
   render(ctx) {
     Backdrop.draw(ctx, 0.6);
     drawText(ctx, 'オンライン対戦', 480, 64, { size: 30, align: 'center', color: '#ffffff', glow: '#19f3ff' });
     const sub = (t, y, c) => drawText(ctx, t, 480, y, { size: 14, align: 'center', color: c || '#8fa3c8' });
+    if (this.mode === 'test') { this.renderTest(ctx, sub); drawConn(ctx); return; }
     if (this.mode === 'menu') {
-      drawMenuList(ctx, this.ITEMS, this.sel, 480, 190, 46);
+      drawMenuList(ctx, this.ITEMS, this.sel, 480, 175, 44);
       sub('ネット越しに 2人で対戦します。片方が部屋を作り、部屋番号を相手に伝えて入ってもらいます', 392);
       sub('2人とも Chrome か Edge で遊んでください', 416);
-      sub('学校など制限のあるネットワークでは、つながらないことがあります', 440);
+      sub('学校など制限のあるネットワークでは、つながらないことがあります（「接続テスト」で確かめられます）', 440);
     } else if (this.mode === 'code') {
       sub('相手から聞いた 部屋番号（4けた）を入れてください', 150, '#e6f1ff');
       for (let i = 0; i < 4; i++) {

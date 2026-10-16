@@ -68,10 +68,76 @@ const Snap = {
   }
 };
 
+/* ---------------- NetTest: 接続テスト ----------------
+ * 1) 仲介サーバー（部屋番号の受け渡し）に届くか
+ * 2) 回線の種類: 2つの STUN サーバーから見た自分の外向きの番号（ポート）が同じなら「直接つながりやすい」、
+ *    違えば「相手によってはつながらない」（対称型NAT）、外向きの番号が取れなければ UDP が通らない
+ * 3) 中継サーバー（Net.TURN が設定されていれば）が使えるか */
+const NetTest = {
+  state: 'idle', res: null, t0: 0,
+  start() {
+    this.stop();
+    this.state = 'running'; this.t0 = performance.now();
+    const r = this.res = { signal: 'wait', nat: 'wait', turn: Net.TURN.length ? 'wait' : 'none' };
+    /* 1) 仲介サーバー */
+    try {
+      const id = Net.PREFIX + 't' + Net.rnd(10, 'abcdefghijklmnopqrstuvwxyz0123456789');
+      const ws = new WebSocket(Net.server() + '?key=' + Net.KEY + '&id=' + id + '&token=' + Net.rnd(12, 'abcdefghijklmnopqrstuvwxyz0123456789') + '&version=1.5.4');
+      this.ws = ws;
+      ws.onmessage = e => { let m = null; try { m = JSON.parse(e.data); } catch (er) { return; } if (m && m.type === 'OPEN') { r.signal = 'ok'; try { ws.close(); } catch (er) { } } else if (m && m.type === 'ERROR') r.signal = 'ng'; };
+      ws.onerror = () => { if (r.signal === 'wait') r.signal = 'ng'; };
+      ws.onclose = () => { if (r.signal === 'wait') r.signal = 'ng'; };
+    } catch (e) { r.signal = 'ng'; }
+    /* 2) 3) STUN / TURN */
+    try {
+      const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }].concat(Net.TURN) });
+      this.pc = pc;
+      const ports = {}; let relay = false;
+      pc.onicecandidate = e => {
+        const c = e.candidate;
+        if (!c) { this.finishIce(ports, relay); return; }
+        const t = / typ (\w+)/.exec(c.candidate), typ = t ? t[1] : '';
+        const parts = c.candidate.split(' '), port = parts[5], base = (/ rport (\d+)/.exec(c.candidate) || [])[1];
+        if (typ === 'srflx') { const k = base || 'x'; (ports[k] = ports[k] || {})[port] = 1; }
+        if (typ === 'relay') relay = true;
+      };
+      pc.createDataChannel('t');
+      pc.createOffer().then(o => pc.setLocalDescription(o)).catch(() => { r.nat = 'ng'; });
+      this.ports = ports; this.relayRef = () => relay;
+    } catch (e) { r.nat = 'ng'; if (r.turn === 'wait') r.turn = 'ng'; }
+  },
+  finishIce(ports, relay) {
+    const r = this.res; if (!r || r.nat !== 'wait') return;
+    const sets = Object.keys(ports).map(k => Object.keys(ports[k]).length);
+    if (!sets.length) r.nat = 'udp';                         /* 外向きの番号が取れない = UDP が通らない */
+    else r.nat = sets.some(n => n > 1) ? 'sym' : 'open';    /* 同じ自分から 2つの番号 = 相手ごとに番号が変わる回線 */
+    if (r.turn === 'wait') r.turn = relay ? 'ok' : 'ng';
+  },
+  /* 毎フレーム呼ぶ。8秒で打ち切り */
+  poll() {
+    if (this.state !== 'running') return;
+    const r = this.res, late = performance.now() - this.t0 > 8000;
+    if (late) {
+      if (r.signal === 'wait') r.signal = 'ng';
+      if (r.nat === 'wait') this.finishIce(this.ports || {}, this.relayRef ? this.relayRef() : false);
+    }
+    if (r.signal !== 'wait' && r.nat !== 'wait' && r.turn !== 'wait') { this.state = 'done'; this.stop(true); }
+  },
+  stop(keep) {
+    try { if (this.ws) this.ws.close(); } catch (e) { } this.ws = null;
+    try { if (this.pc) this.pc.close(); } catch (e) { } this.pc = null;
+    if (!keep) { this.state = 'idle'; }
+  }
+};
+
 /* ---------------- Net: 通信 ---------------- */
 const Net = {
   SERVER: 'wss://0.peerjs.com:443/peerjs', KEY: 'peerjs', PREFIX: 'denno-houno-',
   ICE: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],
+  /* 中継サーバー（TURN）。直接つながらないときだけ使われる。例:
+   * { urls: ['turn:xxx.metered.live:80', 'turn:xxx.metered.live:443?transport=tcp', 'turns:xxx.metered.live:443'], username: '...', credential: '...' } */
+  TURN: [],
+  iceServers() { return this.ICE.concat(this.TURN); },
   state: 'idle',          /* idle / signaling / waiting(部屋で待機) / connecting / open / closed / error */
   role: null, code: '', err: '', myId: '', peerId: '',
   ws: null, pc: null, ch: {}, inbox: [], candQ: [], hb: 0, pingT: 0, rtt: 0, deadline: 0,
@@ -140,7 +206,7 @@ const Net = {
   },
   flushCand() { const q = this.candQ; this.candQ = []; q.forEach(c => this.pc.addIceCandidate(c).catch(() => { })); },
   newPc() {
-    const pc = new RTCPeerConnection({ iceServers: this.ICE });
+    const pc = new RTCPeerConnection({ iceServers: this.iceServers() });
     pc.onicecandidate = e => { if (e.candidate) this.wsSend({ type: 'CANDIDATE', payload: { candidate: e.candidate, type: 'data', connectionId: this.cid }, dst: this.peerId }); };
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState;
@@ -359,5 +425,5 @@ class NetSession {
   }
 }
 
-return { Snap: Snap, Net: Net, NetSession: NetSession };
+return { Snap: Snap, Net: Net, NetSession: NetSession, NetTest: NetTest };
 };
