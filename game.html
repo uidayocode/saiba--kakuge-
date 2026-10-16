@@ -5,9 +5,11 @@
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
 <style>
 :root { color-scheme: dark; }
-html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #05060f; overflow: hidden; cursor: none; user-select: none; -webkit-user-select: none; touch-action: none; }
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #05060f; overflow: hidden; user-select: none; -webkit-user-select: none; touch-action: none; }
 #game { position: fixed; left: 0; top: 0; background: #05060f; display: block; }
 #errlog { position: fixed; left: 8px; right: 8px; bottom: 8px; max-height: 40%; overflow: auto; margin: 0; padding: 6px 8px; background: rgba(60,0,10,.88); color: #ffb3c0; font: 12px/1.4 monospace; white-space: pre-wrap; z-index: 9; display: none; pointer-events: none; }
+/* カーソルはマウスを動かしている間だけ出す（2.5秒止まると消える） */
+body.hide-cursor, body.hide-cursor * { cursor: none !important; }
 </style>
 <canvas id="game" width="960" height="540"></canvas>
 <pre id="errlog"></pre>
@@ -8818,7 +8820,11 @@ function toggleFullscreen() {
 function boot() {
   Display.init();
   /* ---- 入力イベント ---- */
-  window.addEventListener('keydown', e => {
+  /* マウスカーソル: 動かしたら出して、2.5秒止まったら隠す */
+{ let curT = 0; const hideCur = () => document.body.classList.add('hide-cursor');
+  window.addEventListener('mousemove', () => { document.body.classList.remove('hide-cursor'); clearTimeout(curT); curT = setTimeout(hideCur, 2500); });
+  if (document.body) hideCur(); else window.addEventListener('DOMContentLoaded', hideCur); }
+window.addEventListener('keydown', e => {
     if (e.code === 'F2') { toggleFullscreen(); e.preventDefault(); return; }
     if (e.code === 'F4') { Game.showFps = !Game.showFps; e.preventDefault(); return; }
     if (e.code === 'F3') { Audio.resume(); Audio.setMute(!Audio.muted); Toast.push(Audio.muted ? 'ミュート' : 'ミュート解除'); e.preventDefault(); return; }

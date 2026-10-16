@@ -165,6 +165,8 @@
 
 - 試合中の経路表示（ユーザー指定）: つながった後と3秒ごとに `pc.getStats()` の選ばれた候補の組から `Net.route`（'lan' = 両方 host / 'direct' / 'relay' = どちらかが relay）を出し、オンライン試合の画面下に「直接」「直接（同じネットワーク）」（緑）／「中継サーバー経由」（橙）。`#relay=1` で中継だけを使う（確認用。iceTransportPolicy: 'relay'）。中継だけで1試合通して結果一致を確認（scratchpad の nettest_route.js、RELAY=1）。
 
+- マウスカーソル（ユーザー指定）: 前は常に隠していた（`cursor: none`）。動かしている間だけ出し、2.5秒止まると隠す（body の `hide-cursor`）。
+
 ## 確認のしかた（ヘッドレスの Chromium で回せる）
 
 - `game.html#selftest&matches=64&maxSec=150&seed=N` … 全キャラの組み合わせで CPU 同士の自動対戦。`document.title` が `SELFTEST PASS` なら合格。
