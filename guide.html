@@ -21,6 +21,7 @@
   color-scheme: dark;
 }
 :root.big { --fs: 21px; }
+[hidden] { display: none !important; }   /* ファイルを直接開いたときも、隠した物はきちんと隠す */
 html, body { height: 100%; }
 body {
   background: var(--ink); color: var(--text); font-family: var(--font-body); font-size: var(--fs); line-height: 1.75;
@@ -186,8 +187,11 @@ form { display: flex; gap: 10px; padding: 12px; border-top: 1px solid var(--line
     </div>
     <div id="stBody" hidden>
       <dl class="stat" id="stState"></dl>
-      <label for="stKey">API キー（Anthropic Console で作ったもの。このパソコンのブラウザにだけ保存されます）<input id="stKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-..."></label>
-      <label for="stModel">答えるモデル<select id="stModel"></select></label>
+      <label for="stProv">使う AI<select id="stProv"></select></label>
+      <p class="note" id="stHelp"></p>
+      <label for="stKey" id="stKeyRow">API キー（このパソコンのブラウザにだけ保存されます）<input id="stKey" type="password" autocomplete="off" spellcheck="false"></label>
+      <label for="stModel" id="stModelRow">モデル名<input id="stModel" type="text" autocomplete="off" spellcheck="false" list="stModels"><datalist id="stModels"></datalist></label>
+      <label for="stUrl" id="stUrlRow">Ollama の場所<input id="stUrl" type="text" autocomplete="off" spellcheck="false"></label>
       <label for="stPin">暗証番号（この画面を開くときに聞く。空なら聞かない）<input id="stPin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
       <div class="row">
         <button class="btn main" id="stSave" type="button">保存</button>
@@ -197,7 +201,7 @@ form { display: flex; gap: 10px; padding: 12px; border-top: 1px solid var(--line
       </div>
       <p class="note" id="stMsg"></p>
       <dl class="stat" id="stUsage"></dl>
-      <p class="note">展示が終わったら「キーを消す」を押し、Anthropic Console でもキーを無効にしてください。Console で月の使用上限を低めに決めておくと安心です。連投の制限（待ち時間・回数）はファイルの <code>LIMITS</code> で変えられます。</p>
+      <p class="note">展示が終わったら「キーを消す」を押し、キーを作ったサイトでも無効にしてください。連投の制限（待ち時間・回数）はファイルの <code>LIMITS</code> で変えられます。</p>
     </div>
   </div>
 </div>
@@ -462,92 +466,166 @@ function startCool() {
 }
 
 /* ===================================================================
- * 展示用パソコンで使う「API キー」モード
- *   claude.ai にログインしなくても AI で答えられる（来場者がアカウントに触れない）。
+ * 展示用パソコンで使う AI（claude.ai にログインしなくても AI で答えられる＝来場者がアカウントに触れない）
+ *   Claude（API キー・有料）/ Gemini（API キー・無料枠あり）/ ローカルAI（Ollama・無料・ネット不要）から選ぶ。
  *   キーはこのパソコンのブラウザの中にだけ保存する（ファイルやリポジトリには書かない）。
  *   係の人の設定: Ctrl + Shift + S、または左上の鳥居を 3秒長押し
  * =================================================================== */
-const MODELS = {
-  'claude-opus-5-5': { label: 'Claude Opus 5.5（賢い・標準）', inp: 4.0, out: 20.0 },
-  'claude-haiku-5-5': { label: 'Claude Haiku 5.5（速い・とても安い）', inp: 0.10, out: 0.50 }
+const PROVIDERS = {
+  none:   { label: 'AI を使わない（用意した答えだけ）' },
+  gemini: { label: 'Gemini（Google・無料枠あり）', model: 'gemini-flash-latest', key: true },
+  ollama: { label: 'ローカルAI（Ollama・無料・ネット不要）', model: 'gemma3:4b', key: false },
+  claude: { label: 'Claude（Anthropic・有料）', model: 'claude-opus-5-5', key: true }
 };
+/* Claude の料金（100万トークンあたりのドル。目安の計算用） */
+const CLAUDE_PRICE = { 'claude-opus-5-5': { inp: 4.0, out: 20.0 }, 'claude-haiku-5-5': { inp: 0.10, out: 0.50 } };
 const Staff = {
-  key: '', model: 'claude-opus-5-5', pin: '',
+  provider: 'none', keys: {}, models: {}, ollamaUrl: 'http://localhost:11434', pin: '', off: false,
   load() {
     try {
       const o = JSON.parse(localStorage.getItem('guide-staff') || '{}');
-      this.key = o.key || ''; this.model = MODELS[o.model] ? o.model : 'claude-opus-5-5'; this.pin = o.pin || '';
+      if (o.key && !o.keys) { o.keys = { claude: o.key }; o.provider = 'claude'; o.models = { claude: o.model }; }   /* 前の形式 */
+      this.provider = PROVIDERS[o.provider] ? o.provider : 'none';
+      this.keys = o.keys || {}; this.models = o.models || {}; this.ollamaUrl = o.ollamaUrl || this.ollamaUrl; this.pin = o.pin || '';
     } catch (e) { }
   },
-  save() { try { localStorage.setItem('guide-staff', JSON.stringify({ key: this.key, model: this.model, pin: this.pin })); } catch (e) { } }
+  save() { try { localStorage.setItem('guide-staff', JSON.stringify({ provider: this.provider, keys: this.keys, models: this.models, ollamaUrl: this.ollamaUrl, pin: this.pin })); } catch (e) { } },
+  model() { return this.models[this.provider] || (PROVIDERS[this.provider] || {}).model || ''; },
+  key() { return this.keys[this.provider] || ''; },
+  /* この設定で AI を呼べるか */
+  ready() {
+    const P = PROVIDERS[this.provider];
+    if (this.off || !P || this.provider === 'none') return false;
+    return P.key ? !!this.key() : true;
+  }
 };
 Staff.load();
-/* 使った量（その日の分。料金は目安） */
+/* 使った量（その日の分。料金は Claude のときだけ目安を出す） */
 const Usage = {
   get() {
     const day = new Date().toISOString().slice(0, 10);
     let o = null; try { o = JSON.parse(localStorage.getItem('guide-usage') || 'null'); } catch (e) { }
     return o && o.day === day ? o : { day: day, calls: 0, inp: 0, out: 0, cw: 0, cr: 0, usd: 0 };
   },
-  add(u, model) {
-    const o = this.get(), M = MODELS[model] || MODELS['claude-opus-5-5'];
-    const inp = u.input_tokens || 0, out = u.output_tokens || 0, cw = u.cache_creation_input_tokens || 0, cr = u.cache_read_input_tokens || 0;
-    o.calls++; o.inp += inp; o.out += out; o.cw += cw; o.cr += cr;
-    /* 1時間キャッシュの書き込みは入力の2倍、読み出しは入力の1割 */
-    o.usd += (inp * M.inp + out * M.out + cw * M.inp * 2 + cr * M.inp * 0.1) / 1e6;
+  add(inp, out, cw, cr, usd) {
+    const o = this.get();
+    o.calls++; o.inp += inp || 0; o.out += out || 0; o.cw += cw || 0; o.cr += cr || 0; o.usd += usd || 0;
     try { localStorage.setItem('guide-usage', JSON.stringify(o)); } catch (e) { }
   }
 };
+/* ストリームを 1行ずつ読む（SSE も NDJSON も） */
+async function readLines(res, onLine) {
+  const rd = res.body.getReader(), dec = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const r = await rd.read();
+    if (r.done) break;
+    buf += dec.decode(r.value, { stream: true }).replace(/\r/g, '');
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (line) onLine(line); }
+  }
+  if (buf.trim()) onLine(buf.trim());
+}
 const Api = {
   fallbacks: true, lastError: '',
-  /* system: 決まりの文と知識（毎回同じ → キャッシュされて安くなる）。messages: user で始まり user で終わる */
-  async ask(system, messages, onText, signal, retried) {
-    const model = Staff.model, opus = model.indexOf('opus') >= 0;
+  /* system: 決まりの文と知識。messages: {role:'user'|'assistant', content} の列（user で始まり user で終わる） */
+  async ask(system, messages, onText, signal) {
+    const p = Staff.provider;
+    const r = p === 'gemini' ? await this.gemini(system, messages, onText, signal)
+      : p === 'ollama' ? await this.ollama(system, messages, onText, signal)
+      : await this.claude(system, messages, onText, signal);
+    if (!r.text.trim()) throw { code: 'empty' };
+    this.lastError = '';
+    return r;
+  },
+  async fail(res, name) {
+    const t = await res.text().catch(() => '');
+    this.lastError = name + ' ' + res.status + ' ' + t.slice(0, 160);
+    throw { code: 'http_' + res.status, status: res.status, body: t };
+  },
+  /* ---- Claude（Anthropic API）---- */
+  async claude(system, messages, onText, signal, retried) {
+    const model = Staff.model(), opus = model.indexOf('opus') >= 0;
     const body = {
       model: model, max_tokens: 4000, stream: true,
-      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral', ttl: '1h' } }],
+      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral', ttl: '1h' } }],   /* 毎回同じ → キャッシュで安く */
       messages: messages,
       output_config: { effort: 'low' }   /* 案内の答えに深い考えはいらない（使う量も減る） */
     };
-    const headers = {
-      'content-type': 'application/json', 'x-api-key': Staff.key, 'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    };
+    const headers = { 'content-type': 'application/json', 'x-api-key': Staff.key(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
     if (opus && this.fallbacks) { body.fallbacks = 'default'; headers['anthropic-beta'] = 'server-side-fallback-2026-07-01'; }
     const res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: headers, body: JSON.stringify(body), signal: signal });
     if (!res.ok) {
-      const t = await res.text().catch(() => '');
-      /* 予備のモデルに切り替える設定が通らなかったら、それなしでもう一度だけ */
-      if (res.status === 400 && body.fallbacks && !retried && /fallback/i.test(t)) { this.fallbacks = false; return this.ask(system, messages, onText, signal, true); }
-      this.lastError = res.status + ' ' + t.slice(0, 160);
-      throw { code: 'http_' + res.status, status: res.status };
-    }
-    /* ストリーム（Server-Sent Events）を読む */
-    const rd = res.body.getReader(), dec = new TextDecoder();
-    let buf = '', text = '', stop = '', usage = {};
-    for (;;) {
-      const r = await rd.read(); if (r.done) break;
-      buf += dec.decode(r.value, { stream: true });
-      let i;
-      while ((i = buf.indexOf('\n\n')) >= 0) {
-        const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
-        const line = chunk.split('\n').find(l => l.indexOf('data:') === 0);
-        if (!line) continue;
-        let ev = null; try { ev = JSON.parse(line.slice(5).trim()); } catch (e) { continue; }
-        if (ev.type === 'message_start' && ev.message && ev.message.usage) Object.assign(usage, ev.message.usage);
-        else if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') { text += ev.delta.text; onText(text); }
-        else if (ev.type === 'message_delta') { if (ev.delta && ev.delta.stop_reason) stop = ev.delta.stop_reason; if (ev.usage) Object.assign(usage, ev.usage); }
-        else if (ev.type === 'error') { this.lastError = (ev.error && ev.error.type) || 'stream error'; throw { code: 'stream_error' }; }
+      if (res.status === 400 && body.fallbacks && !retried) {
+        const t = await res.clone().text().catch(() => '');
+        if (/fallback/i.test(t)) { this.fallbacks = false; return this.claude(system, messages, onText, signal, true); }
       }
+      await this.fail(res, 'Claude');
     }
-    Usage.add(usage, model);
-    if (stop === 'refusal' || !text.trim()) throw { code: 'refusal' };
-    this.lastError = '';
+    let text = '', stop = '', usage = {};
+    await readLines(res, line => {
+      if (line.indexOf('data:') !== 0) return;
+      let ev = null; try { ev = JSON.parse(line.slice(5).trim()); } catch (e) { return; }
+      if (ev.type === 'message_start' && ev.message && ev.message.usage) Object.assign(usage, ev.message.usage);
+      else if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') { text += ev.delta.text; onText(text); }
+      else if (ev.type === 'message_delta') { if (ev.delta && ev.delta.stop_reason) stop = ev.delta.stop_reason; if (ev.usage) Object.assign(usage, ev.usage); }
+      else if (ev.type === 'error') { this.lastError = 'Claude ' + ((ev.error && ev.error.type) || 'stream error'); throw { code: 'stream_error' }; }
+    });
+    const M = CLAUDE_PRICE[model] || CLAUDE_PRICE['claude-opus-5-5'];
+    const inp = usage.input_tokens || 0, out = usage.output_tokens || 0, cw = usage.cache_creation_input_tokens || 0, cr = usage.cache_read_input_tokens || 0;
+    /* 1時間キャッシュの書き込みは入力の2倍、読み出しは入力の1割 */
+    Usage.add(inp, out, cw, cr, (inp * M.inp + out * M.out + cw * M.inp * 2 + cr * M.inp * 0.1) / 1e6);
+    if (stop === 'refusal') throw { code: 'refusal' };
     return { text: text, truncated: stop === 'max_tokens' };
+  },
+  /* ---- Gemini（Google AI Studio の API キー。無料枠あり）---- */
+  async gemini(system, messages, onText, signal) {
+    const model = Staff.model();
+    const body = {
+      systemInstruction: { parts: [{ text: system }] },
+      contents: messages.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+      generationConfig: { maxOutputTokens: 4000 }
+    };
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':streamGenerateContent?alt=sse';
+    const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': Staff.key() }, body: JSON.stringify(body), signal: signal });
+    if (!res.ok) await this.fail(res, 'Gemini');
+    let text = '', finish = '', inp = 0, out = 0;
+    await readLines(res, line => {
+      if (line.indexOf('data:') !== 0) return;
+      let ev = null; try { ev = JSON.parse(line.slice(5).trim()); } catch (e) { return; }
+      const c = ev.candidates && ev.candidates[0];
+      if (c && c.content && c.content.parts) c.content.parts.forEach(pt => { if (pt.text && !pt.thought) { text += pt.text; onText(text); } });
+      if (c && c.finishReason) finish = c.finishReason;
+      if (ev.usageMetadata) { inp = ev.usageMetadata.promptTokenCount || inp; out = ev.usageMetadata.candidatesTokenCount || out; }
+    });
+    Usage.add(inp, out, 0, 0, 0);
+    if (!text && /SAFETY|BLOCK|PROHIBITED/.test(finish)) throw { code: 'refusal' };
+    return { text: text, truncated: finish === 'MAX_TOKENS' };
+  },
+  /* ---- ローカルAI（Ollama。このパソコンの中で動く）---- */
+  async ollama(system, messages, onText, signal) {
+    const body = {
+      model: Staff.model(), stream: true,
+      messages: [{ role: 'system', content: system }].concat(messages),
+      options: { num_ctx: 8192, num_predict: 900 }   /* 知識が全部入る長さ・答えは短め */
+    };
+    let res;
+    try { res = await fetch(Staff.ollamaUrl.replace(/\/$/, '') + '/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: signal }); }
+    catch (e) { if (e && e.name === 'AbortError') throw e; this.lastError = 'Ollama につながりません（起動しているか・OLLAMA_ORIGINS を確かめてください）'; throw { code: 'network' }; }
+    if (!res.ok) await this.fail(res, 'Ollama');
+    let text = '', inp = 0, out = 0;
+    await readLines(res, line => {
+      let ev = null; try { ev = JSON.parse(line); } catch (e) { return; }
+      if (ev.error) { this.lastError = 'Ollama ' + ev.error; throw { code: 'stream_error' }; }
+      if (ev.message && ev.message.content) { text += ev.message.content; onText(text); }
+      if (ev.done) { inp = ev.prompt_eval_count || 0; out = ev.eval_count || 0; }
+    });
+    Usage.add(inp, out, 0, 0, 0);
+    return { text: text, truncated: false };
   }
 };
-/* AI で答えられるか（API キーがある / claude.ai の中で許可されている） */
-function aiReady() { return !!Staff.key || (!!sample && aiOk); }
+/* AI で答えられるか（展示用パソコンの設定 / claude.ai の中で許可されている） */
+function aiReady() { return Staff.ready() || (!!sample && aiOk); }
 
 let sample = null, aiOk = true, busy = false, ctl = null;
 const turns = [];   /* AI との会話（最近の分だけ送る） */
@@ -590,8 +668,8 @@ async function ask(text, id) {
   const show = t => { body.innerHTML = render(t); scrollDown(); };
   try {
     let res;
-    if (Staff.key) {
-      /* 展示用パソコン: API キーで直接（決まりの文は system に置いて使い回す＝安い） */
+    if (Staff.ready()) {
+      /* 展示用パソコン: 選んだ AI に直接（決まりの文は system に置く） */
       res = await Api.ask(RULES(), recent.concat([{ role: 'user', content: text }]), show, ctl.signal);
     } else {
       /* claude.ai の中で開いたとき: 決まりの文 → 最近の会話 → 今の質問（user で始まり user で終わる） */
@@ -605,7 +683,8 @@ async function ask(text, id) {
   } catch (e) {
     if (e && (e.code === 'cancelled' || e.name === 'AbortError')) { done(); return; }
     /* AI が使えない・混んでいるときは、用意した答えで代わりに答える */
-    if (e && (e.status === 401 || e.status === 403)) { Api.lastError = 'API キーが使えません（' + e.status + '）'; Staff.badKey = Staff.key; Staff.key = ''; }
+    /* キーがまちがっている → このページを開いている間は AI を使わない（係の人の設定に理由が出る） */
+    if (e && (e.status === 401 || e.status === 403 || (e.status === 400 && /API_KEY|api key/i.test(e.body || '')))) { Api.lastError = 'API キーが使えません（' + e.status + '）'; Staff.off = true; }
     if (e && ['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed', 'session_expired'].indexOf(e.code) >= 0) aiOk = false;
     const r = offlineAnswer(text, null);
     node.querySelector('.src').textContent = '案内データから回答';
@@ -662,24 +741,47 @@ const St = {
     if (locked) { $('stPinIn').value = ''; $('stPinMsg').textContent = ''; $('stPinIn').focus(); } else this.fill();
   },
   close() { $('staff').hidden = true; },
+  HELP: {
+    none: '用意した答えだけで答えます（AI の費用はかかりません）。',
+    gemini: 'Google AI Studio（aistudio.google.com）で「Get API key」からキーを作って貼ってください。無料枠の範囲なら料金はかかりません（1日・1分あたりの回数に上限があり、超えると用意した答えで返します）。無料枠では、送った質問が Google のサービス改善に使われることがあります。',
+    ollama: 'このパソコンに Ollama（ollama.com）を入れ、モデルを入れておきます（例: コマンドで ollama pull gemma3:4b）。ネットも料金も不要ですが、メモリ 8GB 以上・できれば GPU のあるパソコン向けです。つながらないときは、環境変数 OLLAMA_ORIGINS に * を設定して Ollama を起動し直してください。',
+    claude: 'Anthropic Console（console.anthropic.com）で API キーを作って貼ってください。有料です。Console で月の使用上限を低めに決めておくと安心です。'
+  },
+  MODEL_LIST: { gemini: ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash'], ollama: ['gemma3:4b', 'qwen2.5:7b', 'llama3.2:3b'], claude: ['claude-opus-5-5', 'claude-haiku-5-5'] },
+  /* 使う AI を変えたときの欄の出し入れ */
+  shape() {
+    const p = $('stProv').value, P = PROVIDERS[p];
+    $('stHelp').textContent = this.HELP[p];
+    $('stKeyRow').hidden = !P.key; $('stModelRow').hidden = p === 'none'; $('stUrlRow').hidden = p !== 'ollama';
+    $('stKey').value = Staff.keys[p] || ''; $('stKey').placeholder = p === 'claude' ? 'sk-ant-...' : p === 'gemini' ? 'AIza...' : '';
+    $('stModel').value = Staff.models[p] || P.model || '';
+    $('stModels').innerHTML = (this.MODEL_LIST[p] || []).map(m => '<option value="' + esc(m) + '"></option>').join('');
+  },
   fill() {
-    $('stModel').innerHTML = Object.keys(MODELS).map(id => '<option value="' + id + '">' + esc(MODELS[id].label) + '</option>').join('');
-    $('stModel').value = Staff.model; $('stKey').value = Staff.key || Staff.badKey || ''; $('stPin').value = Staff.pin; $('stMsg').textContent = '';
-    const mode = Staff.key ? 'API キー（' + MODELS[Staff.model].label.split('（')[0] + '）' : sample && aiOk ? 'claude.ai の中の AI' : '用意した答えだけ（AI なし）';
+    $('stProv').innerHTML = Object.keys(PROVIDERS).map(id => '<option value="' + id + '">' + esc(PROVIDERS[id].label) + '</option>').join('');
+    $('stProv').value = Staff.provider; $('stUrl').value = Staff.ollamaUrl; $('stPin').value = Staff.pin; $('stMsg').textContent = '';
+    this.shape();
+    const mode = Staff.ready() ? PROVIDERS[Staff.provider].label.split('（')[0] + '（' + Staff.model() + '）' : sample && aiOk ? 'claude.ai の中の AI' : '用意した答えだけ（AI なし）';
     $('stState').innerHTML = '<dt>いまの答え方</dt><dd>' + esc(mode) + '</dd>' + (Api.lastError ? '<dt>最後のエラー</dt><dd class="warn">' + esc(Api.lastError) + '</dd>' : '');
-    if (window.claude) $('stState').innerHTML += '<dt>注意</dt><dd class="warn">claude.ai の中では API キーは使えません。展示用パソコンでは start-guide.bat で guide.html を直接開いてください。</dd>';
+    if (window.claude) $('stState').innerHTML += '<dt>注意</dt><dd class="warn">claude.ai の中では、ここで選んだ AI は使えません。展示用パソコンでは start-guide.bat で guide.html を直接開いてください。</dd>';
     const u = Usage.get();
     $('stUsage').innerHTML = '<dt>今日 AI に聞いた回数</dt><dd>' + u.calls + ' 回（この 1時間: ' + hourLog().length + ' / ' + LIMITS.perHour + '）</dd>' +
-      '<dt>使った量</dt><dd>入力 ' + (u.inp + u.cw + u.cr).toLocaleString() + '（うちキャッシュ読み ' + u.cr.toLocaleString() + '）/ 出力 ' + u.out.toLocaleString() + ' トークン</dd>' +
-      '<dt>料金の目安</dt><dd>約 $' + u.usd.toFixed(3) + '（約 ' + Math.round(u.usd * 150) + ' 円）</dd>';
+      '<dt>使った量</dt><dd>入力 ' + (u.inp + u.cw + u.cr).toLocaleString() + ' / 出力 ' + u.out.toLocaleString() + ' トークン</dd>' +
+      (u.usd > 0 ? '<dt>Claude の料金の目安</dt><dd>約 $' + u.usd.toFixed(3) + '（約 ' + Math.round(u.usd * 150) + ' 円）</dd>' : '');
   },
   save() {
-    Staff.key = $('stKey').value.trim(); Staff.model = $('stModel').value; Staff.pin = $('stPin').value.trim(); Staff.badKey = '';
+    const p = $('stProv').value;
+    Staff.provider = p;
+    if (PROVIDERS[p].key) Staff.keys[p] = $('stKey').value.trim();
+    if (p !== 'none') Staff.models[p] = $('stModel').value.trim() || PROVIDERS[p].model;
+    Staff.ollamaUrl = $('stUrl').value.trim() || 'http://localhost:11434';
+    Staff.pin = $('stPin').value.trim(); Staff.off = false;
     Staff.save(); Api.lastError = ''; this.fill(); $('stMsg').textContent = '保存しました。';
   },
   async test() {
     this.save();
-    if (!Staff.key) { $('stMsg').textContent = 'API キーを入れてください。'; return; }
+    if (Staff.provider === 'none') { $('stMsg').textContent = '「使う AI」を選んでください。'; return; }
+    if (!Staff.ready()) { $('stMsg').textContent = 'API キーを入れてください。'; return; }
     $('stMsg').textContent = '試しています…';
     let msg;
     try {
@@ -693,7 +795,8 @@ const St = {
 };
 $('stSave').onclick = () => St.save();
 $('stTest').onclick = () => St.test();
-$('stClear').onclick = () => { Staff.key = ''; Staff.badKey = ''; Staff.save(); St.fill(); $('stMsg').textContent = 'キーを消しました。'; };
+$('stClear').onclick = () => { Staff.keys = {}; Staff.off = false; Staff.save(); St.fill(); $('stMsg').textContent = 'すべての API キーを消しました。'; };
+$('stProv').onchange = () => St.shape();
 $('stUnlock').onclick = () => { if ($('stPinIn').value.trim() === Staff.pin) { $('stLock').hidden = true; $('stBody').hidden = false; St.fill(); } else $('stPinMsg').textContent = '暗証番号がちがいます。'; };
 $('stPinIn').addEventListener('keydown', e => { if (e.key === 'Enter') $('stUnlock').click(); });
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => St.close());
