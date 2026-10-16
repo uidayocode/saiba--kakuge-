@@ -480,12 +480,12 @@ const PROVIDERS = {
 /* Claude の料金（100万トークンあたりのドル。目安の計算用） */
 const CLAUDE_PRICE = { 'claude-opus-5-5': { inp: 4.0, out: 20.0 }, 'claude-haiku-5-5': { inp: 0.10, out: 0.50 } };
 const Staff = {
-  provider: 'none', keys: {}, models: {}, ollamaUrl: 'http://localhost:11434', pin: '', off: false,
+  provider: 'gemini', keys: {}, models: {}, ollamaUrl: 'http://localhost:11434', pin: '', off: false,   /* はじめは Gemini（キーを入れるまでは用意した答えだけ） */
   load() {
     try {
       const o = JSON.parse(localStorage.getItem('guide-staff') || '{}');
       if (o.key && !o.keys) { o.keys = { claude: o.key }; o.provider = 'claude'; o.models = { claude: o.model }; }   /* 前の形式 */
-      this.provider = PROVIDERS[o.provider] ? o.provider : 'none';
+      this.provider = PROVIDERS[o.provider] ? o.provider : 'gemini';
       this.keys = o.keys || {}; this.models = o.models || {}; this.ollamaUrl = o.ollamaUrl || this.ollamaUrl; this.pin = o.pin || '';
     } catch (e) { }
   },
