@@ -550,7 +550,7 @@ class Link {
 const Room = {
   MAX: 6,
   state: 'idle',   /* idle / signaling / connecting / joining / open / closed / error */
-  role: null, code: '', myId: '', hostId: '', name: '', err: '', deadline: 0,
+  role: null, code: '', myId: '', hostId: '', name: '', err: '', deadline: 0, watch: false,
   sock: null, sockOk: false, reT: 0, links: {},
   members: [], order: [], cur: null, champ: null, streak: 0, cap: 0, n: 0, autoAt: 0,
   log: [], spec: null, pendingStart: 0, myMatch: 0, sigQ: [], ver: 0,
@@ -568,15 +568,15 @@ const Room = {
     this.log = []; this.spec = null; this.pendingStart = 0; this.myMatch = 0; this.sigQ = []; this.ver++;
   },
   /* 部屋を作る（4桁の部屋番号。1対1の部屋とは別の番号の空間） */
-  create(name) {
-    this.close(); this.reset();
+  create(name, watch) {
+    this.close(); this.reset(); this.watch = !!watch;
     this.role = 'host'; this.name = this.cleanName(name);
     this.code = Net.rnd(4, '0123456789'); this.myId = this.hostId = Net.PREFIX + 'r' + this.code;
     this.state = 'signaling'; this.err = ''; this.deadline = performance.now() + 15000;
     this.openSock();
   },
-  join(code, name) {
-    this.close(); this.reset();
+  join(code, name, watch) {
+    this.close(); this.reset(); this.watch = !!watch;
     this.role = 'guest'; this.name = this.cleanName(name); this.code = code;
     this.hostId = Net.PREFIX + 'r' + code; this.myId = Net.PREFIX + 'rg' + Net.rnd(10, AZ);
     this.state = 'signaling'; this.err = ''; this.deadline = performance.now() + 15000;
@@ -612,9 +612,9 @@ const Room = {
         }
         break;
       case 'ID-TAKEN':
-        if (this.isHost() && this.state === 'signaling') this.create(this.name);   /* たまたま使われていた番号 → 作り直す */
+        if (this.isHost() && this.state === 'signaling') this.create(this.name, this.watch);   /* たまたま使われていた番号 → 作り直す */
         else if (this.isHost()) { const s = this.sock; this.sock = null; if (s) s.close(); this.retrySock(); }
-        else if (this.state === 'signaling') this.join(this.code, this.name);
+        else if (this.state === 'signaling') this.join(this.code, this.name, this.watch);
         break;
       case 'ERROR': if (this.state === 'signaling' || this.state === 'connecting') this.fail('仲介サーバーのエラー: ' + ((m.payload && m.payload.msg) || '')); break;
       case 'EXPIRE': if (!this.isHost() && this.state !== 'open') this.fail('部屋が見つかりません（番号を確かめてください）'); break;
@@ -635,7 +635,7 @@ const Room = {
   linkOpen(L) {
     if (this.isHost()) return;   /* 名乗り（hello）を待つ */
     this.state = 'joining';
-    L.send({ t: 'hello', name: this.name });
+    L.send({ t: 'hello', name: this.name, watch: this.watch });
     /* ホストとつながったら仲介サーバーはもう要らない */
     const s = this.sock; this.sock = null; if (s) s.close();
   },
@@ -653,7 +653,7 @@ const Room = {
   /* ---- ホスト側 ---- */
   opened() {
     this.state = 'open'; this.deadline = 0;
-    this.members = [{ id: this.myId, name: this.name, wins: 0 }]; this.order = [this.myId];
+    this.members = [{ id: this.myId, name: this.name, wins: 0, watch: this.watch }]; this.order = [this.myId];
     this.sys('部屋を作りました（部屋番号 ' + this.code + '）');
   },
   uniqueName(n) {
@@ -669,9 +669,9 @@ const Room = {
         const L = this.links[id]; if (!L) return;
         if (this.members.length >= this.MAX) { L.send({ t: 'full' }); delete this.links[id]; setTimeout(() => L.close(), 500); return; }
         const name = this.uniqueName(this.cleanName(m.name));
-        this.members.push({ id: id, name: name, wins: 0 }); this.order.push(id);
+        this.members.push({ id: id, name: name, wins: 0, watch: !!m.watch }); this.order.push(id);
         L.send({ t: 'log', list: this.log.slice(-30) });
-        this.sys(name + ' さんが入りました');
+        this.sys(name + ' さんが入りました' + (m.watch ? '（観戦だけ）' : ''));
         this.bcast();
         /* 試合の途中から来た人も、最初から早送りで観戦できるように */
         const S = this.spec;
@@ -679,6 +679,7 @@ const Room = {
         break;
       }
       case 'chat': this.hostChat(id, m.text); break;
+      case 'watch': this.hostWatch(id, m.on); break;
       case 'sig': this.route(id, m.to, m.m); break;
       case 'spec': if (this.spec && this.spec.skip && this.spec.skip[0] === id) this.hostSpec(m); break;
       case 'specStart': if (this.cur && this.cur.a === id) this.hostSpecStart(m.n, m.msg); break;
@@ -716,13 +717,20 @@ const Room = {
     if (to === this.myId) this.deliverSig(from, JSON.parse(JSON.stringify(m)));
     else { const L = this.links[to]; if (L) L.send({ t: 'sig', from: from, m: m }); }
   },
-  /* 次の対戦を始める（ホストだけ）。勝ち残りがいれば、その人と順番の先頭の人 */
+  /* 対戦する人（観戦だけの人を除く）の順番 */
+  players() { return this.order.filter(id => { const M = this.member(id); return M && !M.watch; }); },
+  /* 次に対戦する 2人。勝ち残りがいれば、その人と順番の先頭の人 */
+  nextPair() {
+    const o = this.players();
+    if (o.length < 2) return null;
+    if (this.champ && o.indexOf(this.champ) >= 0) return [this.champ, o.find(x => x !== this.champ)];
+    return [o[0], o[1]];
+  },
+  /* 次の対戦を始める（ホストだけ） */
   startMatch() {
-    if (!this.isHost() || !this.active() || this.cur || this.members.length < 2) return false;
-    const o = this.order;
-    let a, b;
-    if (this.champ && o.indexOf(this.champ) >= 0) { a = this.champ; b = o.find(x => x !== a); }
-    else { a = o[0]; b = o[1]; }
+    if (!this.isHost() || !this.active() || this.cur) return false;
+    const p = this.nextPair(); if (!p) return false;
+    const a = p[0], b = p[1];
     this.cur = { n: ++this.n, a: a, b: b }; this.autoAt = 0; this.spec = null;
     this.sys('対戦: ' + this.nameOf(a) + ' vs ' + this.nameOf(b));
     this.bcast();
@@ -749,8 +757,22 @@ const Room = {
       this.sys(this.nameOf(this.champ) + ' さんは ' + this.streak + '連勝したので交代です');
       this.toEnd(this.champ); this.champ = null; this.streak = 0;
     }
-    this.autoAt = this.members.length >= 2 ? performance.now() + 15000 : 0;
+    this.autoAt = this.players().length >= 2 ? performance.now() + 15000 : 0;
     this.bcast();
+  },
+  /* 観戦だけにする / 対戦にも出る（次の対戦から） */
+  hostWatch(id, on) {
+    const M = this.member(id); if (!M || M.watch === !!on) return;
+    M.watch = !!on;
+    if (on && this.champ === id) { this.champ = null; this.streak = 0; }
+    if (this.players().length < 2) this.autoAt = 0;
+    this.sys(M.name + (on ? ' さんは観戦だけにしました' : ' さんが対戦の順番に入りました'));
+    this.bcast();
+  },
+  setWatch(on) {
+    this.watch = !!on;
+    if (!this.active()) return;
+    this.toHost({ t: 'watch', on: this.watch }, () => this.hostWatch(this.myId, this.watch));
   },
   hostAbort(n) {
     if (!this.cur || this.cur.n !== n) return;
@@ -768,7 +790,7 @@ const Room = {
     this.members = this.members.filter(m => m.id !== id);
     this.order = this.order.filter(x => x !== id);
     if (this.champ === id) { this.champ = null; this.streak = 0; }
-    if (this.members.length < 2) this.autoAt = 0;
+    if (this.players().length < 2) this.autoAt = 0;
     this.sys(M.name + ' さんが抜けました');
     this.bcast();
   },

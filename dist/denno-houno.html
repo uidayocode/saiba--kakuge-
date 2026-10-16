@@ -3092,7 +3092,7 @@ class Link {
 const Room = {
   MAX: 6,
   state: 'idle',   /* idle / signaling / connecting / joining / open / closed / error */
-  role: null, code: '', myId: '', hostId: '', name: '', err: '', deadline: 0,
+  role: null, code: '', myId: '', hostId: '', name: '', err: '', deadline: 0, watch: false,
   sock: null, sockOk: false, reT: 0, links: {},
   members: [], order: [], cur: null, champ: null, streak: 0, cap: 0, n: 0, autoAt: 0,
   log: [], spec: null, pendingStart: 0, myMatch: 0, sigQ: [], ver: 0,
@@ -3110,15 +3110,15 @@ const Room = {
     this.log = []; this.spec = null; this.pendingStart = 0; this.myMatch = 0; this.sigQ = []; this.ver++;
   },
   /* 部屋を作る（4桁の部屋番号。1対1の部屋とは別の番号の空間） */
-  create(name) {
-    this.close(); this.reset();
+  create(name, watch) {
+    this.close(); this.reset(); this.watch = !!watch;
     this.role = 'host'; this.name = this.cleanName(name);
     this.code = Net.rnd(4, '0123456789'); this.myId = this.hostId = Net.PREFIX + 'r' + this.code;
     this.state = 'signaling'; this.err = ''; this.deadline = performance.now() + 15000;
     this.openSock();
   },
-  join(code, name) {
-    this.close(); this.reset();
+  join(code, name, watch) {
+    this.close(); this.reset(); this.watch = !!watch;
     this.role = 'guest'; this.name = this.cleanName(name); this.code = code;
     this.hostId = Net.PREFIX + 'r' + code; this.myId = Net.PREFIX + 'rg' + Net.rnd(10, AZ);
     this.state = 'signaling'; this.err = ''; this.deadline = performance.now() + 15000;
@@ -3154,9 +3154,9 @@ const Room = {
         }
         break;
       case 'ID-TAKEN':
-        if (this.isHost() && this.state === 'signaling') this.create(this.name);   /* たまたま使われていた番号 → 作り直す */
+        if (this.isHost() && this.state === 'signaling') this.create(this.name, this.watch);   /* たまたま使われていた番号 → 作り直す */
         else if (this.isHost()) { const s = this.sock; this.sock = null; if (s) s.close(); this.retrySock(); }
-        else if (this.state === 'signaling') this.join(this.code, this.name);
+        else if (this.state === 'signaling') this.join(this.code, this.name, this.watch);
         break;
       case 'ERROR': if (this.state === 'signaling' || this.state === 'connecting') this.fail('仲介サーバーのエラー: ' + ((m.payload && m.payload.msg) || '')); break;
       case 'EXPIRE': if (!this.isHost() && this.state !== 'open') this.fail('部屋が見つかりません（番号を確かめてください）'); break;
@@ -3177,7 +3177,7 @@ const Room = {
   linkOpen(L) {
     if (this.isHost()) return;   /* 名乗り（hello）を待つ */
     this.state = 'joining';
-    L.send({ t: 'hello', name: this.name });
+    L.send({ t: 'hello', name: this.name, watch: this.watch });
     /* ホストとつながったら仲介サーバーはもう要らない */
     const s = this.sock; this.sock = null; if (s) s.close();
   },
@@ -3195,7 +3195,7 @@ const Room = {
   /* ---- ホスト側 ---- */
   opened() {
     this.state = 'open'; this.deadline = 0;
-    this.members = [{ id: this.myId, name: this.name, wins: 0 }]; this.order = [this.myId];
+    this.members = [{ id: this.myId, name: this.name, wins: 0, watch: this.watch }]; this.order = [this.myId];
     this.sys('部屋を作りました（部屋番号 ' + this.code + '）');
   },
   uniqueName(n) {
@@ -3211,9 +3211,9 @@ const Room = {
         const L = this.links[id]; if (!L) return;
         if (this.members.length >= this.MAX) { L.send({ t: 'full' }); delete this.links[id]; setTimeout(() => L.close(), 500); return; }
         const name = this.uniqueName(this.cleanName(m.name));
-        this.members.push({ id: id, name: name, wins: 0 }); this.order.push(id);
+        this.members.push({ id: id, name: name, wins: 0, watch: !!m.watch }); this.order.push(id);
         L.send({ t: 'log', list: this.log.slice(-30) });
-        this.sys(name + ' さんが入りました');
+        this.sys(name + ' さんが入りました' + (m.watch ? '（観戦だけ）' : ''));
         this.bcast();
         /* 試合の途中から来た人も、最初から早送りで観戦できるように */
         const S = this.spec;
@@ -3221,6 +3221,7 @@ const Room = {
         break;
       }
       case 'chat': this.hostChat(id, m.text); break;
+      case 'watch': this.hostWatch(id, m.on); break;
       case 'sig': this.route(id, m.to, m.m); break;
       case 'spec': if (this.spec && this.spec.skip && this.spec.skip[0] === id) this.hostSpec(m); break;
       case 'specStart': if (this.cur && this.cur.a === id) this.hostSpecStart(m.n, m.msg); break;
@@ -3258,13 +3259,20 @@ const Room = {
     if (to === this.myId) this.deliverSig(from, JSON.parse(JSON.stringify(m)));
     else { const L = this.links[to]; if (L) L.send({ t: 'sig', from: from, m: m }); }
   },
-  /* 次の対戦を始める（ホストだけ）。勝ち残りがいれば、その人と順番の先頭の人 */
+  /* 対戦する人（観戦だけの人を除く）の順番 */
+  players() { return this.order.filter(id => { const M = this.member(id); return M && !M.watch; }); },
+  /* 次に対戦する 2人。勝ち残りがいれば、その人と順番の先頭の人 */
+  nextPair() {
+    const o = this.players();
+    if (o.length < 2) return null;
+    if (this.champ && o.indexOf(this.champ) >= 0) return [this.champ, o.find(x => x !== this.champ)];
+    return [o[0], o[1]];
+  },
+  /* 次の対戦を始める（ホストだけ） */
   startMatch() {
-    if (!this.isHost() || !this.active() || this.cur || this.members.length < 2) return false;
-    const o = this.order;
-    let a, b;
-    if (this.champ && o.indexOf(this.champ) >= 0) { a = this.champ; b = o.find(x => x !== a); }
-    else { a = o[0]; b = o[1]; }
+    if (!this.isHost() || !this.active() || this.cur) return false;
+    const p = this.nextPair(); if (!p) return false;
+    const a = p[0], b = p[1];
     this.cur = { n: ++this.n, a: a, b: b }; this.autoAt = 0; this.spec = null;
     this.sys('対戦: ' + this.nameOf(a) + ' vs ' + this.nameOf(b));
     this.bcast();
@@ -3291,8 +3299,22 @@ const Room = {
       this.sys(this.nameOf(this.champ) + ' さんは ' + this.streak + '連勝したので交代です');
       this.toEnd(this.champ); this.champ = null; this.streak = 0;
     }
-    this.autoAt = this.members.length >= 2 ? performance.now() + 15000 : 0;
+    this.autoAt = this.players().length >= 2 ? performance.now() + 15000 : 0;
     this.bcast();
+  },
+  /* 観戦だけにする / 対戦にも出る（次の対戦から） */
+  hostWatch(id, on) {
+    const M = this.member(id); if (!M || M.watch === !!on) return;
+    M.watch = !!on;
+    if (on && this.champ === id) { this.champ = null; this.streak = 0; }
+    if (this.players().length < 2) this.autoAt = 0;
+    this.sys(M.name + (on ? ' さんは観戦だけにしました' : ' さんが対戦の順番に入りました'));
+    this.bcast();
+  },
+  setWatch(on) {
+    this.watch = !!on;
+    if (!this.active()) return;
+    this.toHost({ t: 'watch', on: this.watch }, () => this.hostWatch(this.myId, this.watch));
   },
   hostAbort(n) {
     if (!this.cur || this.cur.n !== n) return;
@@ -3310,7 +3332,7 @@ const Room = {
     this.members = this.members.filter(m => m.id !== id);
     this.order = this.order.filter(x => x !== id);
     if (this.champ === id) { this.champ = null; this.streak = 0; }
-    if (this.members.length < 2) this.autoAt = 0;
+    if (this.players().length < 2) this.autoAt = 0;
     this.sys(M.name + ' さんが抜けました');
     this.bcast();
   },
@@ -9457,18 +9479,21 @@ function roomWatch(S) {
 Game.scenes.roomMenu = {
   idleLimit: 0,
   enter() { this.mode = 'menu'; this.sel = 0; this.dig = this.dig || [0, 0, 0, 0]; this.di = 0; if (Room.state !== 'idle') Room.close(); Net.close(); FX.reset(); },
-  items() { return ['部屋を作る', '部屋に入る', '名前: ' + roomName(), '戻る']; },
+  items() { return ['部屋を作る', '部屋に入る', '名前: ' + roomName(), '入り方: ' + (Store.get('roomWatch', false) ? '観戦だけ' : '対戦する'), '戻る']; },
   update() {
     if (Chat.typing) return;
     const n = Input.nav, back = (n & B_H) || Input.keyPressed('Escape'), ok = (n & B_L) || Input.keyPressed('Enter') || Input.keyPressed('NumpadEnter');
     if (this.mode === 'menu') {
-      this.sel = menuMove(this.sel, 4, n);
+      this.sel = menuMove(this.sel, 5, n);
+      const w = !!Store.get('roomWatch', false);
+      if (this.sel === 3 && (n & (B_LEFT | B_RIGHT))) { Store.set('roomWatch', !w); Audio.play('menuMove'); }
       if (back) { Audio.play('menuCancel'); Game.go('online'); return; }
       if (ok) {
         Audio.play('menuOk');
-        if (this.sel === 0) { Room.create(roomName()); this.mode = 'wait'; }
+        if (this.sel === 0) { Room.create(roomName(), w); this.mode = 'wait'; }
         else if (this.sel === 1) { this.mode = 'code'; this.di = 0; }
         else if (this.sel === 2) Chat.open(roomName(), 'name', v => Store.set('roomName', Room.cleanName(v)));
+        else if (this.sel === 3) Store.set('roomWatch', !w);
         else Game.go('online');
       }
       return;
@@ -9483,7 +9508,7 @@ Game.scenes.roomMenu = {
       }
       if (Input.keyPressed('Backspace')) this.di = Math.max(0, this.di - 1);
       if (back) { Audio.play('menuCancel'); this.mode = 'menu'; return; }
-      if (ok) { Audio.play('menuOk'); Room.join(this.dig.join(''), roomName()); this.mode = 'wait'; }
+      if (ok) { Audio.play('menuOk'); Room.join(this.dig.join(''), roomName(), !!Store.get('roomWatch', false)); this.mode = 'wait'; }
       return;
     }
     /* 接続待ち */
@@ -9496,11 +9521,12 @@ Game.scenes.roomMenu = {
     drawText(ctx, '大部屋', 480, 64, { size: 30, align: 'center', color: '#ffffff', glow: '#19f3ff' });
     const sub = (t, y, c) => drawText(ctx, t, 480, y, { size: 14, align: 'center', color: c || '#8fa3c8' });
     if (this.mode === 'menu') {
-      drawMenuList(ctx, this.items(), this.sel, 480, 165, 46, { w: 190 });
+      drawMenuList(ctx, this.items(), this.sel, 480, 150, 44, { w: 190 });
       sub('3〜6人で入って、負け抜けで順番に対戦します。対戦していない人は観戦できます', 370);
       sub('つながるのは「対戦する2人」と「部屋を作った人」だけ。チャットはキーボードで打てます', 394);
       sub('部屋を作った人が抜けると、部屋はなくなります', 418);
       if (this.sel === 2) sub('名前はキーボードで入れます（弱で入力欄が開きます）', 450, '#e6f1ff');
+      if (this.sel === 3) sub('「観戦だけ」だと対戦の順番に入りません（部屋の中でも 必殺 で切り替えられます）', 450, '#e6f1ff');
     } else if (this.mode === 'code') {
       sub('教えてもらった 大部屋の番号（4けた）を入れてください', 150, '#e6f1ff');
       for (let i = 0; i < 4; i++) {
@@ -9541,13 +9567,6 @@ Game.scenes.room = {
     FX.reset();
   },
   exit() { if (Chat.typing) Chat.close(); },
-  /* 次に対戦する 2人（startMatch と同じ決め方） */
-  nextPair() {
-    const o = Room.order;
-    if (o.length < 2) return null;
-    if (Room.champ && o.indexOf(Room.champ) >= 0) return [Room.champ, o.find(x => x !== Room.champ)];
-    return [o[0], o[1]];
-  },
   update() {
     if (!Room.active()) { Toast.push(Room.err || '部屋から出ました'); Room.close(); Game.go('roomMenu'); return; }
     const c = Room.cur, me = Room.myId, fighter = Room.isFighter(me);
@@ -9585,7 +9604,9 @@ Game.scenes.room = {
     }
     if (back) { Audio.play('menuOk'); this.ask = true; return; }
     if (ed & B_T) { Audio.play('menuOk'); this.menu = true; this.sel = 0; return; }
-    if (Room.isHost() && (ed & B_S)) { const C = this.CAPS; Room.setCap(C[(C.indexOf(Room.cap) + 1) % C.length]); Audio.play('menuMove'); }
+    /* 必殺: 観戦だけ ⇔ 対戦する。ホストは ←→ で連勝の上限 */
+    if (ed & B_S) { Room.setWatch(!Room.watch); Store.set('roomWatch', Room.watch); Audio.play('menuMove'); }
+    if (Room.isHost() && (n & (B_LEFT | B_RIGHT))) { const C = this.CAPS, d = (n & B_RIGHT) ? 1 : C.length - 1; Room.setCap(C[(C.indexOf(Room.cap) + d) % C.length]); Audio.play('menuMove'); }
     if (n & B_L) {
       if (Room.isHost() && !c) { if (Room.startMatch()) Audio.play('menuOk'); else { Audio.play('menuCancel'); Toast.push('2人以上そろうと始められます'); } }
       else if (c && !fighter && S && S.n === c.n && S.start) { Audio.play('menuOk'); this.watchOff = 0; Room.pendingStart = c.n; }
@@ -9597,8 +9618,8 @@ Game.scenes.room = {
     drawText(ctx, '大部屋', 40, 46, { size: 26, color: '#ffffff', glow: '#19f3ff', base: 'middle' });
     drawText(ctx, '部屋番号', 170, 46, { size: 13, color: '#8fa3c8', base: 'middle' });
     drawText(ctx, Room.code, 232, 46, { size: 30, font: 'en', color: '#ffffff', glow: '#19f3ff', base: 'middle' });
-    drawText(ctx, Room.members.length + ' / ' + Room.MAX + ' 人', 920, 46, { size: 16, color: '#e6f1ff', align: 'right', base: 'middle' });
-    if (host && !Room.sockOk) drawText(ctx, '仲介サーバーにつなぎ直しています（その間は新しい人が入れません）', 920, 72, { size: 11, color: '#ffb347', align: 'right', base: 'middle' });
+    drawText(ctx, Room.members.length + ' / ' + Room.MAX + ' 人', 340, 48, { size: 16, color: '#e6f1ff', base: 'middle' });
+    if (host && !Room.sockOk) drawText(ctx, '仲介サーバーにつなぎ直しています（その間は新しい人が入れません）', 450, 72, { size: 11, color: '#ffb347', base: 'middle' });
     /* 左: 順番 */
     panel(ctx, 30, 86, 420, 336, '#19f3ff', 0.85);
     drawText(ctx, '順番（負けたら最後へ）', 46, 106, { size: 13, color: '#8fa3c8', base: 'middle' });
@@ -9607,11 +9628,12 @@ Game.scenes.room = {
       const M = Room.member(id); if (!M) return;
       const y = 138 + i * 44, isC = c && (c.a === id || c.b === id), col = Chat.col(id);
       if (id === me) { ctx.save(); ctx.fillStyle = 'rgba(25,243,255,0.10)'; fillRR(ctx, 40, y - 18, 400, 36, 5); ctx.fill(); ctx.restore(); }
-      drawText(ctx, String(i + 1), 58, y, { size: 18, font: 'en', color: '#8fa3c8', align: 'center', base: 'middle' });
+      drawText(ctx, M.watch ? '-' : String(Room.players().indexOf(id) + 1), 58, y, { size: 18, font: 'en', color: '#8fa3c8', align: 'center', base: 'middle' });
       drawText(ctx, M.name, 80, y, { size: 18, color: '#ffffff', glow: col, base: 'middle' });
       const tags = [];
       if (id === me) tags.push('あなた');
       if (id === hostId) tags.push('部屋主');
+      if (M.watch) tags.push('観戦だけ');
       drawText(ctx, tags.join(' ・ '), 80, y + 15, { size: 10, color: '#8fa3c8', base: 'middle' });
       drawText(ctx, M.wins + '勝', 330, y, { size: 14, color: '#e6f1ff', align: 'right', base: 'middle' });
       if (isC) drawText(ctx, '対戦中', 430, y, { size: 13, color: '#ff6b8b', align: 'right', base: 'middle', glow: '#ff3b5c' });
@@ -9648,8 +9670,8 @@ Game.scenes.room = {
       else if (watching) line += '     弱: 観戦する';
       else line += '（キャラを選んでいます）';
     } else {
-      const p = this.nextPair();
-      if (!p) { line = 'ほかの人が入るのを待っています（部屋番号 ' + Room.code + ' を伝えてください）'; col = '#8fa3c8'; }
+      const p = Room.nextPair();
+      if (!p) { line = Room.members.length >= 2 ? '対戦する人が 2人いません（観戦だけの人は 必殺 で対戦に入れます）' : 'ほかの人が入るのを待っています（部屋番号 ' + Room.code + ' を伝えてください）'; col = '#8fa3c8'; }
       else {
         const nx = '次: ' + nm(p[0]) + ' vs ' + nm(p[1]);
         const left = Room.autoAt ? Math.max(0, Math.ceil((Room.autoAt - performance.now()) / 1000)) : 0;
@@ -9660,9 +9682,9 @@ Game.scenes.room = {
     }
     drawText(ctx, line, 480, 446, { size: 17, align: 'center', color: col, base: 'middle' });
     const pad = Devices.slots[0] && Devices.slots[0].kind === 'pad';
-    const hint = 'Enter: チャット' + (pad ? '（キーを打つだけでもOK）' : '') + '    投げ: 定型文    強: 部屋を出る' + (host ? '    必殺: 連勝上限 ' + (Room.cap ? Room.cap + '連勝' : 'なし') : '');
+    const hint = 'Enter: チャット' + (pad ? '（キーを打つだけでもOK）' : '') + '   投げ: 定型文   必殺: ' + (Room.watch ? '対戦に入る' : '観戦だけにする') + '   強: 部屋を出る' + (host ? '   ←→: 連勝上限 ' + (Room.cap ? Room.cap + '連勝' : 'なし') : '');
     if (!Chat.typing) drawText(ctx, hint, 480, 476, { size: 13, align: 'center', color: '#8fa3c8', base: 'middle' });
-    if (!host && Room.cap) drawText(ctx, '連勝上限: ' + Room.cap + '連勝で交代', 920, 72, { size: 11, color: '#8fa3c8', align: 'right', base: 'middle' });
+    if (!host && Room.cap) drawText(ctx, '連勝上限: ' + Room.cap + '連勝で交代', 450, 72, { size: 11, color: '#8fa3c8', align: 'right', base: 'middle' });
     /* 定型文 */
     if (this.menu) {
       const P = Chat.PHRASES, h = P.length * 30 + 40;
