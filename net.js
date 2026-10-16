@@ -185,7 +185,15 @@ const Net = {
     clearInterval(this.hb);
     this.hb = setInterval(() => this.wsSend({ type: 'HEARTBEAT' }), 5000);
   },
-  wsSend(o) { try { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(o)); } catch (e) { /* 無視 */ } },
+  /* 大部屋: 対戦する2人だけを直接つなぐ。最初の仲介は部屋（ホスト）経由で行う
+   * role: 'host'（P1・相手の申し込みを待つ）/ 'guest'（P2・申し込む）。sig: 仲介メッセージの送り先 */
+  viaRoom(role, peerId, sig, n) {
+    this.close(true);
+    this.role = role; this.peerId = peerId; this.myId = ''; this.code = ''; this.sig = sig; this.roomN = n;
+    this.state = 'connecting'; this.deadline = performance.now() + 25000;
+    if (role === 'guest') this.offer();
+  },
+  wsSend(o) { if (this.sig) { this.sig(o); return; } try { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(o)); } catch (e) { /* 無視 */ } },
   onSig(m) {
     switch (m.type) {
       case 'OPEN':
@@ -331,7 +339,7 @@ const Net = {
   close(quiet) {
     if (this.state === 'open') { try { this.ch.ctl.send(JSON.stringify({ t: 'bye' })); } catch (e) { /* 無視 */ } }
     this.cleanup();
-    this.state = 'idle'; this.inbox = []; this.rtt = 0;
+    this.state = 'idle'; this.inbox = []; this.rtt = 0; this.sig = null; this.roomN = 0;
     if (!quiet) { this.role = null; this.code = ''; this.err = ''; }
   },
   isOpen() { return this.state === 'open'; }
@@ -456,5 +464,418 @@ class NetSession {
   }
 }
 
-return { Snap: Snap, Net: Net, NetSession: NetSession, NetTest: NetTest };
+/* ---------------- Room: 大部屋（最大6人・負け抜け・観戦・チャット） ----------------
+ * ホストが部屋の中心。みんなはホストとだけつながり、メンバー表・順番・チャット・観戦用の入力はホストが配る。
+ * 対戦する 2人だけは Net（上）で直接つなぐ（その仲介もホスト経由）。
+ * 観戦: P1 側の対戦者が「確定した入力」をホストへ送り、ホストが観戦者に配る。観戦者は同じ試合を少し遅れて再生する */
+const AZ = 'abcdefghijklmnopqrstuvwxyz0123456789';
+/* 仲介サーバー（PeerJS）への接続。onMsg(m) / onDown() */
+function sigSocket(id, onMsg, onDown) {
+  const url = Net.server() + '?key=' + Net.KEY + '&id=' + encodeURIComponent(id) + '&token=' + Net.rnd(12, AZ) + '&version=1.5.4';
+  let ws;
+  try { ws = new WebSocket(url); } catch (e) { setTimeout(onDown, 0); return { send() { }, close() { } }; }
+  const S = {
+    closed: false,
+    send(o) { try { if (ws.readyState === 1) ws.send(JSON.stringify(o)); } catch (e) { /* 無視 */ } },
+    close() { S.closed = true; clearInterval(hb); try { ws.close(); } catch (e) { /* 無視 */ } }
+  };
+  const hb = setInterval(() => S.send({ type: 'HEARTBEAT' }), 5000);
+  ws.onmessage = e => { let m = null; try { m = JSON.parse(e.data); } catch (er) { return; } if (!S.closed) onMsg(m); };
+  ws.onerror = ws.onclose = () => { clearInterval(hb); if (!S.closed) { S.closed = true; onDown(); } };
+  return S;
+}
+/* 部屋の中の 1本の接続（確実に届く順番どおりのチャネル 1本） */
+class Link {
+  constructor(peerId, sig, h) {
+    this.peerId = peerId; this.sig = sig; this.h = h;
+    this.pc = null; this.ch = null; this.candQ = []; this.state = 'connecting';
+    this.t0 = performance.now(); this.lastRecv = this.t0;
+    /* 生存確認は setInterval で（タブが裏にあっても動くように） */
+    this.timer = setInterval(() => this.tick(), 1000);
+  }
+  newPc() {
+    const hp = (E.HASH && E.HASH.p) || {};
+    const pc = new RTCPeerConnection({ iceServers: Net.iceServers(), iceTransportPolicy: hp.relay ? 'relay' : 'all' });
+    pc.onicecandidate = e => { if (e.candidate) this.sig({ type: 'CANDIDATE', payload: { candidate: e.candidate, type: 'data', connectionId: this.cid }, dst: this.peerId }); };
+    pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed') this.down(); };
+    this.pc = pc;
+    return pc;
+  }
+  offer() {
+    this.cid = 'dc_' + Net.rnd(10, AZ);
+    const pc = this.newPc();
+    this.chan(pc.createDataChannel('room', { ordered: true }));
+    pc.createOffer().then(o => pc.setLocalDescription(o)).then(() => {
+      this.sig({ type: 'OFFER', payload: { sdp: pc.localDescription, type: 'data', connectionId: this.cid, label: this.cid, reliable: true, serialization: 'json', browser: 'chrome' }, dst: this.peerId });
+    }).catch(() => this.down());
+  }
+  answer(p) {
+    this.cid = p.connectionId;
+    const pc = this.newPc();
+    pc.ondatachannel = e => this.chan(e.channel);
+    pc.setRemoteDescription(p.sdp).then(() => { this.flush(); return pc.createAnswer(); })
+      .then(a => pc.setLocalDescription(a)).then(() => {
+        this.sig({ type: 'ANSWER', payload: { sdp: pc.localDescription, type: 'data', connectionId: this.cid, browser: 'chrome' }, dst: this.peerId });
+      }).catch(() => this.down());
+  }
+  onSig(m) {
+    const pc = this.pc; if (!pc || !m.payload) return;
+    if (m.type === 'ANSWER' && m.payload.sdp) pc.setRemoteDescription(m.payload.sdp).then(() => this.flush()).catch(() => this.down());
+    else if (m.type === 'CANDIDATE' && m.payload.candidate) {
+      if (pc.remoteDescription) pc.addIceCandidate(m.payload.candidate).catch(() => { });
+      else this.candQ.push(m.payload.candidate);
+    }
+  }
+  flush() { const q = this.candQ; this.candQ = []; q.forEach(c => this.pc.addIceCandidate(c).catch(() => { })); }
+  chan(c) {
+    this.ch = c;
+    c.onopen = () => { if (this.state !== 'connecting') return; this.state = 'open'; this.lastRecv = performance.now(); this.h.open(this); };
+    c.onmessage = e => {
+      this.lastRecv = performance.now();
+      let m = null; try { m = JSON.parse(e.data); } catch (er) { return; }
+      if (m && m.t !== 'hb' && this.state === 'open') this.h.msg(m, this);
+    };
+    c.onclose = () => this.down();
+  }
+  send(o) { const c = this.ch; if (!c || c.readyState !== 'open') return; try { c.send(JSON.stringify(o)); } catch (e) { /* 無視 */ } }
+  tick() {
+    const now = performance.now();
+    if (this.state === 'open') { this.send({ t: 'hb' }); if (now - this.lastRecv > 20000) this.down(); }
+    else if (this.state === 'connecting' && now - this.t0 > 25000) this.down();
+  }
+  down() { if (this.state === 'down') return; this.close(); this.h.down(this); }
+  close() { this.state = 'down'; clearInterval(this.timer); try { if (this.pc) this.pc.close(); } catch (e) { /* 無視 */ } }
+}
+
+const Room = {
+  MAX: 6,
+  state: 'idle',   /* idle / signaling / connecting / joining / open / closed / error */
+  role: null, code: '', myId: '', hostId: '', name: '', err: '', deadline: 0,
+  sock: null, sockOk: false, reT: 0, links: {},
+  members: [], order: [], cur: null, champ: null, streak: 0, cap: 0, n: 0, autoAt: 0,
+  log: [], spec: null, pendingStart: 0, myMatch: 0, sigQ: [], ver: 0,
+  onChat: null,    /* チャットが届いたとき（音など。ゲーム側で設定） */
+  active() { return this.state === 'open'; },
+  isHost() { return this.role === 'host'; },
+  member(id) { for (const m of this.members) if (m.id === id) return m; return null; },
+  nameOf(id) { const m = this.member(id); return m ? m.name : '？'; },
+  isFighter(id) { const c = this.cur; return !!c && (c.a === id || c.b === id); },
+  cleanName(s) { s = String(s || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 10); return s || 'ななし'; },
+  cleanText(s) { return String(s || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 60); },
+  reset() {
+    this.role = null; this.code = ''; this.myId = ''; this.hostId = ''; this.deadline = 0;
+    this.members = []; this.order = []; this.cur = null; this.champ = null; this.streak = 0; this.cap = 0; this.n = 0; this.autoAt = 0;
+    this.log = []; this.spec = null; this.pendingStart = 0; this.myMatch = 0; this.sigQ = []; this.ver++;
+  },
+  /* 部屋を作る（4桁の部屋番号。1対1の部屋とは別の番号の空間） */
+  create(name) {
+    this.close(); this.reset();
+    this.role = 'host'; this.name = this.cleanName(name);
+    this.code = Net.rnd(4, '0123456789'); this.myId = this.hostId = Net.PREFIX + 'r' + this.code;
+    this.state = 'signaling'; this.err = ''; this.deadline = performance.now() + 15000;
+    this.openSock();
+  },
+  join(code, name) {
+    this.close(); this.reset();
+    this.role = 'guest'; this.name = this.cleanName(name); this.code = code;
+    this.hostId = Net.PREFIX + 'r' + code; this.myId = Net.PREFIX + 'rg' + Net.rnd(10, AZ);
+    this.state = 'signaling'; this.err = ''; this.deadline = performance.now() + 15000;
+    this.openSock();
+  },
+  openSock() {
+    const s = sigSocket(this.myId, m => { if (this.sock === s) this.onSock(m); }, () => { if (this.sock === s) this.onSockDown(); });
+    this.sock = s;
+  },
+  /* ホストの仲介サーバー接続が切れたら、少し待ってつなぎ直す（その間は新しい人が入れない） */
+  retrySock() {
+    clearTimeout(this.reT);
+    this.reT = setTimeout(() => { if (this.state === 'open' && this.isHost() && !this.sock) this.openSock(); }, 5000);
+  },
+  onSockDown() {
+    this.sock = null; this.sockOk = false;
+    if (this.isHost() && this.state === 'open') this.retrySock();
+    else if (this.state === 'signaling' || this.state === 'connecting') this.fail('仲介サーバーにつながりません');
+  },
+  newLink(peerId) {
+    return new Link(peerId, o => { if (this.sock) this.sock.send(o); }, {
+      open: L => this.linkOpen(L), msg: (m, L) => this.linkMsg(m, L), down: L => this.linkDown(L)
+    });
+  },
+  onSock(m) {
+    switch (m.type) {
+      case 'OPEN':
+        this.sockOk = true;
+        if (this.isHost()) { if (this.state === 'signaling') this.opened(); }
+        else if (this.state === 'signaling') {
+          this.state = 'connecting'; this.deadline = performance.now() + 25000;
+          const L = this.links.host = this.newLink(this.hostId); L.offer();
+        }
+        break;
+      case 'ID-TAKEN':
+        if (this.isHost() && this.state === 'signaling') this.create(this.name);   /* たまたま使われていた番号 → 作り直す */
+        else if (this.isHost()) { const s = this.sock; this.sock = null; if (s) s.close(); this.retrySock(); }
+        else if (this.state === 'signaling') this.join(this.code, this.name);
+        break;
+      case 'ERROR': if (this.state === 'signaling' || this.state === 'connecting') this.fail('仲介サーバーのエラー: ' + ((m.payload && m.payload.msg) || '')); break;
+      case 'EXPIRE': if (!this.isHost() && this.state !== 'open') this.fail('部屋が見つかりません（番号を確かめてください）'); break;
+      case 'OFFER':
+        if (this.isHost() && this.state === 'open' && m.src && m.payload) {
+          const old = this.links[m.src]; if (old) old.close();
+          const L = this.links[m.src] = this.newLink(m.src); L.answer(m.payload);
+        }
+        break;
+      case 'ANSWER': case 'CANDIDATE': {
+        const L = this.isHost() ? this.links[m.src] : this.links.host;
+        if (L) L.onSig(m);
+        break;
+      }
+      default: break;
+    }
+  },
+  linkOpen(L) {
+    if (this.isHost()) return;   /* 名乗り（hello）を待つ */
+    this.state = 'joining';
+    L.send({ t: 'hello', name: this.name });
+    /* ホストとつながったら仲介サーバーはもう要らない */
+    const s = this.sock; this.sock = null; if (s) s.close();
+  },
+  linkMsg(m, L) { if (this.isHost()) this.hostMsg(L.peerId, m); else this.guestMsg(m); },
+  linkDown(L) {
+    if (this.isHost()) {
+      if (this.links[L.peerId] === L) delete this.links[L.peerId];
+      this.removeMember(L.peerId);
+      return;
+    }
+    if (this.links.host !== L) return;
+    if (this.state === 'open') { this.state = 'closed'; this.err = '部屋との接続が切れました'; this.cleanup(); }
+    else if (this.state !== 'idle' && this.state !== 'error' && this.state !== 'closed') this.fail('部屋とつながりませんでした（ネットワークの制限かもしれません）');
+  },
+  /* ---- ホスト側 ---- */
+  opened() {
+    this.state = 'open'; this.deadline = 0;
+    this.members = [{ id: this.myId, name: this.name, wins: 0 }]; this.order = [this.myId];
+    this.sys('部屋を作りました（部屋番号 ' + this.code + '）');
+  },
+  uniqueName(n) {
+    let s = n, k = 2;
+    while (this.members.some(m => m.name === s)) s = n + k++;
+    return s;
+  },
+  hostMsg(id, m) {
+    if (m.t !== 'hello' && !this.member(id)) return;
+    switch (m.t) {
+      case 'hello': {
+        if (this.member(id)) return;
+        const L = this.links[id]; if (!L) return;
+        if (this.members.length >= this.MAX) { L.send({ t: 'full' }); delete this.links[id]; setTimeout(() => L.close(), 500); return; }
+        const name = this.uniqueName(this.cleanName(m.name));
+        this.members.push({ id: id, name: name, wins: 0 }); this.order.push(id);
+        L.send({ t: 'log', list: this.log.slice(-30) });
+        this.sys(name + ' さんが入りました');
+        this.bcast();
+        /* 試合の途中から来た人も、最初から早送りで観戦できるように */
+        const S = this.spec;
+        if (this.cur && S && S.n === this.cur.n && S.start) L.send({ t: 'specAll', n: S.n, msg: S.start, inp: S.inp });
+        break;
+      }
+      case 'chat': this.hostChat(id, m.text); break;
+      case 'sig': this.route(id, m.to, m.m); break;
+      case 'spec': if (this.spec && this.spec.skip && this.spec.skip[0] === id) this.hostSpec(m); break;
+      case 'specStart': if (this.cur && this.cur.a === id) this.hostSpecStart(m.n, m.msg); break;
+      case 'res': if (this.isFighter(id)) this.hostResult(m.n, m.win); break;
+      case 'abort': if (this.isFighter(id)) this.hostAbort(m.n); break;
+      case 'leave': { const L = this.links[id]; if (L) { delete this.links[id]; L.close(); } this.removeMember(id); break; }
+      default: break;
+    }
+  },
+  stateMsg() {
+    return {
+      t: 'state', members: this.members, order: this.order, cur: this.cur, champ: this.champ, streak: this.streak, cap: this.cap,
+      autoIn: this.autoAt ? Math.max(0, this.autoAt - performance.now()) : 0, sockOk: this.sockOk
+    };
+  },
+  /* メンバー全員へ（ホスト自身は除く）。skip に入っている人には送らない */
+  toAll(o, skip) {
+    for (const m of this.members) {
+      if (m.id === this.myId || (skip && skip.indexOf(m.id) >= 0)) continue;
+      const L = this.links[m.id]; if (L) L.send(o);
+    }
+  },
+  bcast() { this.ver++; this.toAll(this.stateMsg()); },
+  sys(text) { const e = { sys: true, text: text }; this.addLog(e); this.toAll({ t: 'chat', e: e }); },
+  hostChat(id, text) {
+    text = this.cleanText(text); const M = this.member(id);
+    if (!text || !M) return;
+    const now = performance.now();
+    if (M.lastChat && now - M.lastChat < 400) return;   /* 連打よけ */
+    M.lastChat = now;
+    const e = { id: id, name: M.name, text: text };
+    this.addLog(e); this.toAll({ t: 'chat', e: e });
+  },
+  route(from, to, m) {
+    if (to === this.myId) this.deliverSig(from, JSON.parse(JSON.stringify(m)));
+    else { const L = this.links[to]; if (L) L.send({ t: 'sig', from: from, m: m }); }
+  },
+  /* 次の対戦を始める（ホストだけ）。勝ち残りがいれば、その人と順番の先頭の人 */
+  startMatch() {
+    if (!this.isHost() || !this.active() || this.cur || this.members.length < 2) return false;
+    const o = this.order;
+    let a, b;
+    if (this.champ && o.indexOf(this.champ) >= 0) { a = this.champ; b = o.find(x => x !== a); }
+    else { a = o[0]; b = o[1]; }
+    this.cur = { n: ++this.n, a: a, b: b }; this.autoAt = 0; this.spec = null;
+    this.sys('対戦: ' + this.nameOf(a) + ' vs ' + this.nameOf(b));
+    this.bcast();
+    return true;
+  },
+  setCap(v) { if (!this.isHost()) return; this.cap = v; this.sys(v ? '連勝の上限: ' + v + '連勝で交代' : '連勝の上限: なし'); this.bcast(); },
+  toEnd(id) { const i = this.order.indexOf(id); if (i < 0) return; this.order.splice(i, 1); this.order.push(id); },
+  toFront(id) { const i = this.order.indexOf(id); if (i < 0) return; this.order.splice(i, 1); this.order.unshift(id); },
+  hostResult(n, win) { if (this.cur && this.cur.n === n) this.finish(win, ''); },
+  /* 決着: 負けた人は順番の最後へ、勝った人は残る。引き分けは挑戦者が後ろへ */
+  finish(win, why) {
+    const c = this.cur; this.cur = null;
+    const draw = win !== c.a && win !== c.b;
+    const w = draw ? c.a : win, l = w === c.a ? c.b : c.a;
+    if (!draw) {
+      const M = this.member(w); if (M) M.wins++;
+      this.streak = this.champ === w ? this.streak + 1 : 1; this.champ = w;
+    }
+    this.toEnd(l); if (!draw) this.toFront(w);
+    if (why) this.sys(why);
+    else if (draw) this.sys('引き分け');
+    else this.sys(this.nameOf(w) + ' の勝ち！' + (this.streak >= 2 ? '（' + this.streak + '連勝）' : ''));
+    if (this.cap && this.champ && this.streak >= this.cap) {
+      this.sys(this.nameOf(this.champ) + ' さんは ' + this.streak + '連勝したので交代です');
+      this.toEnd(this.champ); this.champ = null; this.streak = 0;
+    }
+    this.autoAt = this.members.length >= 2 ? performance.now() + 15000 : 0;
+    this.bcast();
+  },
+  hostAbort(n) {
+    if (!this.cur || this.cur.n !== n) return;
+    const c = this.cur; this.cur = null; this.autoAt = 0;
+    this.sys(this.nameOf(c.a) + ' と ' + this.nameOf(c.b) + ' の接続がうまくいかず、対戦を中止しました');
+    this.bcast();
+  },
+  removeMember(id) {
+    const M = this.member(id); if (!M) return;
+    const c = this.cur;
+    if (c && (c.a === id || c.b === id)) {
+      const other = c.a === id ? c.b : c.a;
+      this.finish(other, M.name + ' さんが抜けたので ' + this.nameOf(other) + ' の勝ち');
+    }
+    this.members = this.members.filter(m => m.id !== id);
+    this.order = this.order.filter(x => x !== id);
+    if (this.champ === id) { this.champ = null; this.streak = 0; }
+    if (this.members.length < 2) this.autoAt = 0;
+    this.sys(M.name + ' さんが抜けました');
+    this.bcast();
+  },
+  hostSpecStart(n, msg) {
+    const c = this.cur; if (!c || c.n !== n) return;
+    this.spec = { n: n, start: msg, inp: [], skip: [c.a, c.b] };
+    this.toAll({ t: 'specStart', n: n, msg: msg }, [c.a, c.b]);
+    if (!this.isFighter(this.myId)) this.pendingStart = n;
+  },
+  hostSpec(m) {
+    /* 決着の知らせが先に届いて cur が空になっていても、最後の入力は配る */
+    const S = this.spec;
+    if (!S || S.n !== m.n || m.s !== S.inp.length / 2) return;
+    for (let i = 0; i < m.a.length; i++) S.inp.push(m.a[i] | 0);
+    this.toAll(m, S.skip);
+  },
+  /* ---- 参加者側 ---- */
+  guestMsg(m) {
+    switch (m.t) {
+      case 'state':
+        this.members = m.members || []; this.order = m.order || []; this.cur = m.cur || null;
+        this.champ = m.champ || null; this.streak = m.streak | 0; this.cap = m.cap | 0; this.sockOk = !!m.sockOk;
+        this.autoAt = m.autoIn > 0 ? performance.now() + m.autoIn : 0;
+        if (this.state !== 'open') { this.state = 'open'; this.deadline = 0; }
+        this.ver++;
+        break;
+      case 'log': this.log = (m.list || []).map(e => Object.assign({}, e, { at: 0 })); this.ver++; break;   /* 入る前の発言（小さい表示には出さない） */
+      case 'chat': if (m.e) this.addLog(m.e); break;
+      case 'sig': this.deliverSig(m.from, m.m); break;
+      case 'specStart': this.spec = { n: m.n, start: m.msg, inp: [] }; this.pendingStart = m.n; break;
+      case 'specAll': this.spec = { n: m.n, start: m.msg, inp: (m.inp || []).slice() }; this.pendingStart = m.n; break;
+      case 'spec': {
+        const S = this.spec;
+        if (S && S.n === m.n && m.s === S.inp.length / 2) for (let i = 0; i < m.a.length; i++) S.inp.push(m.a[i] | 0);
+        break;
+      }
+      case 'full': this.fail('部屋がいっぱいです（' + this.MAX + '人まで）'); break;
+      case 'closed': this.state = 'closed'; this.err = 'ホストが部屋を閉じました'; this.cleanup(); break;
+      default: break;
+    }
+  },
+  /* ---- みんな共通 ---- */
+  addLog(e) {
+    e = Object.assign({}, e, { at: performance.now() });
+    this.log.push(e); if (this.log.length > 80) this.log.shift();
+    this.ver++;
+    if (this.onChat) { try { this.onChat(e); } catch (er) { /* 無視 */ } }
+  },
+  say(text) {
+    text = this.cleanText(text);
+    if (!text || !this.active()) return;
+    if (this.isHost()) this.hostChat(this.myId, text);
+    else if (this.links.host) this.links.host.send({ t: 'chat', text: text });
+  },
+  toHost(o, hostFn) { if (this.isHost()) hostFn(); else if (this.links.host) this.links.host.send(o); },
+  report(n, win) { this.toHost({ t: 'res', n: n, win: win }, () => this.hostResult(n, win)); },
+  abort(n) { this.toHost({ t: 'abort', n: n }, () => this.hostAbort(n)); },
+  specStart(n, msg) { this.toHost({ t: 'specStart', n: n, msg: msg }, () => this.hostSpecStart(n, msg)); },
+  sendSpec(n, s, a) { const m = { t: 'spec', n: n, s: s, a: a }; this.toHost(m, () => this.hostSpec(m)); },
+  /* 対戦する 2人の直接接続。仲介メッセージは部屋を通して送る（試合番号つき） */
+  sendSig(to, m) {
+    if (this.isHost()) this.route(this.myId, to, m);
+    else if (this.links.host) this.links.host.send({ t: 'sig', to: to, m: m });
+  },
+  deliverSig(from, m) {
+    if (Net.sig && Net.peerId === from && Net.roomN === m.n) Net.onSig(Object.assign({}, m, { src: from }));
+    else if (m.n > this.myMatch) { this.sigQ.push({ from: from, m: m }); if (this.sigQ.length > 300) this.sigQ.shift(); }
+  },
+  /* 自分が対戦者に選ばれたら呼ぶ（P1 = 申し込みを待つ側、P2 = 申し込む側） */
+  startLink(c) {
+    this.myMatch = c.n;
+    const first = c.a === this.myId, peer = first ? c.b : c.a;
+    Net.viaRoom(first ? 'host' : 'guest', peer, o => this.sendSig(peer, { n: c.n, type: o.type, payload: o.payload }), c.n);
+    const q = this.sigQ; this.sigQ = [];
+    q.forEach(x => { if (x.from === peer && x.m.n === c.n) Net.onSig(Object.assign({}, x.m, { src: peer })); });
+  },
+  /* 毎フレーム（ゲームのループから） */
+  poll() {
+    if (this.state === 'idle') return;
+    const now = performance.now();
+    if (this.deadline && now > this.deadline && this.state !== 'open') this.fail(this.state === 'signaling' ? '仲介サーバーにつながりません' : '部屋とつながりませんでした（ネットワークの制限かもしれません）');
+    if (this.isHost() && this.active() && this.autoAt && now >= this.autoAt) { this.autoAt = 0; this.startMatch(); }
+  },
+  fail(msg) { this.state = 'error'; this.err = msg; this.cleanup(); },
+  cleanup() {
+    clearTimeout(this.reT); this.deadline = 0;
+    const s = this.sock; this.sock = null; if (s) s.close();
+    const L = this.links; this.links = {};
+    for (const k in L) L[k].close();
+    this.ver++;
+  },
+  /* 自分から抜ける（ホストなら部屋を閉じる） */
+  close() {
+    if (this.state === 'open') {
+      if (this.isHost()) this.toAll({ t: 'closed' });
+      else if (this.links.host) this.links.host.send({ t: 'leave' });
+      /* 送ったメッセージが出ていくのを少し待ってから切る */
+      const L = this.links, s = this.sock; this.links = {}; this.sock = null;
+      setTimeout(() => { for (const k in L) L[k].close(); if (s) s.close(); }, 300);
+    }
+    this.cleanup();
+    if (Net.sig) Net.close();
+    this.state = 'idle'; this.err = '';
+    this.reset();
+  }
+};
+window.addEventListener('pagehide', () => { if (Room.state !== 'idle') Room.close(); });
+
+return { Snap: Snap, Net: Net, NetSession: NetSession, NetTest: NetTest, Room: Room };
 };

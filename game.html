@@ -2478,7 +2478,7 @@ class Fighter {
  * ================================================================ */
 const NullFX = new Proxy({}, { get: function () { return function () { }; } });
 /* オンライン対戦（net.js）。中身は使うときに参照するのでゲッターで渡す */
-const { Snap, Net, NetSession, NetTest } = window.DennoNet({
+const { Snap, Net, NetSession, NetTest, Room } = window.DennoNet({
   get Game() { return Game; }, get FX() { return FX; }, get NullFX() { return NullFX; }, get Match() { return Match; }, get HASH() { return HASH; }
 });
 
@@ -5530,6 +5530,7 @@ Game.scenes.title = {
   enter() {
     this.sel = 0; this.hintT = 0; this.demo = false; this.demoT = 0; this.demoI = 0; this.pups = [];
     if (Net.state !== 'idle') Net.close();   /* オンラインから戻ったら切断 */
+    if (Room.state !== 'idle') Room.close();
     Game.netLinger = null;
     FX.reset();
   },
@@ -5791,6 +5792,7 @@ function netHostStart() {
   const eff = Settings.eff(), seed = Math.floor(Math.random() * 0x7ffffffe) + 1;
   const msg = { t: 'start', sel: Game.sel.slice(), pal2: [false, true], easy: Game.easy.slice(), seed: seed, rounds: eff.rounds, time: eff.time, stage: list[seed % list.length] };
   Net.send(msg);
+  if (Game.roomGame) Room.specStart(Game.roomGame.n, msg);   /* 大部屋: 観戦する人にも同じ試合の条件を送る */
   netApplyStart(msg);
 }
 function netApplyStart(msg) {
@@ -5804,12 +5806,37 @@ function netLost() {
   Net.poll();
   if (Net.state === 'open') return false;
   Toast.push(Net.err || '相手との接続が切れました');
-  Net.close(); Game.go('title');
+  Net.close();
+  if (Game.roomGame) { Room.abort(Game.roomGame.n); roomBack(); } else Game.go('title');
   return true;
+}
+/* 自分から対戦をやめる（大部屋では負け扱いにして部屋へ戻る） */
+function netQuit() {
+  const RG = Game.roomGame;
+  if (RG && RG.fighter) { Room.report(RG.n, RG.ids[1 - (Game.netSlot || 0)]); roomBack(); return; }
+  Net.close(); Game.go('title');
+}
+/* 大部屋: 試合が終わったら部屋（ロビー）へ戻る。部屋がなくなっていたらタイトルへ */
+function roomBack() {
+  const RG = Game.roomGame;
+  if (Net.state !== 'idle' && RG && Net.roomN === RG.n) Net.close();
+  Game.netLinger = null; Game.roomGame = null;
+  if (Room.active()) Game.go('room');
+  else { Toast.push(Room.err || '部屋がなくなりました'); Game.go('title'); }
+}
+/* 大部屋: P1 側の対戦者が、確定した入力（両者ぶん）を観戦用に部屋へ送る */
+function roomFeed(S, n, force) {
+  if (S.specSent === undefined) S.specSent = -1;
+  const upto = Math.min(S.known, S.frame - 1);
+  if (upto <= S.specSent || (!force && upto - S.specSent < 4)) return;
+  const a = [], A = S.inp[0], B = S.inp[1];
+  for (let f = S.specSent + 1; f <= upto; f++) a.push(A[f] | 0, B[f] | 0);
+  Room.sendSpec(n, S.specSent + 1, a);
+  S.specSent = upto;
 }
 Game.scenes.online = {
   idleLimit: 0,
-  ITEMS: ['部屋を作る', '部屋に入る', '接続テスト', 'タイトルへ'],
+  ITEMS: ['部屋を作る', '部屋に入る', '大部屋（3〜6人・観戦つき）', '接続テスト', 'タイトルへ'],
   enter() { this.mode = 'menu'; this.sel = 0; this.dig = this.dig || [0, 0, 0, 0]; this.di = 0; Net.close(); NetTest.stop(); FX.reset(); },
   exit() { NetTest.stop(); },
   update() {
@@ -5828,7 +5855,8 @@ Game.scenes.online = {
         Audio.play('menuOk');
         if (this.sel === 0) { Net.host(); this.mode = 'host'; }
         else if (this.sel === 1) { this.mode = 'code'; this.di = 0; }
-        else if (this.sel === 2) { NetTest.start(); this.mode = 'test'; }
+        else if (this.sel === 2) Game.go('roomMenu');
+        else if (this.sel === 3) { NetTest.start(); this.mode = 'test'; }
         else Game.go('title');
       }
       return;
@@ -5888,7 +5916,7 @@ Game.scenes.online = {
     const sub = (t, y, c) => drawText(ctx, t, 480, y, { size: 14, align: 'center', color: c || '#8fa3c8' });
     if (this.mode === 'test') { this.renderTest(ctx, sub); drawConn(ctx); return; }
     if (this.mode === 'menu') {
-      drawMenuList(ctx, this.ITEMS, this.sel, 480, 175, 44);
+      drawMenuList(ctx, this.ITEMS, this.sel, 480, 160, 44, { w: 190 });
       sub('ネット越しに 2人で対戦します。片方が部屋を作り、部屋番号を相手に伝えて入ってもらいます', 392);
       sub('2人とも Chrome か Edge で遊んでください', 416);
       sub('学校など制限のあるネットワークでは、つながらないことがあります（「接続テスト」で確かめられます）', 440);
@@ -5918,6 +5946,355 @@ Game.scenes.online = {
         sub('仲介サーバーに接続しています' + dots, 230, '#e6f1ff');
       }
       if (st !== 'error' && st !== 'closed') sub('強 / Esc: やめる', 420);
+    }
+    drawConn(ctx);
+  }
+};
+
+/* ================================================================
+ * 大部屋のチャット。キーボードで打つ
+ *   コントローラーで遊んでいる人: 文字キーを打つだけで入力欄が開く
+ *   キーボードで遊んでいる人: Enter で開く（打っている間はキーボードの操作は止まる）
+ * 対戦中も画面の左上に、新しい発言を小さく出す（しばらくすると消える）
+ * ================================================================ */
+const Chat = {
+  el: null, typing: false, purpose: 'chat', onDone: null,
+  PHRASES: ['よろしく！', 'ナイス！', 'つよい…', 'もう一回！', 'GG', 'ちょっと待って', 'おつかれさま！', 'ありがとう！'],
+  COLS: ['#ff4a6b', '#3ff0ff', '#ffe94d', '#7cff6b', '#c08bff', '#ffb347'],
+  col(id) { let h = 0; id = String(id || ''); for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0; return this.COLS[h % this.COLS.length]; },
+  ensure() {
+    if (this.el) return this.el;
+    const el = document.createElement('input');
+    el.type = 'text'; el.autocomplete = 'off'; el.spellcheck = false;
+    el.style.cssText = 'position:fixed;z-index:10;display:none;box-sizing:border-box;padding:6px 10px;font:16px ' + FONT_JP + ';color:#e6f1ff;background:rgba(4,5,16,0.94);border:2px solid #19f3ff;border-radius:6px;outline:none;user-select:text;-webkit-user-select:text;cursor:text;';
+    el.addEventListener('blur', () => { if (this.typing) this.close(); });
+    document.body.appendChild(el);
+    this.el = el;
+    return el;
+  },
+  /* 大部屋の画面（部屋・キャラ選択・対戦・結果）にいるか */
+  inRoom() { return Room.active() && (Game.name === 'room' || (!!Game.roomGame && ['charSelect', 'versus', 'fight', 'result'].indexOf(Game.name) >= 0)); },
+  open(text, purpose, onDone) {
+    const el = this.ensure(), cv = document.getElementById('game');
+    const c = cv ? cv.getBoundingClientRect() : { left: 0, top: 0, width: innerWidth, height: innerHeight };
+    /* 部屋の画面では下の真ん中に大きく、対戦中は左上（小さいチャットの下）に */
+    const big = Game.name === 'room' || Game.name === 'roomMenu';
+    el.style.left = (c.left + c.width * (big ? 0.2 : 0.012)) + 'px';
+    el.style.width = (c.width * (big ? 0.6 : 0.4)) + 'px';
+    el.style.top = (c.top + c.height * (big ? 0.855 : 0.42)) + 'px';
+    el.maxLength = purpose === 'name' ? 10 : 60;
+    el.placeholder = purpose === 'name' ? '名前（10文字まで）   Enter: 決定   Esc: やめる' : 'チャット   Enter: 送る   Esc: やめる';
+    el.value = text || '';
+    el.style.display = 'block';
+    this.typing = true; this.purpose = purpose || 'chat'; this.onDone = onDone || null;
+    Keys.clear(); Devices.releaseAll();
+    el.focus();
+  },
+  close() {
+    this.typing = false;
+    if (this.el) { this.el.style.display = 'none'; try { this.el.blur(); } catch (e) { /* 無視 */ } }
+    Input.lockFor(6);
+  },
+  submit() {
+    const v = this.el ? this.el.value : '', fn = this.onDone, p = this.purpose;
+    this.close();
+    if (p === 'chat') Room.say(v);
+    else if (fn) fn(v);
+  },
+  /* keydown のたびに（ゲームより先に）呼ぶ。true ならゲームには渡さない */
+  onKey(e) {
+    if (this.typing) {
+      if (e.isComposing || e.keyCode === 229) return true;   /* 日本語の変換中 */
+      if (e.key === 'Enter') { e.preventDefault(); this.submit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); this.close(); }
+      return true;   /* 文字はそのまま入力欄へ */
+    }
+    if (!this.inRoom() || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return false;
+    if (e.code === 'Enter') { e.preventDefault(); this.open('', 'chat'); return true; }
+    /* キーボードを操作に使っていない（コントローラーの）人は、文字キーを打つだけで開く */
+    const d = Devices.slots[0];
+    if (d && d.kind === 'pad' && e.key && e.key.length === 1 && e.key !== ' ') { this.open('', 'chat'); return true; }
+    return false;
+  },
+  line(e) { return e.sys ? '・' + e.text : e.name + ': ' + e.text; },
+  /* 長い文字列を幅に収める（はみ出す分は …） */
+  fit(ctx, s, w) {
+    if (ctx.measureText(s).width <= w) return s;
+    let lo = 0, hi = s.length;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (ctx.measureText(s.slice(0, mid) + '…').width <= w) lo = mid; else hi = mid - 1; }
+    return s.slice(0, lo) + '…';
+  },
+  /* 対戦中などの小さい表示（左上。新しい 4件を 12秒） */
+  drawSmall(ctx) {
+    if (!this.inRoom() || Game.name === 'room') return;
+    const now = performance.now(), L = Room.log, out = [];
+    for (let i = L.length - 1; i >= 0 && out.length < 4; i--) { const e = L[i]; if (!e.at || now - e.at > 12000) break; out.unshift(e); }
+    if (!out.length) return;
+    ctx.save();
+    ctx.font = '13px ' + FONT_JP;
+    let y = 140;
+    for (const e of out) {
+      const a = Util.clamp((12000 - (now - e.at)) / 1500, 0, 1), t = this.fit(ctx, this.line(e), 360), w = ctx.measureText(t).width + 14;
+      ctx.globalAlpha = a * 0.8; ctx.fillStyle = 'rgba(4,5,16,0.75)'; fillRR(ctx, 10, y - 10, w, 20, 4); ctx.fill();
+      ctx.globalAlpha = a;
+      if (e.sys) drawText(ctx, t, 17, y, { size: 13, color: '#ffe94d', base: 'middle' });
+      else {
+        const nm = e.name + ': ', nw = ctx.measureText(nm).width;
+        drawText(ctx, nm, 17, y, { size: 13, color: this.col(e.id), base: 'middle' });
+        if (t.length > nm.length) drawText(ctx, t.slice(nm.length), 17 + nw, y, { size: 13, color: '#ffffff', base: 'middle' });
+      }
+      y += 22;
+    }
+    ctx.restore();
+  }
+};
+Room.onChat = e => { if (!e.sys && e.id !== Room.myId) Audio.play('menuMove'); };
+
+/* 大部屋の名前（はじめは「プレイヤー」＋数字） */
+function roomName() {
+  let n = Store.get('roomName', '');
+  if (!n) { n = 'プレイヤー' + (10 + Math.floor(Math.random() * 90)); Store.set('roomName', n); }
+  return n;
+}
+/* 観戦: 試合の条件を受け取って VS 画面へ */
+function roomWatch(S) {
+  const msg = S.start, c = Room.cur;
+  Game.sel = msg.sel.slice(); Game.pal2 = msg.pal2.slice(); Game.easy = msg.easy.slice();
+  Game.netRules = { seed: msg.seed, rounds: msg.rounds, time: msg.time, stage: msg.stage };
+  Game.training = false; Game.tutorial = false; Game.netLinger = null;
+  const ids = c && c.n === S.n ? [c.a, c.b] : ['', ''];
+  Game.roomGame = { n: S.n, ids: ids, names: ids.map(id => Room.nameOf(id)), fighter: false };
+  Game.go('versus', { spec: true });
+}
+
+/* ================================================================
+ * 大部屋の入口: 部屋を作る / 番号を入れて入る / 名前
+ * ================================================================ */
+Game.scenes.roomMenu = {
+  idleLimit: 0,
+  enter() { this.mode = 'menu'; this.sel = 0; this.dig = this.dig || [0, 0, 0, 0]; this.di = 0; if (Room.state !== 'idle') Room.close(); Net.close(); FX.reset(); },
+  items() { return ['部屋を作る', '部屋に入る', '名前: ' + roomName(), '戻る']; },
+  update() {
+    if (Chat.typing) return;
+    const n = Input.nav, back = (n & B_H) || Input.keyPressed('Escape'), ok = (n & B_L) || Input.keyPressed('Enter') || Input.keyPressed('NumpadEnter');
+    if (this.mode === 'menu') {
+      this.sel = menuMove(this.sel, 4, n);
+      if (back) { Audio.play('menuCancel'); Game.go('online'); return; }
+      if (ok) {
+        Audio.play('menuOk');
+        if (this.sel === 0) { Room.create(roomName()); this.mode = 'wait'; }
+        else if (this.sel === 1) { this.mode = 'code'; this.di = 0; }
+        else if (this.sel === 2) Chat.open(roomName(), 'name', v => Store.set('roomName', Room.cleanName(v)));
+        else Game.go('online');
+      }
+      return;
+    }
+    if (this.mode === 'code') {
+      if (n & B_LEFT) { this.di = (this.di + 3) % 4; Audio.play('menuMove'); }
+      if (n & B_RIGHT) { this.di = (this.di + 1) % 4; Audio.play('menuMove'); }
+      if (n & B_UP) { this.dig[this.di] = (this.dig[this.di] + 1) % 10; Audio.play('menuMove'); }
+      if (n & B_DOWN) { this.dig[this.di] = (this.dig[this.di] + 9) % 10; Audio.play('menuMove'); }
+      for (let d = 0; d < 10; d++) {
+        if (Input.keyPressed('Digit' + d) || Input.keyPressed('Numpad' + d)) { this.dig[this.di] = d; this.di = Math.min(3, this.di + 1); Audio.play('menuMove'); }
+      }
+      if (Input.keyPressed('Backspace')) this.di = Math.max(0, this.di - 1);
+      if (back) { Audio.play('menuCancel'); this.mode = 'menu'; return; }
+      if (ok) { Audio.play('menuOk'); Room.join(this.dig.join(''), roomName()); this.mode = 'wait'; }
+      return;
+    }
+    /* 接続待ち */
+    if (Room.active()) { Audio.play('padOn'); Game.go('room'); return; }
+    const bad = Room.state === 'error' || Room.state === 'closed';
+    if (back || (bad && ok)) { Audio.play('menuCancel'); Room.close(); this.mode = 'menu'; }
+  },
+  render(ctx) {
+    Backdrop.draw(ctx, 0.6);
+    drawText(ctx, '大部屋', 480, 64, { size: 30, align: 'center', color: '#ffffff', glow: '#19f3ff' });
+    const sub = (t, y, c) => drawText(ctx, t, 480, y, { size: 14, align: 'center', color: c || '#8fa3c8' });
+    if (this.mode === 'menu') {
+      drawMenuList(ctx, this.items(), this.sel, 480, 165, 46, { w: 190 });
+      sub('3〜6人で入って、負け抜けで順番に対戦します。対戦していない人は観戦できます', 370);
+      sub('つながるのは「対戦する2人」と「部屋を作った人」だけ。チャットはキーボードで打てます', 394);
+      sub('部屋を作った人が抜けると、部屋はなくなります', 418);
+      if (this.sel === 2) sub('名前はキーボードで入れます（弱で入力欄が開きます）', 450, '#e6f1ff');
+    } else if (this.mode === 'code') {
+      sub('教えてもらった 大部屋の番号（4けた）を入れてください', 150, '#e6f1ff');
+      for (let i = 0; i < 4; i++) {
+        const x = 480 + (i - 1.5) * 84, on = i === this.di;
+        ctx.save(); ctx.fillStyle = on ? 'rgba(25,243,255,0.16)' : 'rgba(4,5,16,0.72)'; fillRR(ctx, x - 32, 196, 64, 84, 8); ctx.fill();
+        ctx.strokeStyle = on ? '#19f3ff' : 'rgba(143,163,200,0.4)'; ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
+        drawText(ctx, String(this.dig[i]), x, 240, { size: 46, font: 'en', align: 'center', base: 'middle', color: '#ffffff', glow: on ? '#19f3ff' : null });
+      }
+      sub('↑↓: 数字を変える   ←→: けたを移る   （数字キーでも入れられます）', 320);
+      sub('弱: 入る   強 / Esc: 戻る', 346);
+    } else {
+      const st = Room.state, dots = '.'.repeat(1 + Math.floor(Game.t * 2) % 3);
+      if (st === 'error' || st === 'closed') {
+        drawText(ctx, Room.err || 'つながりませんでした', 480, 220, { size: 18, align: 'center', color: '#ff6b8b' });
+        sub('弱 / 強: 戻る', 270);
+      } else {
+        sub(st === 'signaling' ? '仲介サーバーに接続しています' + dots : '部屋に接続しています' + dots, 230, '#e6f1ff');
+        sub('強 / Esc: やめる', 420);
+      }
+    }
+    drawConn(ctx);
+  }
+};
+
+/* ================================================================
+ * 大部屋（ロビー）: メンバーと順番・いまの対戦・チャット
+ *   ホスト: 弱で対戦開始（決着の 15秒後は自動で次へ）、必殺で連勝の上限
+ *   みんな: Enter でチャット、投げで定型文、強で部屋を出る。試合が始まると自動で観戦へ
+ * ================================================================ */
+Game.scenes.room = {
+  idleLimit: 0, watchOff: 0,
+  CAPS: [0, 3, 5],
+  enter() {
+    this.menu = false; this.ask = false; this.sel = 0;
+    /* 前の試合の接続が残っていたら切る（今の対戦の接続は残す） */
+    if (Net.state !== 'idle' && !(Room.cur && Net.roomN === Room.cur.n)) Net.close();
+    Game.roomGame = null; Game.netLinger = null;
+    FX.reset();
+  },
+  exit() { if (Chat.typing) Chat.close(); },
+  /* 次に対戦する 2人（startMatch と同じ決め方） */
+  nextPair() {
+    const o = Room.order;
+    if (o.length < 2) return null;
+    if (Room.champ && o.indexOf(Room.champ) >= 0) return [Room.champ, o.find(x => x !== Room.champ)];
+    return [o[0], o[1]];
+  },
+  update() {
+    if (!Room.active()) { Toast.push(Room.err || '部屋から出ました'); Room.close(); Game.go('roomMenu'); return; }
+    const c = Room.cur, me = Room.myId, fighter = Room.isFighter(me);
+    /* 自分が対戦に選ばれた → 相手と直接つなぐ。つながったらキャラ選択へ */
+    if (c && fighter) {
+      if (Room.myMatch !== c.n) Room.startLink(c);
+      Net.poll();
+      if (Net.state === 'open' && Net.roomN === c.n) {
+        if (Chat.typing) Chat.close();
+        Audio.play('padOn');
+        Game.netSlot = c.a === me ? 0 : 1;
+        Game.roomGame = { n: c.n, ids: [c.a, c.b], names: [Room.nameOf(c.a), Room.nameOf(c.b)], fighter: true };
+        Game.go('charSelect', { net: true });
+        return;
+      }
+      if ((Net.state === 'error' || Net.state === 'closed') && Net.roomN === c.n) { Toast.push(Net.err || '相手とつながりませんでした'); Room.abort(c.n); Net.close(); }
+    }
+    /* 試合が始まった → 観戦へ */
+    const S = Room.spec;
+    if (Room.pendingStart && S && S.n === Room.pendingStart && S.start && !fighter && c && c.n === S.n && this.watchOff !== S.n) {
+      Room.pendingStart = 0; if (Chat.typing) Chat.close(); roomWatch(S); return;
+    }
+    if (Chat.typing) return;
+    const n = Input.nav, ed = Input.edge[0] | Input.edge[1], back = (n & B_H) || Input.keyPressed('Escape');
+    if (this.menu) {
+      this.sel = menuMove(this.sel, Chat.PHRASES.length, n);
+      if (n & B_L) { Audio.play('menuOk'); Room.say(Chat.PHRASES[this.sel]); this.menu = false; }
+      else if (back || (ed & B_T)) { Audio.play('menuCancel'); this.menu = false; }
+      return;
+    }
+    if (this.ask) {
+      if (n & B_L) { Audio.play('menuCancel'); Room.close(); Game.go('roomMenu'); return; }
+      if (back) { Audio.play('menuCancel'); this.ask = false; }
+      return;
+    }
+    if (back) { Audio.play('menuOk'); this.ask = true; return; }
+    if (ed & B_T) { Audio.play('menuOk'); this.menu = true; this.sel = 0; return; }
+    if (Room.isHost() && (ed & B_S)) { const C = this.CAPS; Room.setCap(C[(C.indexOf(Room.cap) + 1) % C.length]); Audio.play('menuMove'); }
+    if (n & B_L) {
+      if (Room.isHost() && !c) { if (Room.startMatch()) Audio.play('menuOk'); else { Audio.play('menuCancel'); Toast.push('2人以上そろうと始められます'); } }
+      else if (c && !fighter && S && S.n === c.n && S.start) { Audio.play('menuOk'); this.watchOff = 0; Room.pendingStart = c.n; }
+    }
+  },
+  render(ctx) {
+    Backdrop.draw(ctx, 0.62);
+    const me = Room.myId, c = Room.cur, host = Room.isHost();
+    drawText(ctx, '大部屋', 40, 46, { size: 26, color: '#ffffff', glow: '#19f3ff', base: 'middle' });
+    drawText(ctx, '部屋番号', 170, 46, { size: 13, color: '#8fa3c8', base: 'middle' });
+    drawText(ctx, Room.code, 232, 46, { size: 30, font: 'en', color: '#ffffff', glow: '#19f3ff', base: 'middle' });
+    drawText(ctx, Room.members.length + ' / ' + Room.MAX + ' 人', 920, 46, { size: 16, color: '#e6f1ff', align: 'right', base: 'middle' });
+    if (host && !Room.sockOk) drawText(ctx, '仲介サーバーにつなぎ直しています（その間は新しい人が入れません）', 920, 72, { size: 11, color: '#ffb347', align: 'right', base: 'middle' });
+    /* 左: 順番 */
+    panel(ctx, 30, 86, 420, 336, '#19f3ff', 0.85);
+    drawText(ctx, '順番（負けたら最後へ）', 46, 106, { size: 13, color: '#8fa3c8', base: 'middle' });
+    const hostId = Room.isHost() ? me : (Room.members[0] && Room.members[0].id);
+    Room.order.forEach((id, i) => {
+      const M = Room.member(id); if (!M) return;
+      const y = 138 + i * 44, isC = c && (c.a === id || c.b === id), col = Chat.col(id);
+      if (id === me) { ctx.save(); ctx.fillStyle = 'rgba(25,243,255,0.10)'; fillRR(ctx, 40, y - 18, 400, 36, 5); ctx.fill(); ctx.restore(); }
+      drawText(ctx, String(i + 1), 58, y, { size: 18, font: 'en', color: '#8fa3c8', align: 'center', base: 'middle' });
+      drawText(ctx, M.name, 80, y, { size: 18, color: '#ffffff', glow: col, base: 'middle' });
+      const tags = [];
+      if (id === me) tags.push('あなた');
+      if (id === hostId) tags.push('部屋主');
+      drawText(ctx, tags.join(' ・ '), 80, y + 15, { size: 10, color: '#8fa3c8', base: 'middle' });
+      drawText(ctx, M.wins + '勝', 330, y, { size: 14, color: '#e6f1ff', align: 'right', base: 'middle' });
+      if (isC) drawText(ctx, '対戦中', 430, y, { size: 13, color: '#ff6b8b', align: 'right', base: 'middle', glow: '#ff3b5c' });
+      else if (Room.champ === id) drawText(ctx, Room.streak + '連勝中', 430, y, { size: 13, color: '#ffe94d', align: 'right', base: 'middle', glow: '#ffe94d' });
+    });
+    /* 右: チャット */
+    panel(ctx, 470, 86, 460, 336, '#c08bff', 0.85);
+    drawText(ctx, 'チャット', 486, 106, { size: 13, color: '#8fa3c8', base: 'middle' });
+    {
+      ctx.save(); ctx.font = '14px ' + FONT_JP;
+      const rows = [];
+      for (let i = Room.log.length - 1; i >= 0 && rows.length < 13; i--) {
+        const e = Room.log[i], lines = wrapText(ctx, Chat.line(e), 420, 14, 'jp');
+        for (let k = lines.length - 1; k >= 0 && rows.length < 13; k--) rows.unshift({ e: e, t: lines[k], first: k === 0 });
+      }
+      ctx.restore();
+      rows.forEach((r, i) => {
+        const y = 132 + i * 22, e = r.e;
+        if (e.sys) drawText(ctx, r.t, 486, y, { size: 14, color: '#ffe94d', base: 'middle' });
+        else if (r.first) {
+          ctx.save(); ctx.font = '14px ' + FONT_JP; const nw = ctx.measureText(e.name + ': ').width; ctx.restore();
+          drawText(ctx, e.name + ': ', 486, y, { size: 14, color: Chat.col(e.id), base: 'middle' });
+          drawText(ctx, r.t.slice(e.name.length + 2), 486 + nw, y, { size: 14, color: '#ffffff', base: 'middle' });
+        } else drawText(ctx, r.t, 486, y, { size: 14, color: '#ffffff', base: 'middle' });
+      });
+    }
+    /* 下: いまの対戦 / 次の対戦 */
+    const nm = id => Room.nameOf(id), dots = '.'.repeat(1 + Math.floor(Game.t * 2) % 3);
+    let line = '', col = '#e6f1ff';
+    if (c) {
+      const S = Room.spec, watching = S && S.n === c.n && S.start;
+      line = '対戦中: ' + nm(c.a) + ' vs ' + nm(c.b);
+      if (Room.isFighter(me)) { line = 'あなたの番です！ ' + nm(c.a === me ? c.b : c.a) + ' さんと接続しています' + dots; col = '#ffe94d'; }
+      else if (watching) line += '     弱: 観戦する';
+      else line += '（キャラを選んでいます）';
+    } else {
+      const p = this.nextPair();
+      if (!p) { line = 'ほかの人が入るのを待っています（部屋番号 ' + Room.code + ' を伝えてください）'; col = '#8fa3c8'; }
+      else {
+        const nx = '次: ' + nm(p[0]) + ' vs ' + nm(p[1]);
+        const left = Room.autoAt ? Math.max(0, Math.ceil((Room.autoAt - performance.now()) / 1000)) : 0;
+        if (left) line = nx + '   あと ' + left + ' 秒で開始' + (host ? '（弱: すぐ始める）' : '');
+        else line = host ? '弱: 対戦を始める   ' + nx : nx + '   （部屋主が始めるのを待っています）';
+        if (p.indexOf(me) >= 0) col = '#ffe94d';
+      }
+    }
+    drawText(ctx, line, 480, 446, { size: 17, align: 'center', color: col, base: 'middle' });
+    const pad = Devices.slots[0] && Devices.slots[0].kind === 'pad';
+    const hint = 'Enter: チャット' + (pad ? '（キーを打つだけでもOK）' : '') + '    投げ: 定型文    強: 部屋を出る' + (host ? '    必殺: 連勝上限 ' + (Room.cap ? Room.cap + '連勝' : 'なし') : '');
+    if (!Chat.typing) drawText(ctx, hint, 480, 476, { size: 13, align: 'center', color: '#8fa3c8', base: 'middle' });
+    if (!host && Room.cap) drawText(ctx, '連勝上限: ' + Room.cap + '連勝で交代', 920, 72, { size: 11, color: '#8fa3c8', align: 'right', base: 'middle' });
+    /* 定型文 */
+    if (this.menu) {
+      const P = Chat.PHRASES, h = P.length * 30 + 40;
+      ctx.fillStyle = 'rgba(3,4,12,0.6)'; ctx.fillRect(0, 0, CFG.W, CFG.H);
+      panel(ctx, 340, 270 - h / 2, 280, h, '#19f3ff', 0.95);
+      P.forEach((t, i) => {
+        const y = 270 - h / 2 + 34 + i * 30, on = i === this.sel;
+        if (on) { ctx.save(); ctx.fillStyle = 'rgba(25,243,255,0.16)'; fillRR(ctx, 352, y - 13, 256, 26, 4); ctx.fill(); ctx.restore(); }
+        drawText(ctx, t, 480, y, { size: 16, align: 'center', base: 'middle', color: on ? '#ffffff' : '#8fa3c8' });
+      });
+      drawText(ctx, '弱: 送る   強: やめる', 480, 270 + h / 2 + 18, { size: 12, align: 'center', color: '#8fa3c8' });
+    }
+    if (this.ask) {
+      ctx.fillStyle = 'rgba(3,4,12,0.7)'; ctx.fillRect(0, 0, CFG.W, CFG.H);
+      drawText(ctx, host ? '部屋を閉じますか？（みんな退出になります）' : '部屋を出ますか？', 480, 250, { size: 22, align: 'center', base: 'middle', color: '#ffffff' });
+      drawText(ctx, '弱: 出る   強 / Esc: 戻る', 480, 292, { size: 14, align: 'center', base: 'middle', color: '#8fa3c8' });
     }
     drawConn(ctx);
   }
@@ -5997,7 +6374,7 @@ Game.scenes.charSelect = {
     if (this.net) {
       if (netLost() || this.netRecv()) return;
       const me = this.p[this.local];
-      if (Input.keyPressed('Escape') || ((Input.edge[0] & B_H) && !me.decided)) { Audio.play('menuCancel'); Net.close(); Game.go('title'); return; }
+      if (Input.keyPressed('Escape') || ((Input.edge[0] & B_H) && !me.decided)) { Audio.play('menuCancel'); netQuit(); return; }
     }
     for (let i = 0; i < 2; i++) {
       /* オンライン: 相手の側は届いた状態を表示するだけ。自分の側は自分の機器（P1 の機器）で動かす */
@@ -6067,7 +6444,7 @@ Game.scenes.charSelect = {
   },
   render(ctx) {
     Backdrop.draw(ctx, 0.6);
-    drawText(ctx, this.net ? 'オンライン対戦  キャラクター選択（あなたは P' + (this.local + 1) + '）' : this.challenger ? '乱入！  P2 キャラクター選択' : (this.training ? '1人で遊ぶ  キャラクター選択' : 'キャラクター選択'), 480, 44, { size: 28, align: 'center', color: '#ffffff', glow: '#19f3ff' });
+    drawText(ctx, this.net && Game.roomGame ? '大部屋  キャラクター選択（あなたは P' + (this.local + 1) + '）' : this.net ? 'オンライン対戦  キャラクター選択（あなたは P' + (this.local + 1) + '）' : this.challenger ? '乱入！  P2 キャラクター選択' : (this.training ? '1人で遊ぶ  キャラクター選択' : 'キャラクター選択'), 480, 44, { size: 28, align: 'center', color: '#ffffff', glow: '#19f3ff' });
     /* 左右の大きな人形を先に描き、カードを手前に重ねる（カードが隠れないように） */
     for (let i = 0; i < 2; i++) {
       const p = this.p[i], col = i === 0 ? UI_COL.p1 : UI_COL.p2, cx = i === 0 ? 105 : 855;
@@ -6150,7 +6527,7 @@ Game.scenes.charSelect = {
       /* デバイス */
       const d = this.net ? (i === this.local ? Devices.slots[0] : null) : Devices.slots[i];
       const y2 = 524;
-      drawText(ctx, 'P' + (i + 1) + ' ' + (this.net ? (i === this.local ? 'あなた ' + (d ? d.name : '') : 'オンラインの相手') : (d ? d.name : '---')), ix, y2, { size: 12, color: col });
+      drawText(ctx, 'P' + (i + 1) + ' ' + (this.net ? (i === this.local ? 'あなた ' + (d ? d.name : '') : Game.roomGame ? Game.roomGame.names[i] : 'オンラインの相手') : (d ? d.name : '---')), ix, y2, { size: 12, color: col });
       ctx.fillStyle = (this.net && i !== this.local) || (d && d.connected !== false) ? '#7cff6b' : '#ff3b5c';
       ctx.beginPath(); ctx.arc(ix + iw - 8, y2 - 4, 4, 0, 6.2832); ctx.fill();
       if (p.easy) { panel(ctx, ix + iw - 110, y2 - 14, 90, 18, '#ffe94d', 0.6); drawText(ctx, 'かんたん: ON', ix + iw - 65, y2 - 5, { size: 11, color: '#ffe94d', align: 'center', base: 'middle' }); }
@@ -6161,7 +6538,7 @@ Game.scenes.charSelect = {
         : this.training ? 'P1 が 弱 で決めると始まります'
         : '2人とも 弱 で決めると始まります';
       drawText(ctx, msg, 480, 262, { size: 15, align: 'center', color: '#ffe94d', alpha: 0.75 + 0.25 * Math.sin(Game.t * 4) });
-      drawText(ctx, this.net ? 'Esc: 切断してタイトルへ' : (Settings.data.lock && !Game.staff) ? 'Esc: 戻る' : 'Tab: 入力設定    Esc: 戻る', 480, 284, { size: 12, align: 'center', color: '#8fa3c8' });
+      drawText(ctx, this.net && Game.roomGame ? 'Esc: やめる（負け扱いで部屋へ）   Enter: チャット' : this.net ? 'Esc: 切断してタイトルへ' : (Settings.data.lock && !Game.staff) ? 'Esc: 戻る' : 'Tab: 入力設定    Esc: 戻る', 480, 284, { size: 12, align: 'center', color: '#8fa3c8' });
     }
     if (this.cd >= 0) {
       const k = this.cd / 60;
@@ -6356,7 +6733,7 @@ Game.scenes.versus = {
   enter(args) {
     this.args = args || {};
     if (Game.tutorial) initStage(Game.data.stage.colors, 'sando');
-    else if (this.args.net && Game.netRules && Game.netRules.stage) initStage(Game.data.stage.colors, Game.netRules.stage);
+    else if ((this.args.net || this.args.spec) && Game.netRules && Game.netRules.stage) initStage(Game.data.stage.colors, Game.netRules.stage);
     else pickStage();
     this.pups = [0, 1].map(i => {
       const p = makePreview(Game.sel[i], Game.pal2[i]);
@@ -6370,9 +6747,10 @@ Game.scenes.versus = {
     this.pups.forEach(p => { p.beginStep(); p.commit(false, false); });
     /* 掛け合いがあるときは少し長く見せる（決定で飛ばせる） */
     if (this.args.net && netLost()) return;
+    if (this.args.spec && !Room.active()) { roomBack(); return; }
     const len = vsLines(Game.sel[0], Game.sel[1]) && !Game.tutorial ? 210 : 120;
-    if (!this.args.net && Game.sceneT > 30 && (Input.nav & B_L) && Game.sceneT < len - 20) Game.sceneT = len - 20;
-    if (Game.sceneT >= len) Game.go('fight', { training: this.args.training, net: this.args.net });
+    if (!this.args.net && !this.args.spec && Game.sceneT > 30 && (Input.nav & B_L) && Game.sceneT < len - 20) Game.sceneT = len - 20;
+    if (Game.sceneT >= len) Game.go('fight', { training: this.args.training, net: this.args.net, spec: this.args.spec });
   },
   render(ctx) {
     const t = Game.sceneT, T = Game.data.stage;
@@ -6894,8 +7272,10 @@ Game.scenes.fight = {
     }
     const eff = Settings.eff();
     const net = !!args.net && Net.state === 'open' && Game.netRules;
-    this.training = !net && (!!args.training || !!HASH.p.training);
-    const seed = net ? Game.netRules.seed : HASH.p.seed != null && HASH.p.seed !== true ? (parseInt(HASH.p.seed, 10) || 1) : ((Date.now() & 0xffff) + 1);
+    /* 大部屋の観戦: 対戦者から届く入力で同じ試合を再生する */
+    const spec = !net && !!args.spec && !!Game.netRules && !!Room.spec;
+    this.training = !net && !spec && (!!args.training || !!HASH.p.training);
+    const seed = net || spec ? Game.netRules.seed : HASH.p.seed != null && HASH.p.seed !== true ? (parseInt(HASH.p.seed, 10) || 1) : ((Date.now() & 0xffff) + 1);
     FX.reset();
     FX.glitchWords = Game.data.texts.glitchWords;
     /* 同じ引数・同じ入力でもう一度シミュレートすると同じ試合になる（KO のリプレイに使う） */
@@ -6903,7 +7283,8 @@ Game.scenes.fight = {
       rts: [Game.chars[Game.sel[0]], Game.chars[Game.sel[1]]], pal2: Game.pal2.slice(), easy: Game.easy.slice(),
       rounds: Game.tutorial ? 1 : eff.rounds, time: (Game.tutorial || this.practice()) ? 0 : eff.time, seed: seed
     };
-    if (net) { this.mArgs.rounds = Game.netRules.rounds; this.mArgs.time = Game.netRules.time; }
+    if (net || spec) { this.mArgs.rounds = Game.netRules.rounds; this.mArgs.time = Game.netRules.time; }
+    this.spec = spec ? { n: Room.spec.n, f: 0, go: false, idle: 0 } : null;
     this.match = new Match(Object.assign({ fx: FX }, this.mArgs));
     /* オンライン: 試合はロールバックのセッションが進める */
     this.net = net ? new NetSession(Game.netSlot || 0, this.mArgs) : null;
@@ -7106,6 +7487,7 @@ Game.scenes.fight = {
     if (this.replay) { this.replayUpdate(); return; }
     if (this.challenger) { this.challengerUpdate(); return; }
     if (this.net) { this.netUpdate(); return; }
+    if (this.spec) { this.specUpdate(); return; }
     const m = this.match, hud = this.hud;
     if (this.paused) { this.updatePause(); return; }
     if (Game.blurPause) { Game.blurPause = false; this.openPause('blur'); return; }
@@ -7159,18 +7541,22 @@ Game.scenes.fight = {
     const S = this.net;
     /* オンラインは止められないので、やめるときは確認だけ出して試合は進める */
     if (this.quitAsk) {
-      if ((Input.nav & B_L) || Input.keyPressed('Enter')) { Audio.play('menuOk'); Net.close(); this.match = null; this.net = null; Game.go('title'); return; }
+      if ((Input.nav & B_L) || Input.keyPressed('Enter')) { Audio.play('menuOk'); this.match = null; this.net = null; netQuit(); return; }
       if ((Input.nav & B_H) || Input.keyPressed('Escape')) { this.quitAsk = false; Audio.play('menuCancel'); }
     } else if (Input.keyPressed('Escape') || (Input.edge[0] & B_START)) { this.quitAsk = true; Audio.play('menuOk'); }
     const mask = this.quitAsk ? 0 : (Input.raw[0] & ~B_START);
     /* 終わった後は進めない（入力は送り続けて、相手の確定を待つ） */
     if (S.match.ended) { S.sendInputs(); if (S.rbFrom >= 0) S.rollback(); }
     else S.tick(mask);
+    const RG = Game.roomGame;
+    if (RG && S.local === 0) roomFeed(S, RG.n, false);
     const m = this.match = S.match;
     BGM.setHurry(m.timeMax > 0 && m.timer <= 10 && m.phase === 'FIGHTING');
     this.hudStep(m);
     if (m.ended && S.settled()) {
       Game.result = Object.assign({}, m.result, { ids: Game.sel.slice(), pal2: Game.pal2.slice() });
+      /* 大部屋: 残りの入力を観戦用に送り、勝敗を部屋に知らせる（2人とも送る。部屋は先に届いた方を使う） */
+      if (RG) { if (S.local === 0) roomFeed(S, RG.n, true); Room.report(RG.n, m.result.winner >= 0 ? RG.ids[m.result.winner] : null); }
       Game.netLinger = S;   /* リザルト画面でも少しのあいだ入力を送り続ける（相手の確定のため） */
       this.rec = S.record();
       const ko = this.findKo();
@@ -7178,6 +7564,46 @@ Game.scenes.fight = {
       if (ko && m.result.winner >= 0 && this.startReplay()) return;
       Game.go('result');
     }
+  },
+  /* ---- 大部屋の観戦の 1 フレーム。届いた入力を少し（約0.3秒）ためてから再生する。遅れたら早送り ---- */
+  specUpdate() {
+    const V = this.spec, R = Room.spec, m = this.match;
+    if (!Room.active() || !R || R.n !== V.n) { this.match = null; this.spec = null; roomBack(); return; }
+    /* 自分が次の対戦に選ばれた → 部屋へ */
+    if (Room.cur && Room.cur.n !== V.n && Room.isFighter(Room.myId)) { this.match = null; this.spec = null; roomBack(); return; }
+    if (Input.keyPressed('Escape') || ((Input.edge[0] | Input.edge[1]) & B_START)) {
+      Game.scenes.room.watchOff = V.n; Audio.play('menuCancel'); this.match = null; this.spec = null; roomBack(); return;
+    }
+    const avail = (R.inp.length >> 1) - V.f, over = !Room.cur || Room.cur.n !== V.n;
+    if (!V.go) { if (avail >= 20 || (avail > 0 && over)) V.go = true; else return; }
+    const k = avail > 120 ? Math.min(12, avail - 20) : avail > 40 ? 2 : avail > 0 ? 1 : 0;
+    if (!k) { if (++V.idle > 600 && over) { this.match = null; this.spec = null; roomBack(); } return; }
+    V.idle = 0;
+    for (let i = 0; i < k && !m.ended; i++) {
+      m.fx = i < k - 1 ? NullFX : FX;   /* 早送り中は演出・音を最後の 1 フレームだけ */
+      m.step([R.inp[V.f * 2], R.inp[V.f * 2 + 1]]); V.f++;
+    }
+    m.fx = FX;
+    BGM.setHurry(m.timeMax > 0 && m.timer <= 10 && m.phase === 'FIGHTING');
+    this.hudStep(m);
+    if (m.ended) {
+      Game.result = Object.assign({}, m.result, { ids: Game.sel.slice(), pal2: Game.pal2.slice() });
+      this.rec = [];
+      for (let f = 0; f < V.f; f++) this.rec.push([R.inp[f * 2], R.inp[f * 2 + 1]]);
+      const ko = this.findKo();
+      this.match = null; this.spec = null;
+      if (ko && m.result.winner >= 0 && this.startReplay()) return;
+      Game.go('result');
+    }
+  },
+  drawSpec(ctx) {
+    const V = this.spec, RG = Game.roomGame;
+    if (RG) {
+      drawText(ctx, RG.names[0], 40, 112, { size: 13, color: UI_COL.p1, glow: UI_COL.p1 });
+      drawText(ctx, RG.names[1], 920, 112, { size: 13, color: UI_COL.p2, glow: UI_COL.p2, align: 'right' });
+    }
+    drawText(ctx, '観戦中   Esc: 部屋に戻る', 480, 488, { size: 11, align: 'center', color: '#8fa3c8', alpha: 0.75 });
+    if (V && !V.go) drawText(ctx, '観戦の準備をしています…', 480, 230, { size: 18, align: 'center', color: '#e6f1ff', glow: '#19f3ff' });
   },
   /* 記録した入力を流し直して、最後のラウンドが KO で決まったか・そのフレームを調べる */
   findKo() {
@@ -7199,13 +7625,14 @@ Game.scenes.fight = {
     drawText(ctx, 'YOU', me === 0 ? 40 : 920, 112, { size: 13, font: 'en', align: me === 0 ? 'left' : 'right', color: col, glow: col });
     /* 通信の経路: 中継サーバー経由のときは目立つ色で */
     const rt = Net.route, rLabel = rt === 'relay' ? '中継サーバー経由' : rt === 'lan' ? '直接（同じネットワーク）' : rt === 'direct' ? '直接' : '';
-    drawText(ctx, 'ONLINE  ' + Math.round(Net.rtt) + 'ms', 480, 488, { size: 11, font: 'en', align: 'center', color: '#8fa3c8', alpha: 0.7 });
+    const watch = Game.roomGame ? Math.max(0, Room.members.length - 2) : 0;
+    drawText(ctx, 'ONLINE  ' + Math.round(Net.rtt) + 'ms' + (watch ? '   WATCH ' + watch : ''), 480, 488, { size: 11, font: 'en', align: 'center', color: '#8fa3c8', alpha: 0.7 });
     if (rLabel) drawText(ctx, rLabel, 480, 474, { size: 11, align: 'center', color: rt === 'relay' ? '#ffb347' : '#7cff6b', alpha: 0.8 });
     if (S.waitT > 20) drawText(ctx, '通信を待っています…', 480, 210, { size: 18, align: 'center', color: '#ffb347', glow: '#ffb347' });
     if (S.desync >= 0) drawText(ctx, '同期ずれが起きました（2人の画面の結果が違う可能性があります）', 480, 456, { size: 13, align: 'center', color: '#ff6b8b' });
     if (this.quitAsk) {
       ctx.fillStyle = 'rgba(3,4,12,0.6)'; ctx.fillRect(0, 210, CFG.W, 110);
-      drawText(ctx, '対戦をやめて 切断しますか？', 480, 246, { size: 22, align: 'center', base: 'middle', color: '#ffffff' });
+      drawText(ctx, Game.roomGame ? '対戦をやめますか？（負け扱いになります）' : '対戦をやめて 切断しますか？', 480, 246, { size: 22, align: 'center', base: 'middle', color: '#ffffff' });
       drawText(ctx, '弱: やめる   強 / Esc: 続ける（試合は止まりません）', 480, 288, { size: 14, align: 'center', base: 'middle', color: '#8fa3c8' });
     }
   },
@@ -7262,13 +7689,14 @@ Game.scenes.fight = {
     if (!PerfOff.hud) drawHUD(ctx, m, this.hud, Game.t);
     if (this.practice()) this.drawChallenge(ctx, m);
     if (this.net) this.drawNet(ctx);
+    else if (this.spec) this.drawSpec(ctx);
     else if (!this.paused && !this.challenger) {
       drawText(ctx, 'Esc: ポーズ / 技一覧', 480, 503, { size: 11, align: 'center', color: '#8fa3c8', alpha: 0.75 });
       if (this.canChallenge()) drawText(ctx, 'P2: ' + keyName(1, 'start') + ' で乱入！', 940, 503, { size: 12, align: 'right', color: UI_COL.p2, alpha: 0.6 + 0.3 * Math.sin(Game.t * 3) });
     }
     drawFightBanners(ctx, m, this);
     if (this.tut && !this.paused) this.tutRender(ctx);
-    if (Input.idle > 1800 && !this.paused && !this.net) {
+    if (Input.idle > 1800 && !this.paused && !this.net && !this.spec) {
       drawText(ctx, '10秒後にタイトルへ戻ります', 480, 150, { size: 20, align: 'center', color: '#ffb347', alpha: 0.6 + 0.4 * Math.sin(Game.t * 8) });
     }
     if (Debug.on) Debug.hud(ctx, m);
@@ -7306,13 +7734,15 @@ Game.scenes.result = {
     const r = Game.result;
     this.r = r; this.t = 0; this.sel = 0; this.items = ['もう一度', 'キャラ選択へ', 'タイトルへ'];
     /* オンライン: もう一度は 2人とも選んだら始まる */
-    this.net = Net.state === 'open'; this.wantAgain = false; this.peerAgain = false; this.idleLimit = this.net ? 0 : 2700;
+    /* 大部屋: もう一度・キャラ選択はなし。少し見せたら部屋へ戻る */
+    this.room = !!Game.roomGame;
+    this.net = !this.room && Net.state === 'open'; this.wantAgain = false; this.peerAgain = false; this.idleLimit = this.net || this.room ? 0 : 2700;
     /* CPU 戦の連勝数 */
     this.vsCpu = !!Game.training && CPU_LEVELS[Game.cpuLevel];
     if (this.vsCpu) Game.cpuStreak = r.winner === 0 ? (Game.cpuStreak || 0) + 1 : 0;
     if (this.vsCpu && r.winner === 0) this.items[0] = '次の相手';
-    /* 本日の記録（CPU 戦は P1 だけ、2人対戦は両方のコンボを記録） */
-    {
+    /* 本日の記録（CPU 戦は P1 だけ、2人対戦は両方のコンボを記録。観戦では記録しない） */
+    if (!this.room || Game.roomGame.fighter) {
       const combo = this.vsCpu ? r.maxCombo[0] : Math.max(r.maxCombo[0], r.maxCombo[1]);
       const whoI = this.vsCpu ? 0 : (r.maxCombo[0] >= r.maxCombo[1] ? 0 : 1);
       this.news = Records.note({ level: this.vsCpu && r.winner === 0 ? Game.cpuLevel : null, streak: Game.cpuStreak || 0, combo: combo, who: Game.charName(r.ids[whoI]) });
@@ -7347,9 +7777,17 @@ Game.scenes.result = {
     if (Net.role === 'host' && this.wantAgain && this.peerAgain) { netHostStart(); return true; }
     return false;
   },
+  roomStep() {
+    const RG = Game.roomGame;
+    if (Game.netLinger && this.t < 300) Game.netLinger.sendInputs();
+    const fresh = Room.cur && Room.cur.n !== RG.n;   /* 次の対戦が始まった */
+    if (!Room.active() || fresh || this.t > 330) { roomBack(); return true; }
+    return false;
+  },
   update() {
     this.t++;
     if (this.net && this.netStep()) return;
+    if (this.room && this.roomStep()) return;
     const T0 = this.win >= 0 ? 200 : 60;
     if (this.t === 4 && this.win >= 0) Audio.play('win');
     if (this.win >= 0 && this.t === 190 && !this.omiPlayed) { this.omiPlayed = true; Audio.play('omikuji', { good: this.good }); }
@@ -7362,6 +7800,7 @@ Game.scenes.result = {
     const n = Input.nav;
     this.sel = (n & B_LEFT) ? (this.sel + 2) % 3 : ((n & B_RIGHT) ? (this.sel + 1) % 3 : this.sel);
     if (n & (B_LEFT | B_RIGHT)) Audio.play('menuMove');
+    if (this.room) { if (n & B_L) { Audio.play('menuOk'); roomBack(); } return; }
     if (n & B_L) {
       Audio.play('menuOk');
       if (this.net) {
@@ -7460,7 +7899,12 @@ Game.scenes.result = {
       ctx.restore();
     }
     const T0 = this.win >= 0 ? 200 : 60;
-    if (t >= T0) {
+    if (this.room) {
+      const RG = Game.roomGame;
+      if (this.win >= 0 && RG) drawText(ctx, RG.names[this.win], 480, 104, { size: 18, align: 'center', color: '#ffffff', glow: winCol });
+      if (t >= T0) drawText(ctx, '弱: 部屋に戻る（自動で戻ります）', 480, 500, { size: 15, align: 'center', color: '#8fa3c8' });
+      else drawText(ctx, '弱で スキップ', 480, 520, { size: 12, align: 'center', color: '#6a7490' });
+    } else if (t >= T0) {
       for (let i = 0; i < this.items.length; i++) {
         const x = 300 + i * 180, on = i === this.sel;
         if (on) { ctx.fillStyle = 'rgba(25,243,255,0.16)'; fillRR(ctx, x - 80, 478, 160, 34, 5); ctx.fill(); }
@@ -8699,6 +9143,7 @@ function reportErr(e, where) {
 const Main = {
   last: 0, acc: 0, rafOk: false, started: false,
   stepOnce() {
+    Room.poll();
     Input.step();
     Toast.update();
     const sc = Game.scene;
@@ -8743,6 +9188,7 @@ const Main = {
         const L = { high: '高', normal: '標準', low: '低', min: '最軽量' }, lv = Display.level();
         drawText(g, Math.round(Debug.fps) + ' fps  画質:' + (L[lv] || lv) + (((Settings.data && Settings.data.quality) || 'auto') === 'auto' ? '(自動)' : '') + '  処理 ' + (Main.busy || 0).toFixed(1) + 'ms', 8, 14, { size: 12, color: '#7cff6b', font: 'mono' });
       }
+      Chat.drawSmall(g);
       Toast.draw(g);
       if (Debug.on) Debug.overlay(g);
     } catch (e) { reportErr(e, 'overlay'); return; }
@@ -8828,6 +9274,7 @@ window.addEventListener('keydown', e => {
     if (e.code === 'F2') { toggleFullscreen(); e.preventDefault(); return; }
     if (e.code === 'F4') { Game.showFps = !Game.showFps; e.preventDefault(); return; }
     if (e.code === 'F3') { Audio.resume(); Audio.setMute(!Audio.muted); Toast.push(Audio.muted ? 'ミュート' : 'ミュート解除'); e.preventDefault(); return; }
+    if (Chat.onKey(e)) return;   /* チャット入力中・チャットを開くキーはゲームに渡さない */
     Audio.resume();
     Keys.onDown(e);
     if (Game.mode === 'gallery') Gallery.onKey(e.code);
@@ -8868,7 +9315,7 @@ window.addEventListener('keydown', e => {
   Game.pal2 = [false, true];
   const eff = Settings.eff();
   Game.easy = [eff.easy.p1, eff.easy.p2];
-  window.__denno = { Game: Game, Input: Input, Devices: Devices, FX: FX, Debug: Debug, SelfTest: SelfTest, Gallery: Gallery, Settings: Settings, validateGameData: validateGameData, CFG: CFG, Match: Match, NullFX: NullFX, CpuPolicy: CpuPolicy, BGM: BGM, Net: Net, Snap: Snap, NetSession: NetSession, get SV() { return SV; }, Display: Display, PerfOff: PerfOff, Audio: Audio };
+  window.__denno = { Game: Game, Input: Input, Devices: Devices, FX: FX, Debug: Debug, SelfTest: SelfTest, Gallery: Gallery, Settings: Settings, validateGameData: validateGameData, CFG: CFG, Match: Match, NullFX: NullFX, CpuPolicy: CpuPolicy, BGM: BGM, Net: Net, Room: Room, Chat: Chat, Snap: Snap, NetSession: NetSession, get SV() { return SV; }, Display: Display, PerfOff: PerfOff, Audio: Audio };
   Main.applyMode();
   Main.startLoops();
 }
