@@ -473,7 +473,7 @@ function startCool() {
  * =================================================================== */
 const PROVIDERS = {
   none:   { label: 'AI を使わない（用意した答えだけ）' },
-  gemini: { label: 'Gemini（Google・無料枠あり）', model: 'gemini-flash-latest', key: true },
+  gemini: { label: 'Gemini（Google・無料枠あり）', model: 'gemini-flash-lite-latest', key: true },
   ollama: { label: 'ローカルAI（Ollama・無料・ネット不要）', model: 'gemma3:4b', key: false },
   claude: { label: 'Claude（Anthropic・有料）', model: 'claude-opus-5-5', key: true }
 };
@@ -529,14 +529,32 @@ async function readLines(res, onLine) {
 const Api = {
   fallbacks: true, lastError: '',
   /* system: 決まりの文と知識。messages: {role:'user'|'assistant', content} の列（user で始まり user で終わる） */
+  TIMEOUT: 20000,   /* これ以上返事が来なければ、用意した答えで返す */
   async ask(system, messages, onText, signal) {
     const p = Staff.provider;
-    const r = p === 'gemini' ? await this.gemini(system, messages, onText, signal)
-      : p === 'ollama' ? await this.ollama(system, messages, onText, signal)
-      : await this.claude(system, messages, onText, signal);
-    if (!r.text.trim()) throw { code: 'empty' };
-    this.lastError = '';
-    return r;
+    /* 来場者の「やめる」と、時間切れの両方で止められるようにする */
+    const c = new AbortController(); let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; c.abort(); }, p === 'ollama' ? this.TIMEOUT * 3 : this.TIMEOUT);
+    if (signal) { if (signal.aborted) c.abort(); else signal.addEventListener('abort', () => c.abort()); }
+    try {
+      let r;
+      if (p === 'gemini') {
+        try { r = await this.gemini(system, messages, onText, c.signal, Staff.model()); }
+        catch (e) {
+          /* 混んでいる（503）・回数オーバー（429）→ 軽いモデルで 1回だけやり直す */
+          const lite = 'gemini-flash-lite-latest';
+          if ((e.status === 503 || e.status === 429) && Staff.model() !== lite) r = await this.gemini(system, messages, onText, c.signal, lite);
+          else throw e;
+        }
+      } else if (p === 'ollama') r = await this.ollama(system, messages, onText, c.signal);
+      else r = await this.claude(system, messages, onText, c.signal);
+      if (!r.text.trim()) throw { code: 'empty' };
+      this.lastError = '';
+      return r;
+    } catch (e) {
+      if (timedOut) { this.lastError = (PROVIDERS[p] || {}).label + ': ' + (this.TIMEOUT / 1000) + '秒たっても返事がありませんでした（混んでいるかも）'; throw { code: 'timeout' }; }
+      throw e;
+    } finally { clearTimeout(timer); }
   },
   async fail(res, name) {
     const t = await res.text().catch(() => '');
@@ -579,8 +597,7 @@ const Api = {
     return { text: text, truncated: stop === 'max_tokens' };
   },
   /* ---- Gemini（Google AI Studio の API キー。無料枠あり）---- */
-  async gemini(system, messages, onText, signal) {
-    const model = Staff.model();
+  async gemini(system, messages, onText, signal, model) {
     const body = {
       systemInstruction: { parts: [{ text: system }] },
       contents: messages.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
@@ -747,13 +764,13 @@ const St = {
     ollama: 'このパソコンに Ollama（ollama.com）を入れ、モデルを入れておきます（例: コマンドで ollama pull gemma3:4b）。ネットも料金も不要ですが、メモリ 8GB 以上・できれば GPU のあるパソコン向けです。つながらないときは、環境変数 OLLAMA_ORIGINS に * を設定して Ollama を起動し直してください。',
     claude: 'Anthropic Console（console.anthropic.com）で API キーを作って貼ってください。有料です。Console で月の使用上限を低めに決めておくと安心です。'
   },
-  MODEL_LIST: { gemini: ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash'], ollama: ['gemma3:4b', 'qwen2.5:7b', 'llama3.2:3b'], claude: ['claude-opus-5-5', 'claude-haiku-5-5'] },
+  MODEL_LIST: { gemini: ['gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-3.8-flash'], ollama: ['gemma3:4b', 'qwen2.5:7b', 'llama3.2:3b'], claude: ['claude-opus-5-5', 'claude-haiku-5-5'] },
   /* 使う AI を変えたときの欄の出し入れ */
   shape() {
     const p = $('stProv').value, P = PROVIDERS[p];
     $('stHelp').textContent = this.HELP[p];
     $('stKeyRow').hidden = !P.key; $('stModelRow').hidden = p === 'none'; $('stUrlRow').hidden = p !== 'ollama';
-    $('stKey').value = Staff.keys[p] || ''; $('stKey').placeholder = p === 'claude' ? 'sk-ant-...' : p === 'gemini' ? 'AIza...' : '';
+    $('stKey').value = Staff.keys[p] || ''; $('stKey').placeholder = p === 'claude' ? 'sk-ant-...' : p === 'gemini' ? 'AQ.... または AIza...' : '';
     $('stModel').value = Staff.models[p] || P.model || '';
     $('stModels').innerHTML = (this.MODEL_LIST[p] || []).map(m => '<option value="' + esc(m) + '"></option>').join('');
   },
