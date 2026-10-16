@@ -123,6 +123,22 @@ form { display: flex; gap: 10px; padding: 12px; border-top: 1px solid var(--line
   .msg { grid-template-columns: 36px minmax(0, 1fr); gap: 8px; }
   .av { width: 36px; height: 36px; }
 }
+/* 係の人の設定（ふだんは隠れている） */
+.staff { position: fixed; inset: 0; z-index: 20; background: color-mix(in srgb, var(--ink) 80%, transparent); display: grid; place-items: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.sheet { width: min(560px, 100%); max-height: 100%; overflow-y: auto; background: var(--panel); border: 1px solid var(--gold); border-radius: 14px; padding: 20px 22px; display: grid; gap: 14px; font-size: .9em; }
+.sheet h2 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 1.15em; color: var(--gold); letter-spacing: .06em; }
+.sheet label { display: grid; gap: 4px; color: var(--muted); font-size: .9em; }
+.sheet input, .sheet select { font: inherit; font-size: 1.05em; color: var(--text); background: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+.sheet input:focus, .sheet select:focus { outline: none; border-color: var(--cyan); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; }
+.btn:hover, .btn:focus-visible { border-color: var(--cyan); outline: none; }
+.btn.main { background: var(--shu); border-color: var(--shu); color: #fff; font-weight: 700; }
+.stat { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; background: var(--ink); border-radius: 8px; padding: 10px 12px; font-variant-numeric: tabular-nums; }
+.stat dt { color: var(--muted); } .stat dd { margin: 0; }
+.note { color: var(--muted); font-size: .85em; margin: 0; }
+.warn { color: var(--gold); }
 /* 放っておかれたら最初に戻る */
 .idle { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 5;
   background: var(--panel-2); border: 1px solid var(--gold); color: var(--text); border-radius: 999px; padding: 8px 18px; font-size: .85em; }
@@ -159,6 +175,31 @@ form { display: flex; gap: 10px; padding: 12px; border-top: 1px solid var(--line
     </section>
     <aside class="side" id="side" aria-label="よくある質問"></aside>
   </main>
+</div>
+<div class="staff" id="staff" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="stTitle">
+    <h2 id="stTitle">係の人の設定</h2>
+    <div id="stLock" hidden>
+      <label for="stPinIn">暗証番号<input id="stPinIn" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+      <div class="row" style="margin-top:10px"><button class="btn main" id="stUnlock" type="button">開く</button><button class="btn" data-close type="button">閉じる</button></div>
+      <p class="note" id="stPinMsg"></p>
+    </div>
+    <div id="stBody" hidden>
+      <dl class="stat" id="stState"></dl>
+      <label for="stKey">API キー（Anthropic Console で作ったもの。このパソコンのブラウザにだけ保存されます）<input id="stKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-..."></label>
+      <label for="stModel">答えるモデル<select id="stModel"></select></label>
+      <label for="stPin">暗証番号（この画面を開くときに聞く。空なら聞かない）<input id="stPin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+      <div class="row">
+        <button class="btn main" id="stSave" type="button">保存</button>
+        <button class="btn" id="stTest" type="button">つながるか試す</button>
+        <button class="btn" id="stClear" type="button">キーを消す</button>
+        <button class="btn" data-close type="button">閉じる</button>
+      </div>
+      <p class="note" id="stMsg"></p>
+      <dl class="stat" id="stUsage"></dl>
+      <p class="note">展示が終わったら「キーを消す」を押し、Anthropic Console でもキーを無効にしてください。Console で月の使用上限を低めに決めておくと安心です。連投の制限（待ち時間・回数）はファイルの <code>LIMITS</code> で変えられます。</p>
+    </div>
+  </div>
 </div>
 <div class="idle" id="idle" hidden><span id="idleMsg"></span><button type="button" id="stay">続ける</button></div>
 
@@ -420,6 +461,94 @@ function startCool() {
   tick(); coolT = setInterval(tick, 250);
 }
 
+/* ===================================================================
+ * 展示用パソコンで使う「API キー」モード
+ *   claude.ai にログインしなくても AI で答えられる（来場者がアカウントに触れない）。
+ *   キーはこのパソコンのブラウザの中にだけ保存する（ファイルやリポジトリには書かない）。
+ *   係の人の設定: Ctrl + Shift + S、または左上の鳥居を 3秒長押し
+ * =================================================================== */
+const MODELS = {
+  'claude-opus-5-5': { label: 'Claude Opus 5.5（賢い・標準）', inp: 4.0, out: 20.0 },
+  'claude-haiku-5-5': { label: 'Claude Haiku 5.5（速い・とても安い）', inp: 0.10, out: 0.50 }
+};
+const Staff = {
+  key: '', model: 'claude-opus-5-5', pin: '',
+  load() {
+    try {
+      const o = JSON.parse(localStorage.getItem('guide-staff') || '{}');
+      this.key = o.key || ''; this.model = MODELS[o.model] ? o.model : 'claude-opus-5-5'; this.pin = o.pin || '';
+    } catch (e) { }
+  },
+  save() { try { localStorage.setItem('guide-staff', JSON.stringify({ key: this.key, model: this.model, pin: this.pin })); } catch (e) { } }
+};
+Staff.load();
+/* 使った量（その日の分。料金は目安） */
+const Usage = {
+  get() {
+    const day = new Date().toISOString().slice(0, 10);
+    let o = null; try { o = JSON.parse(localStorage.getItem('guide-usage') || 'null'); } catch (e) { }
+    return o && o.day === day ? o : { day: day, calls: 0, inp: 0, out: 0, cw: 0, cr: 0, usd: 0 };
+  },
+  add(u, model) {
+    const o = this.get(), M = MODELS[model] || MODELS['claude-opus-5-5'];
+    const inp = u.input_tokens || 0, out = u.output_tokens || 0, cw = u.cache_creation_input_tokens || 0, cr = u.cache_read_input_tokens || 0;
+    o.calls++; o.inp += inp; o.out += out; o.cw += cw; o.cr += cr;
+    /* 1時間キャッシュの書き込みは入力の2倍、読み出しは入力の1割 */
+    o.usd += (inp * M.inp + out * M.out + cw * M.inp * 2 + cr * M.inp * 0.1) / 1e6;
+    try { localStorage.setItem('guide-usage', JSON.stringify(o)); } catch (e) { }
+  }
+};
+const Api = {
+  fallbacks: true, lastError: '',
+  /* system: 決まりの文と知識（毎回同じ → キャッシュされて安くなる）。messages: user で始まり user で終わる */
+  async ask(system, messages, onText, signal, retried) {
+    const model = Staff.model, opus = model.indexOf('opus') >= 0;
+    const body = {
+      model: model, max_tokens: 4000, stream: true,
+      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral', ttl: '1h' } }],
+      messages: messages,
+      output_config: { effort: 'low' }   /* 案内の答えに深い考えはいらない（使う量も減る） */
+    };
+    const headers = {
+      'content-type': 'application/json', 'x-api-key': Staff.key, 'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    };
+    if (opus && this.fallbacks) { body.fallbacks = 'default'; headers['anthropic-beta'] = 'server-side-fallback-2026-07-01'; }
+    const res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: headers, body: JSON.stringify(body), signal: signal });
+    if (!res.ok) {
+      const t = await res.text().catch(() => '');
+      /* 予備のモデルに切り替える設定が通らなかったら、それなしでもう一度だけ */
+      if (res.status === 400 && body.fallbacks && !retried && /fallback/i.test(t)) { this.fallbacks = false; return this.ask(system, messages, onText, signal, true); }
+      this.lastError = res.status + ' ' + t.slice(0, 160);
+      throw { code: 'http_' + res.status, status: res.status };
+    }
+    /* ストリーム（Server-Sent Events）を読む */
+    const rd = res.body.getReader(), dec = new TextDecoder();
+    let buf = '', text = '', stop = '', usage = {};
+    for (;;) {
+      const r = await rd.read(); if (r.done) break;
+      buf += dec.decode(r.value, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n\n')) >= 0) {
+        const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+        const line = chunk.split('\n').find(l => l.indexOf('data:') === 0);
+        if (!line) continue;
+        let ev = null; try { ev = JSON.parse(line.slice(5).trim()); } catch (e) { continue; }
+        if (ev.type === 'message_start' && ev.message && ev.message.usage) Object.assign(usage, ev.message.usage);
+        else if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') { text += ev.delta.text; onText(text); }
+        else if (ev.type === 'message_delta') { if (ev.delta && ev.delta.stop_reason) stop = ev.delta.stop_reason; if (ev.usage) Object.assign(usage, ev.usage); }
+        else if (ev.type === 'error') { this.lastError = (ev.error && ev.error.type) || 'stream error'; throw { code: 'stream_error' }; }
+      }
+    }
+    Usage.add(usage, model);
+    if (stop === 'refusal' || !text.trim()) throw { code: 'refusal' };
+    this.lastError = '';
+    return { text: text, truncated: stop === 'max_tokens' };
+  }
+};
+/* AI で答えられるか（API キーがある / claude.ai の中で許可されている） */
+function aiReady() { return !!Staff.key || (!!sample && aiOk); }
+
 let sample = null, aiOk = true, busy = false, ctl = null;
 const turns = [];   /* AI との会話（最近の分だけ送る） */
 (async () => {
@@ -439,10 +568,10 @@ async function ask(text, id) {
   const key = norm(text), top = bestTopics(text, 1)[0], strong = top && score(text, top) >= 4;
   const cached = !id && answerCache.get(key);
   const block = aiBlock();
-  if (id || !sample || !aiOk || strong || cached || block) {
+  if (id || !aiReady() || strong || cached || block) {
     let r = cached ? { text: cached, id: null } : offlineAnswer(text, id);
     let label = id ? '' : cached ? '前と同じ質問への答え' : '案内データから回答';
-    if (!id && !cached && !strong && sample && aiOk && block) {
+    if (!id && !cached && !strong && aiReady() && block) {
       r = { text: (block === 'visitor' ? 'AIへの質問はここまでにさせてください（次の方の分を残すため）。' : 'いまAIの案内係は少し休憩中です。') + '用意した答えからお答えします。\n\n' + r.text, id: r.id };
     }
     const node = addBot('<span class="dots"><i></i><i></i><i></i></span>', label);
@@ -458,17 +587,25 @@ async function ask(text, id) {
   ctl = new AbortController();
   /* 送る量を減らす: 直前の 2往復だけ、長い答えは切る */
   const recent = turns.slice(-4).map(t => ({ role: t.role, content: t.content.slice(0, 300) }));
-  /* 決まりの文 → 最近の会話 → 今の質問（user で始まり user で終わる） */
-  const input = [{ role: 'user', content: RULES() }].concat(recent, [{ role: 'user', content: text }]);
+  const show = t => { body.innerHTML = render(t); scrollDown(); };
   try {
-    const res = await sample(input, { modelTier: 'quick', cache: false, signal: ctl.signal, onText: ({ text: t }) => { body.innerHTML = render(t); scrollDown(); } });
+    let res;
+    if (Staff.key) {
+      /* 展示用パソコン: API キーで直接（決まりの文は system に置いて使い回す＝安い） */
+      res = await Api.ask(RULES(), recent.concat([{ role: 'user', content: text }]), show, ctl.signal);
+    } else {
+      /* claude.ai の中で開いたとき: 決まりの文 → 最近の会話 → 今の質問（user で始まり user で終わる） */
+      const input = [{ role: 'user', content: RULES() }].concat(recent, [{ role: 'user', content: text }]);
+      res = await sample(input, { modelTier: 'quick', cache: false, signal: ctl.signal, onText: ({ text: t }) => show(t) });
+    }
     body.innerHTML = render(res.text);
     relatedChips(node, related(text + ' ' + res.text, null));
     turns.push({ role: 'user', content: text }, { role: 'assistant', content: res.text });
     answerCache.set(key, res.text);
   } catch (e) {
-    if (e && e.code === 'cancelled') { done(); return; }
+    if (e && (e.code === 'cancelled' || e.name === 'AbortError')) { done(); return; }
     /* AI が使えない・混んでいるときは、用意した答えで代わりに答える */
+    if (e && (e.status === 401 || e.status === 403)) { Api.lastError = 'API キーが使えません（' + e.status + '）'; Staff.badKey = Staff.key; Staff.key = ''; }
     if (e && ['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed', 'session_expired'].indexOf(e.code) >= 0) aiOk = false;
     const r = offlineAnswer(text, null);
     node.querySelector('.src').textContent = '案内データから回答';
@@ -515,6 +652,61 @@ setInterval(() => {
   if (idleS >= IDLE + WARN) { bump(); start(); return; }
   if (idleS >= IDLE) { $('idle').hidden = false; $('idleMsg').textContent = 'あと ' + (IDLE + WARN - idleS) + ' 秒で、次の方のために最初の画面に戻ります'; }
 }, 1000);
+
+/* ---- 係の人の設定画面 ---- */
+const St = {
+  open() {
+    $('staff').hidden = false;
+    const locked = !!Staff.pin;
+    $('stLock').hidden = !locked; $('stBody').hidden = locked;
+    if (locked) { $('stPinIn').value = ''; $('stPinMsg').textContent = ''; $('stPinIn').focus(); } else this.fill();
+  },
+  close() { $('staff').hidden = true; },
+  fill() {
+    $('stModel').innerHTML = Object.keys(MODELS).map(id => '<option value="' + id + '">' + esc(MODELS[id].label) + '</option>').join('');
+    $('stModel').value = Staff.model; $('stKey').value = Staff.key || Staff.badKey || ''; $('stPin').value = Staff.pin; $('stMsg').textContent = '';
+    const mode = Staff.key ? 'API キー（' + MODELS[Staff.model].label.split('（')[0] + '）' : sample && aiOk ? 'claude.ai の中の AI' : '用意した答えだけ（AI なし）';
+    $('stState').innerHTML = '<dt>いまの答え方</dt><dd>' + esc(mode) + '</dd>' + (Api.lastError ? '<dt>最後のエラー</dt><dd class="warn">' + esc(Api.lastError) + '</dd>' : '');
+    if (window.claude) $('stState').innerHTML += '<dt>注意</dt><dd class="warn">claude.ai の中では API キーは使えません。展示用パソコンでは start-guide.bat で guide.html を直接開いてください。</dd>';
+    const u = Usage.get();
+    $('stUsage').innerHTML = '<dt>今日 AI に聞いた回数</dt><dd>' + u.calls + ' 回（この 1時間: ' + hourLog().length + ' / ' + LIMITS.perHour + '）</dd>' +
+      '<dt>使った量</dt><dd>入力 ' + (u.inp + u.cw + u.cr).toLocaleString() + '（うちキャッシュ読み ' + u.cr.toLocaleString() + '）/ 出力 ' + u.out.toLocaleString() + ' トークン</dd>' +
+      '<dt>料金の目安</dt><dd>約 $' + u.usd.toFixed(3) + '（約 ' + Math.round(u.usd * 150) + ' 円）</dd>';
+  },
+  save() {
+    Staff.key = $('stKey').value.trim(); Staff.model = $('stModel').value; Staff.pin = $('stPin').value.trim(); Staff.badKey = '';
+    Staff.save(); Api.lastError = ''; this.fill(); $('stMsg').textContent = '保存しました。';
+  },
+  async test() {
+    this.save();
+    if (!Staff.key) { $('stMsg').textContent = 'API キーを入れてください。'; return; }
+    $('stMsg').textContent = '試しています…';
+    let msg;
+    try {
+      const r = await Api.ask('あなたは接続テストの相手です。', [{ role: 'user', content: '「つながりました」とだけ答えてください。' }], () => { }, undefined);
+      msg = 'つながりました（AI の返事: ' + r.text.slice(0, 40) + '）';
+    } catch (e) {
+      msg = 'つながりませんでした: ' + (Api.lastError || e.code || '') + (e.status === 401 ? '（キーがまちがっています）' : '');
+    }
+    this.fill(); $('stMsg').textContent = msg;
+  }
+};
+$('stSave').onclick = () => St.save();
+$('stTest').onclick = () => St.test();
+$('stClear').onclick = () => { Staff.key = ''; Staff.badKey = ''; Staff.save(); St.fill(); $('stMsg').textContent = 'キーを消しました。'; };
+$('stUnlock').onclick = () => { if ($('stPinIn').value.trim() === Staff.pin) { $('stLock').hidden = true; $('stBody').hidden = false; St.fill(); } else $('stPinMsg').textContent = '暗証番号がちがいます。'; };
+$('stPinIn').addEventListener('keydown', e => { if (e.key === 'Enter') $('stUnlock').click(); });
+document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => St.close());
+window.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.shiftKey && (e.key === 'S' || e.key === 's')) { e.preventDefault(); St.open(); }
+  else if (e.key === 'Escape' && !$('staff').hidden) St.close();
+});
+/* 鳥居を 3秒長押し（タッチ画面用） */
+{
+  let t = 0; const m = document.querySelector('.mark');
+  m.addEventListener('pointerdown', () => { clearTimeout(t); t = setTimeout(() => St.open(), 3000); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => m.addEventListener(ev, () => clearTimeout(t)));
+}
 
 buildSide();
 start();

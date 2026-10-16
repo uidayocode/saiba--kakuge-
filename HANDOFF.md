@@ -178,6 +178,7 @@
   - 確認: scratchpad の roomtest.js（N=人数 M=試合数 WATCH=観戦だけにする人の番号）。ローカルの仲介サーバー（sig/server.js）で N 人のページを開き、入室・チャット（Enter / コントローラー）・対戦・観戦（全員の結果が一致するか）・順番の入れ替わり・退出・解散を通しで見る。
 
 - 展示案内のチャット（ユーザー指定、保護者・来場者向け）: `guide.html`（公開ページ https://claude.ai/artifact/8Z7RzY6cb8AuX5kKKfvytD、`sample` capability）。技の説明ではなく「どう動いているか・どう作ったか・安心か」を答える。知識は `KB`（話題ごとの答え。AI はこの内容だけをもとに答える）。AI（`claude.use('sample')`、quick）が使えないとき（ファイルを直接開いた・ネットなし・許可なし）は、キーワードで一番近い用意した答えを出す。右の「よくある質問」は用意した答えをすぐ出す。2分さわられないと「最初に戻ります」→15秒で会話を消す。「文字を大きく」。展示の場所・時間・制作者は先頭の `EXHIBIT` に書く（空なら「係の人に」と答える）。
+  - 展示用パソコン（ユーザー指定、来場者が claude.ai のアカウントに触れないように）: `start-guide.bat` で Chrome（無ければ Edge）をキオスクモード・専用プロファイル（%LOCALAPPDATA%\denno-guide-kiosk）で開く。AI は API キーで直接（`Api.ask`: fetch + SSE、`anthropic-dangerous-direct-browser-access`、system に決まりと知識を置いて 1時間キャッシュ、effort low、max_tokens 4000、Opus は `fallbacks: "default"`（400 なら外して1回だけやり直す））。キー・モデル（Opus 5.5 / Haiku 5.5）・暗証番号は係の人の設定（Ctrl+Shift+S か鳥居を3秒長押し）で、そのブラウザの localStorage（guide-staff）にだけ保存。今日の回数・トークン・料金の目安も出る（guide-usage）。401/403 ならそのページを開いている間はキーを使わない。claude.ai の中ではキーは使えない（CSP）ので `sample` のまま。
   - 連投対策（ユーザー指定）: `LIMITS`（次に送れるまで 8秒・1人 6回・端末全体で 1時間 40回、localStorage の guide-ai-log）。ボタンの質問・キーワードがはっきり当たる質問（score>=4）・同じ質問のくり返し（`answerCache`）は AI を使わない。AI に送る会話は直前の 2往復だけ（答えは 300字で切る）、質問は 120字まで。上限に達したら用意した答えで返す。
 
 ## 確認のしかた（ヘッドレスの Chromium で回せる）
